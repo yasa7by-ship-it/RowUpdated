@@ -1,10 +1,12 @@
-const CACHE_NAME = 'mrowdir-cache-v1';
+const CACHE_NAME = 'mrowdir-cache-v2';
+const STATIC_CACHE_NAME = 'mrowdir-static-v2';
 const urlsToCache = [
   '/',
   '/index.html',
   '/favicon.ico',
   '/icons/icon-192.png',
-  '/icons/icon-512.png'
+  '/icons/icon-512.png',
+  '/manifest.json'
 ];
 
 // Install event: opens a cache and adds the app shell to it.

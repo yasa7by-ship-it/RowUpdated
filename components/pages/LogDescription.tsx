@@ -28,7 +28,7 @@ const LogDescription: React.FC<{ action: string; details: any }> = ({ action, de
     const { t } = useLanguage();
 
     if (!details) {
-        return <span>{t(`log_action_${action}`)}</span>;
+        return <span className="text-xs text-gray-600 dark:text-gray-400">{t(`log_action_${action}`)}</span>;
     }
 
     switch (action) {
@@ -65,7 +65,7 @@ const LogDescription: React.FC<{ action: string; details: any }> = ({ action, de
             });
 
         default:
-            return <span>{t(`log_action_${action}`)}</span>;
+            return <span className="text-xs text-gray-600 dark:text-gray-400">{t(`log_action_${action}`)}</span>;
     }
 };
 

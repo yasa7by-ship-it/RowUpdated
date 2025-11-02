@@ -1,6 +1,6 @@
 {
   "short_name": "MRowDir",
-  "name": "MRowDir",
+  "name": "MRowDir - Stock Predictions",
   "description": "Professional and visually engaging stock price predictions for the U.S. markets.",
   "icons": [
     {
@@ -11,17 +11,37 @@
     {
       "src": "/icons/icon-192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
     }
   ],
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "scope": "/",
-  "theme_color": "#4338ca",
-  "background_color": "#ffffff"
+  "theme_color": "#2d5aa0",
+  "background_color": "#ffffff",
+  "categories": ["finance", "business"],
+  "shortcuts": [
+    {
+      "name": "Coming Trend",
+      "short_name": "Trend",
+      "description": "View coming stock trends",
+      "url": "/?page=coming_trend",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Last Day",
+      "short_name": "Last Day",
+      "description": "View last day analysis",
+      "url": "/?page=last_day",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

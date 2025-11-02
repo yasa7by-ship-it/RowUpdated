@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabaseClient';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAppSettings } from '../../contexts/AppSettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { UsersIcon, ShieldCheckIcon, Cog6ToothIcon, PlayIcon, SpinnerIcon } from '../icons';
+import { UsersIcon, ShieldCheckIcon, Cog6ToothIcon, PlayIcon, SpinnerIcon, ChevronDownIcon } from '../icons';
 import ProcessResultModal from './ProcessResultModal';
 
 const StatCard: React.FC<{ title: string; value: number | string; icon: React.ReactNode }> = ({ title, value, icon }) => (
@@ -18,10 +18,51 @@ const StatCard: React.FC<{ title: string; value: number | string; icon: React.Re
   </div>
 );
 
+// Accordion Component for better organization
+const AccordionSection: React.FC<{
+    title: string;
+    isOpen: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+}> = ({ title, isOpen, onToggle, children }) => {
+    return (
+        <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden mb-4">
+            <button
+                onClick={onToggle}
+                className="w-full px-6 py-4 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center justify-between transition-colors"
+            >
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
+                <ChevronDownIcon 
+                    className={`w-5 h-5 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
+                        isOpen ? 'transform rotate-180' : ''
+                    }`}
+                />
+            </button>
+            {isOpen && (
+                <div className="px-6 py-4 bg-white dark:bg-gray-800">
+                    {children}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const SiteSettings: React.FC = () => {
     const { t, refetchTranslations } = useLanguage();
     const { settings, updateSetting, refetchSettings } = useAppSettings();
     const { hasPermission } = useAuth();
+    
+    // Accordion states
+    const [openSections, setOpenSections] = useState<Record<string, boolean>>({
+        general: true,
+        landing: false,
+        stockAnalysis: false,
+        watchlistDisclaimer: false
+    });
+    
+    const toggleSection = (section: string) => {
+        setOpenSections(prev => ({ ...prev, [section]: !prev[section] }));
+    };
     
     // Site settings state
     const [siteTitleEn, setSiteTitleEn] = useState('');
@@ -165,144 +206,154 @@ const SiteSettings: React.FC = () => {
 
     return (
         <div className="mt-8">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">{t('site_settings')}</h2>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                <fieldset>
-                  <legend className="text-lg font-medium text-gray-900 dark:text-white">{t('general_settings')}</legend>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
-                      <div>
-                          <label htmlFor="site_title_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('site_title_en')}</label>
-                          <input type="text" id="site_title_en" value={siteTitleEn} onChange={(e) => setSiteTitleEn(e.target.value)}
-                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                      </div>
-                       <div>
-                          <label htmlFor="site_title_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('site_title_ar')}</label>
-                          <input type="text" id="site_title_ar" dir="rtl" value={siteTitleAr} onChange={(e) => setSiteTitleAr(e.target.value)}
-                                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                      </div>
-                      <div className="md:col-span-2">
-                          <label htmlFor="site_logo" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('site_logo')}</label>
-                          <textarea id="site_logo" rows={4} value={siteLogo} onChange={(e) => setSiteLogo(e.target.value)}
-                                    className="mt-1 block w-full font-mono text-sm px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" placeholder='<svg>...</svg>' />
-                      </div>
-                  </div>
-                </fieldset>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">{t('site_settings')}</h2>
+            
+            <div className="space-y-4">
+                {/* General Settings Accordion */}
+                <AccordionSection
+                    title={t('general_settings')}
+                    isOpen={openSections.general}
+                    onToggle={() => toggleSection('general')}
+                >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label htmlFor="site_title_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('site_title_en')}</label>
+                            <input type="text" id="site_title_en" value={siteTitleEn} onChange={(e) => setSiteTitleEn(e.target.value)}
+                                   className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+                        <div>
+                            <label htmlFor="site_title_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('site_title_ar')}</label>
+                            <input type="text" id="site_title_ar" dir="rtl" value={siteTitleAr} onChange={(e) => setSiteTitleAr(e.target.value)}
+                                   className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                        </div>
+                        <div className="md:col-span-2">
+                            <label htmlFor="site_logo" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('site_logo')}</label>
+                            <textarea id="site_logo" rows={6} value={siteLogo} onChange={(e) => setSiteLogo(e.target.value)}
+                                      className="block w-full font-mono text-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none" placeholder='<svg>...</svg>' />
+                        </div>
+                    </div>
+                </AccordionSection>
 
-                <hr className="my-8 border-gray-200 dark:border-gray-700" />
-                
-                <fieldset>
-                    <legend className="text-lg font-medium text-gray-900 dark:text-white">{t('landing_page_content')}</legend>
-                    
-                    <div className="border-b border-gray-200 dark:border-gray-700 mt-4">
+                {/* Landing Page Content Accordion */}
+                <AccordionSection
+                    title={t('landing_page_content')}
+                    isOpen={openSections.landing}
+                    onToggle={() => toggleSection('landing')}
+                >
+                    <div className="border-b border-gray-200 dark:border-gray-700 mb-4">
                         <nav className="-mb-px flex space-x-4 rtl:space-x-reverse" aria-label="Tabs">
                             <button
                                 type="button"
                                 onClick={() => setArticleTab('en')}
-                                className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
+                                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                                     articleTab === 'en'
                                     ? 'border-nextrow-primary text-nextrow-primary'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600'
                                 }`}
-                                aria-current={articleTab === 'en' ? 'page' : undefined}
                             >
                                 {t('lang_english')}
                             </button>
                             <button
                                 type="button"
                                 onClick={() => setArticleTab('ar')}
-                                className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm ${
+                                className={`whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                                     articleTab === 'ar'
                                     ? 'border-nextrow-primary text-nextrow-primary'
                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:border-gray-600'
                                 }`}
-                                aria-current={articleTab === 'ar' ? 'page' : undefined}
                             >
                                 {t('lang_arabic')}
                             </button>
                         </nav>
                     </div>
 
-                    <div className="mt-6">
+                    <div>
                         {articleTab === 'en' && (
-                            <div className="space-y-6 animate-fade-in">
+                            <div className="space-y-4 animate-fade-in">
                                 <div>
-                                    <label htmlFor="article_title_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('article_title_en')}</label>
+                                    <label htmlFor="article_title_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('article_title_en')}</label>
                                     <input type="text" id="article_title_en" value={articleTitleEn} onChange={(e) => setArticleTitleEn(e.target.value)}
-                                           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                           className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                                 </div>
                                 <div>
-                                    <label htmlFor="article_body_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('article_body_en')}</label>
-                                    <textarea id="article_body_en" rows={5} value={articleBodyEn} onChange={(e) => setArticleBodyEn(e.target.value)}
-                                              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                    <label htmlFor="article_body_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('article_body_en')}</label>
+                                    <textarea id="article_body_en" rows={4} value={articleBodyEn} onChange={(e) => setArticleBodyEn(e.target.value)}
+                                              className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none" />
                                 </div>
                             </div>
                         )}
                         {articleTab === 'ar' && (
-                             <div className="space-y-6 animate-fade-in">
+                            <div className="space-y-4 animate-fade-in">
                                 <div>
-                                   <label htmlFor="article_title_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('article_title_ar')}</label>
+                                   <label htmlFor="article_title_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('article_title_ar')}</label>
                                    <input type="text" id="article_title_ar" dir="rtl" value={articleTitleAr} onChange={(e) => setArticleTitleAr(e.target.value)}
-                                          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                          className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                                 </div>
                                 <div>
-                                   <label htmlFor="article_body_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('article_body_ar')}</label>
-                                   <textarea id="article_body_ar" rows={5} dir="rtl" value={articleBodyAr} onChange={(e) => setArticleBodyAr(e.target.value)}
-                                             className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                   <label htmlFor="article_body_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('article_body_ar')}</label>
+                                   <textarea id="article_body_ar" rows={4} dir="rtl" value={articleBodyAr} onChange={(e) => setArticleBodyAr(e.target.value)}
+                                             className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none" />
                                 </div>
                             </div>
                         )}
                     </div>
-                </fieldset>
+                </AccordionSection>
 
-                <hr className="my-8 border-gray-200 dark:border-gray-700" />
-                <fieldset>
-                    <legend className="text-lg font-medium text-gray-900 dark:text-white">{t('stock_analysis_page_settings')}</legend>
-                    <div className="space-y-6 mt-4">
+                {/* Stock Analysis Page Settings Accordion */}
+                <AccordionSection
+                    title={t('stock_analysis_page_settings')}
+                    isOpen={openSections.stockAnalysis}
+                    onToggle={() => toggleSection('stockAnalysis')}
+                >
+                    <div className="space-y-4">
                         <div>
-                            <label htmlFor="stock_analysis_desc_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('stock_analysis_page_desc_en')}</label>
+                            <label htmlFor="stock_analysis_desc_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('stock_analysis_page_desc_en')}</label>
                             <textarea id="stock_analysis_desc_en" rows={3} value={stockAnalysisDescEn} onChange={(e) => setStockAnalysisDescEn(e.target.value)}
-                                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                      className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none" />
                         </div>
                         <div>
-                            <label htmlFor="stock_analysis_desc_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('stock_analysis_page_desc_ar')}</label>
+                            <label htmlFor="stock_analysis_desc_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('stock_analysis_page_desc_ar')}</label>
                             <textarea id="stock_analysis_desc_ar" rows={3} dir="rtl" value={stockAnalysisDescAr} onChange={(e) => setStockAnalysisDescAr(e.target.value)}
-                                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                      className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white resize-none" />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('show_educational_disclaimer_label')}</label>
-                            <div className="mt-2 flex items-center">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('show_educational_disclaimer_label')}</label>
+                            <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                 <label className="relative inline-flex items-center cursor-pointer">
                                   <input type="checkbox" className="sr-only peer" checked={showDisclaimer} onChange={(e) => setShowDisclaimer(e.target.checked)} />
                                   <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-nextrow-primary dark:peer-focus:ring-nextrow-primary peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] rtl:after:left-auto rtl:after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-nextrow-primary"></div>
                                 </label>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">{t('show_educational_disclaimer_desc')}</p>
                             </div>
-                             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{t('show_educational_disclaimer_desc')}</p>
                         </div>
                     </div>
-                </fieldset>
+                </AccordionSection>
 
-                <hr className="my-8 border-gray-200 dark:border-gray-700" />
-                <fieldset>
-                    <legend className="text-lg font-medium text-gray-900 dark:text-white">إعدادات نص التنبيه في صفحة الاتجاه القادم</legend>
-                    <div className="space-y-6 mt-4">
+                {/* Watchlist Disclaimer Settings Accordion */}
+                <AccordionSection
+                    title="إعدادات نص التنبيه في صفحة الاتجاه القادم"
+                    isOpen={openSections.watchlistDisclaimer}
+                    onToggle={() => toggleSection('watchlistDisclaimer')}
+                >
+                    <div className="space-y-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">إظهار/إخفاء النص</label>
-                            <div className="mt-2 flex items-center">
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">إظهار/إخفاء النص</label>
+                            <div className="flex items-center space-x-3 rtl:space-x-reverse">
                                 <label className="relative inline-flex items-center cursor-pointer">
                                   <input type="checkbox" className="sr-only peer" checked={showWatchlistDisclaimer} onChange={(e) => setShowWatchlistDisclaimer(e.target.checked)} />
                                   <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-nextrow-primary dark:peer-focus:ring-nextrow-primary peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] rtl:after:left-auto rtl:after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-nextrow-primary"></div>
                                 </label>
-                                <span className="ml-3 text-sm text-gray-700 dark:text-gray-300">{showWatchlistDisclaimer ? 'النص ظاهر' : 'النص مخفي'}</span>
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{showWatchlistDisclaimer ? 'النص ظاهر' : 'النص مخفي'}</span>
                             </div>
                         </div>
                         
                         {showWatchlistDisclaimer && (
-                            <>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label htmlFor="watchlist_disclaimer_color" className="block text-sm font-medium text-gray-700 dark:text-gray-300">اللون (من القائمة)</label>
+                                        <label htmlFor="watchlist_disclaimer_color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">اللون (من القائمة)</label>
                                         <select id="watchlist_disclaimer_color" value={watchlistDisclaimerColor} onChange={(e) => setWatchlistDisclaimerColor(e.target.value)}
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                                className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                             <option value="text-gray-500 dark:text-gray-400">رمادي (افتراضي)</option>
                                             <option value="text-nextrow-primary">أزرق</option>
                                             <option value="text-nextrow-success">أخضر</option>
@@ -312,9 +363,9 @@ const SiteSettings: React.FC = () => {
                                         </select>
                                     </div>
                                     <div>
-                                        <label htmlFor="watchlist_disclaimer_size" className="block text-sm font-medium text-gray-700 dark:text-gray-300">الحجم (من القائمة)</label>
+                                        <label htmlFor="watchlist_disclaimer_size" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">الحجم (من القائمة)</label>
                                         <select id="watchlist_disclaimer_size" value={watchlistDisclaimerSize} onChange={(e) => setWatchlistDisclaimerSize(e.target.value)}
-                                                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                                                className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                                             <option value="text-xs">صغير جداً (xs)</option>
                                             <option value="text-sm">صغير (sm) - افتراضي</option>
                                             <option value="text-base">متوسط (base)</option>
@@ -324,33 +375,37 @@ const SiteSettings: React.FC = () => {
                                     </div>
                                 </div>
                                 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label htmlFor="watchlist_disclaimer_custom_color" className="block text-sm font-medium text-gray-700 dark:text-gray-300">لون مخصص (CSS)</label>
+                                        <label htmlFor="watchlist_disclaimer_custom_color" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">لون مخصص (CSS)</label>
                                         <input type="text" id="watchlist_disclaimer_custom_color" value={watchlistDisclaimerCustomColor} onChange={(e) => setWatchlistDisclaimerCustomColor(e.target.value)}
                                                placeholder="مثال: #FF5733 أو rgb(255, 87, 51)" 
-                                               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                               className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">اتركه فارغاً لاستخدام اللون الافتراضي</p>
                                     </div>
                                     <div>
-                                        <label htmlFor="watchlist_disclaimer_custom_size" className="block text-sm font-medium text-gray-700 dark:text-gray-300">حجم مخصص (بالبكسل)</label>
+                                        <label htmlFor="watchlist_disclaimer_custom_size" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">حجم مخصص (بالبكسل)</label>
                                         <input type="number" id="watchlist_disclaimer_custom_size" value={watchlistDisclaimerCustomSize} onChange={(e) => setWatchlistDisclaimerCustomSize(e.target.value)}
                                                placeholder="مثال: 14" min="8" max="48"
-                                               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                                               className="block w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
                                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">اتركه فارغاً لاستخدام الحجم الافتراضي</p>
                                     </div>
                                 </div>
-                            </>
+                            </div>
                         )}
                     </div>
-                </fieldset>
+                </AccordionSection>
 
-                <div className="mt-8 flex items-center justify-end space-x-4 rtl:space-x-reverse">
-                    {saveStatus === 'success' && <p className="text-sm text-nextrow-success">{t('save_success')}</p>}
-                    {saveStatus === 'error' && <p className="text-sm text-nextrow-danger">{t('save_error')}</p>}
+                {/* Save Button */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div>
+                        {saveStatus === 'success' && <p className="text-sm text-nextrow-success">{t('save_success')}</p>}
+                        {saveStatus === 'error' && <p className="text-sm text-nextrow-danger">{t('save_error')}</p>}
+                    </div>
                     <button onClick={handleSave} disabled={isSaving} 
-                        className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-nextrow-primary hover:bg-nextrow-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nextrow-primary disabled:opacity-50"
+                        className="px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-nextrow-primary hover:bg-nextrow-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nextrow-primary disabled:opacity-50 transition-colors flex items-center gap-2"
                     >
+                        {isSaving && <SpinnerIcon className="w-4 h-4" />}
                         {isSaving ? t('saving') : t('save')}
                     </button>
                 </div>

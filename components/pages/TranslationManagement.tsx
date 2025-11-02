@@ -12,23 +12,6 @@ interface TranslationRow {
 type SortKey = 'key' | 'value_en' | 'value_ar';
 type SortDirection = 'ascending' | 'descending';
 
-const SortableHeader: React.FC<{
-  sortKey: SortKey;
-  label: string;
-  sortConfig: { key: SortKey; direction: SortDirection };
-  requestSort: (key: SortKey) => void;
-}> = ({ sortKey, label, sortConfig, requestSort }) => {
-  const isSorted = sortConfig.key === sortKey;
-  const icon = isSorted ? (sortConfig.direction === 'ascending' ? '▲' : '▼') : '';
-  return (
-    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-      <button onClick={() => requestSort(sortKey)} className="flex items-center gap-2">
-        {label}
-        <span className="text-gray-400">{icon}</span>
-      </button>
-    </th>
-  );
-};
 
 const TranslationManagement: React.FC = () => {
   const { t, refetchTranslations } = useLanguage();
@@ -156,98 +139,242 @@ const TranslationManagement: React.FC = () => {
   if (error) return <div className="p-4 bg-red-100 text-red-800 rounded-md">{error}</div>;
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">{t('translation_management')}</h1>
-      <div className="mb-4">
-        <input 
+    <div className="space-y-6">
+      {/* Title Section */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{t('translation_management')}</h1>
+        </div>
+      </div>
+
+      {/* Notification */}
+      {notification && (
+        <div className="flex justify-center">
+          <div className={`w-full max-w-2xl p-4 text-sm rounded-lg ${
+              notification.type === 'success'
+                  ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                  : 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+          }`}>
+              {notification.message}
+          </div>
+        </div>
+      )}
+
+      {/* Search Tool */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+          <input 
             type="text"
             placeholder={t('search_by_key_or_value')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full max-w-sm px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-        />
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+          />
+        </div>
       </div>
-      {notification && <div className={`mb-4 p-4 text-sm rounded-md ${notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{notification.message}</div>}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <SortableHeader sortKey="key" label={t('translation_key')} sortConfig={sortConfig} requestSort={requestSort} />
-              <SortableHeader sortKey="value_en" label={t('english_translation')} sortConfig={sortConfig} requestSort={requestSort} />
-              <SortableHeader sortKey="value_ar" label={t('arabic_translation')} sortConfig={sortConfig} requestSort={requestSort} />
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('actions')}</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {paginatedTranslations.map((row) => {
-              const isEditing = !!editingRows[row.key];
-              const isSaving = savingKey === row.key;
-              return (
-                <tr key={row.key} className={isEditing ? 'bg-blue-50 dark:bg-blue-900/20' : ''}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-600 dark:text-gray-300 align-top">{row.key}</td>
-                  <td className="px-6 py-4 whitespace-normal text-sm text-gray-800 dark:text-gray-200 w-1/3">
-                    {isEditing ? (
-                      <div className="flex flex-col gap-2">
-                        <div>
-                          <label className="text-xs text-gray-500 dark:text-gray-400">{t('original_value')}</label>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md min-h-[2.5rem] whitespace-pre-wrap">{row.value_en || ' '}</p>
-                        </div>
-                        <div>
-                          <label className="text-xs text-blue-600 dark:text-blue-400 font-semibold">{t('new_value')}</label>
-                          <textarea
-                            value={editingRows[row.key].value_en}
-                            onChange={(e) => handleEditingChange(row.key, 'value_en', e.target.value)}
-                            className="w-full p-2 border border-blue-400 rounded-md dark:bg-gray-700 focus:ring-2 focus:ring-blue-500"
-                            rows={Math.max(2, (editingRows[row.key].value_en || '').split('\n').length)}
-                          />
-                        </div>
-                      </div>
-                    ) : (<p className="whitespace-pre-wrap">{row.value_en}</p>)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-normal text-sm text-gray-800 dark:text-gray-200 w-1/3" dir="rtl">
-                     {isEditing ? (
-                        <div className="flex flex-col gap-2">
-                            <div>
-                                <label className="text-xs text-gray-500 dark:text-gray-400">{t('original_value')}</label>
-                                <p className="text-sm text-gray-600 dark:text-gray-400 p-2 bg-gray-100 dark:bg-gray-900/50 rounded-md min-h-[2.5rem] whitespace-pre-wrap">{row.value_ar || ' '}</p>
-                            </div>
-                            <div>
-                                <label className="text-xs text-blue-600 dark:text-blue-400 font-semibold">{t('new_value')}</label>
-                                <textarea
-                                    value={editingRows[row.key].value_ar}
-                                    onChange={(e) => handleEditingChange(row.key, 'value_ar', e.target.value)}
-                                    className="w-full p-2 border border-blue-400 rounded-md dark:bg-gray-700 focus:ring-2 focus:ring-blue-500"
-                                    dir="rtl"
-                                    rows={Math.max(2, (editingRows[row.key].value_ar || '').split('\n').length)}
-                                />
-                            </div>
-                        </div>
-                    ) : (<p className="whitespace-pre-wrap">{row.value_ar}</p>)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium align-top">
-                    {isEditing ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleSave(row.key)} disabled={isSaving} className="py-1 px-3 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 flex items-center">{isSaving ? <SpinnerIcon className="w-4 h-4" /> : t('save')}</button>
-                        <button onClick={() => handleCancel(row.key)} className="py-1 px-3 text-sm font-medium text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-md dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500">{t('cancel')}</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => handleEdit(row.key, row.value_en, row.value_ar)} className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200"><PencilIcon className="w-5 h-5" /></button>
-                    )}
-                  </td>
+
+      {/* Table */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
+                <tr>
+                  <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[150px]">
+                    <button 
+                      onClick={() => requestSort('key')}
+                      className="flex items-center gap-1 hover:text-nextrow-primary transition-all duration-200 font-semibold"
+                    >
+                      {t('translation_key')}
+                      {sortConfig.key === 'key' && (
+                        <span className="text-gray-400">{sortConfig.direction === 'ascending' ? '▲' : '▼'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[200px]">
+                    <button 
+                      onClick={() => requestSort('value_en')}
+                      className="flex items-center gap-1 hover:text-nextrow-primary transition-all duration-200 font-semibold"
+                    >
+                      {t('english_translation')}
+                      {sortConfig.key === 'value_en' && (
+                        <span className="text-gray-400">{sortConfig.direction === 'ascending' ? '▲' : '▼'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[200px]">
+                    <button 
+                      onClick={() => requestSort('value_ar')}
+                      className="flex items-center gap-1 hover:text-nextrow-primary transition-all duration-200 font-semibold"
+                    >
+                      {t('arabic_translation')}
+                      {sortConfig.key === 'value_ar' && (
+                        <span className="text-gray-400">{sortConfig.direction === 'ascending' ? '▲' : '▼'}</span>
+                      )}
+                    </button>
+                  </th>
+                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[60px]">
+                    {t('actions')}
+                  </th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        {totalPages > 1 && (
-            <div className="p-4 flex items-center justify-between border-t border-gray-200 dark:border-gray-700">
-                <span className="text-sm text-gray-700 dark:text-gray-300">{t('page_x_of_y').replace('{currentPage}', String(currentPage)).replace('{totalPages}', String(totalPages))}</span>
-                <div className="flex gap-2">
-                    <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">{t('previous')}</button>
-                    <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50">{t('next')}</button>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {paginatedTranslations.map((row, index) => {
+                  const isEditing = !!editingRows[row.key];
+                  const isSaving = savingKey === row.key;
+                  return (
+                    <tr 
+                      key={row.key} 
+                      className={`group transition-all duration-200 ${
+                        index % 2 === 0 
+                          ? 'bg-white dark:bg-gray-800' 
+                          : 'bg-gray-50/50 dark:bg-gray-800/50'
+                      } ${isEditing ? 'bg-blue-50 dark:bg-blue-900/20' : ''} hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
+                    >
+                      <td className="px-2 py-2 whitespace-nowrap text-left">
+                        <div className="text-xs font-mono font-semibold text-gray-600 dark:text-gray-300">
+                          {row.key}
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 text-left">
+                        {isEditing ? (
+                          <div className="space-y-1.5">
+                            <div>
+                              <label className="text-[10px] text-gray-500 dark:text-gray-400">{t('original_value')}</label>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 p-1.5 bg-gray-100 dark:bg-gray-900/50 rounded min-h-[2rem] whitespace-pre-wrap">{row.value_en || ' '}</p>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">{t('new_value')}</label>
+                              <textarea
+                                value={editingRows[row.key].value_en}
+                                onChange={(e) => handleEditingChange(row.key, 'value_en', e.target.value)}
+                                className="w-full p-1.5 text-xs border border-blue-400 rounded-md dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 resize-none"
+                                rows={Math.max(2, Math.min(4, (editingRows[row.key].value_en || '').split('\n').length))}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs whitespace-pre-wrap text-gray-600 dark:text-gray-400">{row.value_en}</p>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-left" dir="rtl">
+                        {isEditing ? (
+                          <div className="space-y-1.5">
+                            <div>
+                              <label className="text-[10px] text-gray-500 dark:text-gray-400">{t('original_value')}</label>
+                              <p className="text-xs text-gray-600 dark:text-gray-400 p-1.5 bg-gray-100 dark:bg-gray-900/50 rounded min-h-[2rem] whitespace-pre-wrap">{row.value_ar || ' '}</p>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">{t('new_value')}</label>
+                              <textarea
+                                value={editingRows[row.key].value_ar}
+                                onChange={(e) => handleEditingChange(row.key, 'value_ar', e.target.value)}
+                                className="w-full p-1.5 text-xs border border-blue-400 rounded-md dark:bg-gray-700 focus:ring-1 focus:ring-blue-500 resize-none"
+                                dir="rtl"
+                                rows={Math.max(2, Math.min(4, (editingRows[row.key].value_ar || '').split('\n').length))}
+                              />
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs whitespace-pre-wrap text-gray-600 dark:text-gray-400">{row.value_ar}</p>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 whitespace-nowrap text-center">
+                        {isEditing ? (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button 
+                              onClick={() => handleSave(row.key)} 
+                              disabled={isSaving} 
+                              className="px-2 py-1 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 flex items-center gap-1 transition-colors"
+                            >
+                              {isSaving ? <SpinnerIcon className="w-3 h-3" /> : t('save')}
+                            </button>
+                            <button 
+                              onClick={() => handleCancel(row.key)} 
+                              className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 hover:bg-gray-300 dark:hover:bg-gray-500 rounded-md transition-colors"
+                            >
+                              {t('cancel')}
+                            </button>
+                          </div>
+                        ) : (
+                          <button 
+                            onClick={() => handleEdit(row.key, row.value_en, row.value_ar)} 
+                            className="p-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 transform hover:scale-110 text-blue-600 dark:text-blue-400"
+                          >
+                            <PencilIcon className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {paginatedTranslations.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                      {t('no_results_found')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Pagination - Same style as StockAnalysis */}
+          {totalPages > 1 && (
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(currentPage * itemsPerPage, processedTranslations.length)}</span> من <span className="font-semibold">{processedTranslations.length}</span>
                 </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {t('previous')}
+                  </button>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                      if (
+                        page === 1 ||
+                        page === totalPages ||
+                        (page >= currentPage - 1 && page <= currentPage + 1)
+                      ) {
+                        return (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                              currentPage === page
+                                ? 'bg-nextrow-primary text-white'
+                                : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        );
+                      } else if (
+                        page === currentPage - 2 ||
+                        page === currentPage + 2
+                      ) {
+                        return <span key={page} className="text-gray-400 dark:text-gray-600">...</span>;
+                      }
+                      return null;
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {t('next')}
+                  </button>
+                </div>
+              </div>
             </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

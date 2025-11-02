@@ -3,18 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.ico" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
     <title>MRowDir</title>
 
     <!-- PWA Manifest & Theme -->
-    <link rel="manifest" href="manifest.json" />
+    <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#2d5aa0" />
+    <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- Apple PWA specific tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="MRowDir">
-    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
+    
+    <!-- Android/Chrome PWA tags -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="MRowDir" />
+    
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-TileColor" content="#2d5aa0" />
+    <meta name="msapplication-TileImage" content="/icons/icon-192.png" />
+    <meta name="msapplication-config" content="/browserconfig.xml" />
     
     <script>
       // FOUC-prevention script to apply theme on initial load
@@ -87,13 +99,38 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js').then(registration => {
-            console.log('ServiceWorker registration successful with scope: ', registration.scope);
-          }, err => {
-            console.log('ServiceWorker registration failed: ', err);
-          });
+          navigator.serviceWorker.register('/sw.js', { scope: '/' })
+            .then(registration => {
+              console.log('✅ ServiceWorker registration successful with scope: ', registration.scope);
+              
+              // Check for updates periodically
+              setInterval(() => {
+                registration.update();
+              }, 60000); // Check every minute
+            })
+            .catch(err => {
+              console.warn('⚠️ ServiceWorker registration failed: ', err);
+            });
         });
       }
+      
+      // Handle beforeinstallprompt for Android Chrome
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        // Prevent Chrome 67 and earlier from automatically showing the prompt
+        e.preventDefault();
+        deferredPrompt = e;
+        console.log('📱 PWA install prompt available');
+        
+        // Store the event for later use
+        window.pwaInstallPrompt = e;
+      });
+      
+      // Track when app is installed
+      window.addEventListener('appinstalled', () => {
+        console.log('✅ PWA was installed');
+        deferredPrompt = null;
+      });
     </script>
   </body>
 </html>
