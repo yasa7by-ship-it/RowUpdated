@@ -1,0 +1,52 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Table Column Header Translations
+-- #
+-- # Purpose: This script adds translation keys for table column headers
+-- # to ensure all UI text uses the translation system instead of hardcoded English.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Table Column Headers
+('en', 'column_symbol', 'Symbol'),
+('ar', 'column_symbol', 'الرمز'),
+('en', 'column_name', 'Name'),
+('ar', 'column_name', 'الاسم'),
+('en', 'column_price_change', 'Price & Change'),
+('ar', 'column_price_change', 'السعر والتغيير'),
+('en', 'column_price_date', 'Price & Date'),
+('ar', 'column_price_date', 'السعر والتاريخ'),
+('en', 'column_actual_range', 'Actual Price Range'),
+('ar', 'column_actual_range', 'النطاق الفعلي'),
+('en', 'column_expected_range', 'Expected Price Range'),
+('ar', 'column_expected_range', 'النطاق المتوقع'),
+('en', 'column_rsi', 'RSI'),
+('ar', 'column_rsi', 'مؤشر القوة النسبية'),
+('en', 'column_forecast', 'Forecast'),
+('ar', 'column_forecast', 'التوقع'),
+('en', 'column_pattern', 'Pattern'),
+('ar', 'column_pattern', 'النمط'),
+('en', 'column_favorite', 'Favorite'),
+('ar', 'column_favorite', 'مفضل')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################
+

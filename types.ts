@@ -151,6 +151,10 @@ export interface DailyWatchlistItem {
   // Latest candle pattern
   pattern_name: string | null;
   bullish: boolean | null;
+  
+  // Actual price range from historical_data
+  actual_low: number | null;
+  actual_high: number | null;
 }
 
 

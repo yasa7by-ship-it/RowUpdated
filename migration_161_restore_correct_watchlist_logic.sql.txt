@@ -1,0 +1,131 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Restore Correct Watchlist Logic
+-- #
+-- # Purpose: This script restores the correct logic from get_daily_watchlist_data()
+-- # which starts from forecasts table and ensures we only show stocks with
+-- # forecasts for the next trading day, while adding the new required fields:
+-- # - actual_low and actual_high
+-- # - Additional technical indicators (rsi, macd, macd_signal)
+-- # - daily_change and daily_change_percent
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Update the function to use the correct logic from get_daily_watchlist_data
+CREATE OR REPLACE FUNCTION public.get_the_coming_trend_data()
+RETURNS TABLE (
+    -- Stock info
+    symbol TEXT,
+    stock_name TEXT,
+    last_price REAL,
+    daily_change REAL,
+    daily_change_percent REAL,
+    
+    -- Next upcoming forecast (for tomorrow)
+    next_forecast_date DATE,
+    next_predicted_lo REAL,
+    next_predicted_hi REAL,
+    
+    -- Latest technical indicators (for today, before forecast date)
+    indicator_date DATE,
+    rsi REAL,
+    macd REAL,
+    macd_signal REAL,
+    sma20 REAL,
+    sma50 REAL,
+
+    -- Latest candle pattern
+    pattern_name TEXT,
+    bullish BOOLEAN,
+    
+    -- Actual price range
+    actual_low REAL,
+    actual_high REAL
+)
+LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    latest_forecast_date DATE;           -- آخر تاريخ توقع من جدول التوقعات (أحدث سجل)
+    latest_indicator_date DATE;          -- آخر تاريخ مؤشرات (اليوم - قبل تاريخ التوقع)
+    latest_historical_date DATE;         -- آخر تاريخ في البيانات التاريخية (للنطاق الفعلي)
+BEGIN
+    -- 1. آخر تاريخ توقع = أحدث سجل في جدول التوقعات (يوم العمل القادم)
+    SELECT MAX(f.forecast_date) INTO latest_forecast_date FROM public.forecasts f;
+
+    -- 2. آخر تاريخ مؤشرات (اليوم - قبل تاريخ التوقع) - نفس منطق get_daily_watchlist_data
+    SELECT MAX(ti.date) INTO latest_indicator_date 
+    FROM public.technical_indicators ti 
+    WHERE ti.date < latest_forecast_date;
+
+    -- 3. آخر تاريخ في البيانات التاريخية (لجلب النطاق الفعلي)
+    SELECT MAX(hd.date) INTO latest_historical_date FROM public.historical_data hd;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,                              -- رمز السهم من جدول الأسهم (نفس منطق get_daily_watchlist_data)
+        s.name AS stock_name,
+        s.price AS last_price,                  -- سعر آخر إغلاق من جدول الأسهم
+        s.change AS daily_change,
+        s.change_percent AS daily_change_percent,
+        
+        -- التوقع القادم (من نفس سجل التوقعات - أحدث سجل)
+        f.forecast_date AS next_forecast_date,  -- تاريخ التوقع = يوم العمل القادم
+        f.predicted_lo AS next_predicted_lo,    -- نطاق التوقع القادم من نفس السجل
+        f.predicted_hi AS next_predicted_hi,
+        
+        -- المؤشرات الفنية من آخر تاريخ مؤشرات (قبل تاريخ التوقع) - نفس منطق get_daily_watchlist_data
+        ti.date AS indicator_date,
+        ti.rsi::real,
+        ti.macd::real,
+        ti.macd_signal::real,
+        ti.sma20::real,
+        ti.sma50::real,
+
+        -- نمط الشمعة من آخر تاريخ مؤشرات - نفس منطق get_daily_watchlist_data
+        cp.pattern_name,
+        cp.bullish,
+        
+        -- النطاق الفعلي من جدول البيانات التاريخية (لآخر تاريخ تاريخي)
+        hd.low::real AS actual_low,
+        hd.high::real AS actual_high
+        
+    FROM
+        public.forecasts f                    -- ✅ ابدأ من جدول التوقعات (نفس منطق get_daily_watchlist_data)
+    JOIN
+        public.stocks s ON f.stock_symbol = s.symbol  -- ✅ سعر آخر إغلاق من جدول الأسهم
+    LEFT JOIN
+        public.technical_indicators ti 
+        ON f.stock_symbol = ti.stock_symbol 
+        AND ti.date = latest_indicator_date    -- ✅ المؤشرات الفنية من آخر تاريخ مؤشرات (قبل التوقع)
+    LEFT JOIN
+        -- نمط الشمعة من آخر تاريخ مؤشرات - نفس منطق get_daily_watchlist_data
+        (
+            SELECT DISTINCT ON (cp_inner.stock_symbol) *
+            FROM public.candle_patterns cp_inner
+            WHERE cp_inner.date = latest_indicator_date
+        ) cp ON f.stock_symbol = cp.stock_symbol
+    
+    -- النطاق الفعلي من جدول البيانات التاريخية (لآخر تاريخ تاريخي)
+    LEFT JOIN public.historical_data hd 
+        ON f.stock_symbol = hd.stock_symbol 
+        AND hd.date = latest_historical_date
+        
+    WHERE
+        f.forecast_date = latest_forecast_date  -- ✅ Only forecasts for tomorrow
+        AND s.is_tracked = true
+    ORDER BY
+        s.symbol;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_the_coming_trend_data" restored with correct logic from get_daily_watchlist_data.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################
+

@@ -19,3 +19,4 @@ ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
 COMMIT;
 
 
+

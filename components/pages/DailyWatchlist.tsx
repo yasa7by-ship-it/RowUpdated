@@ -4,7 +4,7 @@ import type { DailyWatchlistItem, PageState } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAppSettings } from '../../contexts/AppSettingsContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
-import { SpinnerIcon, StarIcon, ArrowUpIcon, ArrowDownIcon, ChartBarIcon, SparklesIcon } from '../icons';
+import { SpinnerIcon, StarIcon, ArrowUpIcon, ArrowDownIcon, ChartBarIcon, SparklesIcon, CalendarDaysIcon } from '../icons';
 
 const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
@@ -40,6 +40,61 @@ const formatNumber = (num: number | null | undefined, options: Intl.NumberFormat
   }
 };
 
+// Date Card Component - تصميم احترافي وعصري جداً
+const DateCard: React.FC<{ 
+    title: string; 
+    date?: string; 
+    icon: React.ReactNode; 
+    iconBgClass: string;
+    gradient?: string;
+}> = memo(({ title, date, icon, iconBgClass, gradient }) => {
+    return (
+        <div className="group relative bg-gradient-to-br from-purple-50 via-indigo-50 to-blue-50 dark:from-purple-900/20 dark:via-indigo-900/20 dark:to-blue-900/20 rounded-3xl p-8 shadow-2xl hover:shadow-purple-500/20 transition-all duration-500 transform hover:-translate-y-2 hover:scale-[1.02] border-2 border-purple-200/50 dark:border-purple-700/50 overflow-hidden backdrop-blur-sm">
+            {/* Animated gradient backgrounds */}
+            <div className={`absolute inset-0 bg-gradient-to-br ${gradient || 'from-purple-400 via-indigo-400 to-blue-400'} opacity-0 group-hover:opacity-10 transition-opacity duration-500`}></div>
+            <div className={`absolute top-0 right-0 w-40 h-40 ${iconBgClass} opacity-20 blur-3xl rounded-full -mr-20 -mt-20 group-hover:opacity-30 group-hover:scale-150 transition-all duration-700`} style={{ pointerEvents: 'none' }}></div>
+            <div className={`absolute bottom-0 left-0 w-32 h-32 bg-blue-400 opacity-15 blur-2xl rounded-full -ml-16 -mb-16 group-hover:opacity-25 transition-opacity duration-500`} style={{ pointerEvents: 'none' }}></div>
+            
+            {/* Decorative sparkle effects */}
+            <div className="absolute top-4 right-4 w-2 h-2 bg-purple-400 rounded-full opacity-60 animate-pulse"></div>
+            <div className="absolute top-8 left-6 w-1.5 h-1.5 bg-indigo-400 rounded-full opacity-50 animate-pulse delay-300"></div>
+            <div className="absolute bottom-6 right-8 w-1 h-1 bg-blue-400 rounded-full opacity-40 animate-pulse delay-700"></div>
+            
+            {/* Icon with 3D effect and glow */}
+            <div className="relative mb-6 z-10">
+                <div className={`absolute inset-0 ${iconBgClass} opacity-30 blur-2xl rounded-3xl group-hover:opacity-40 transition-opacity duration-500`} style={{ pointerEvents: 'none', transform: 'scale(1.2)' }}></div>
+                <div className={`relative p-5 rounded-2xl ${iconBgClass} text-white shadow-2xl transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 border-2 border-white/30`}>
+                    <div className="relative z-10">
+                        {icon}
+                    </div>
+                    <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-2xl"></div>
+                </div>
+            </div>
+            
+            {/* Title with accent */}
+            <div className="relative mb-4 z-10">
+                <p className="text-xs font-bold text-purple-600 dark:text-purple-300 mb-3 uppercase tracking-widest letter-spacing-2">
+                    {title}
+                </p>
+                <div className="w-12 h-0.5 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"></div>
+            </div>
+            
+            {/* Date value with modern typography - YYYY/MM/DD format */}
+            {date && (
+                <div className="relative z-10">
+                    <p className="text-5xl md:text-6xl font-black bg-gradient-to-r from-purple-700 via-indigo-700 to-blue-700 dark:from-purple-300 dark:via-indigo-300 dark:to-blue-300 bg-clip-text text-transparent drop-shadow-2xl leading-tight mb-2">
+                        {date.split('-').join('/')}
+                    </p>
+                </div>
+            )}
+            
+            {/* Shine effect on hover */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+        </div>
+    );
+});
+DateCard.displayName = 'DateCard';
+
 // Price Change Component
 const PriceChange: React.FC<{ change: number | null; changePercent: number | null }> = memo(({ change, changePercent }) => {
     if (change === null || changePercent === null) return <span className="text-gray-500 text-sm">N/A</span>;
@@ -62,22 +117,34 @@ PriceChange.displayName = 'PriceChange';
 
 // RSI Display
 const RsiDisplay: React.FC<{ value: number | null }> = memo(({ value }) => {
-    if (value === null) return <span className="text-gray-400 text-sm">N/A</span>;
+    if (value === null) return <span className="text-gray-400 text-sm font-medium">N/A</span>;
     
     const getColor = () => {
-        if (value > 70) return { color: 'text-nextrow-danger', bg: 'bg-nextrow-danger' };
-        if (value < 30) return { color: 'text-nextrow-success', bg: 'bg-nextrow-success' };
-        return { color: 'text-gray-600 dark:text-gray-400', bg: 'bg-gray-400' };
+        if (value > 70) return { 
+            color: 'text-red-600 dark:text-red-400', 
+            bg: 'bg-red-500', 
+            badge: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' 
+        };
+        if (value < 30) return { 
+            color: 'text-green-600 dark:text-green-400', 
+            bg: 'bg-green-500', 
+            badge: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' 
+        };
+        return { 
+            color: 'text-gray-600 dark:text-gray-400', 
+            bg: 'bg-gray-400', 
+            badge: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' 
+        };
     };
     
     const status = getColor();
     
     return (
-        <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                <div className={`h-full ${status.bg}`} style={{ width: `${Math.min(100, value)}%` }} />
+        <div className="flex items-center gap-3">
+            <div className="flex-1 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
+                <div className={`h-full ${status.bg} transition-all duration-300 shadow-sm`} style={{ width: `${Math.min(100, value)}%` }} />
             </div>
-            <span className={`text-sm font-medium w-12 text-right ${status.color}`}>
+            <span className={`text-sm font-bold w-14 text-right px-2 py-1 rounded ${status.badge}`}>
                 {formatNumber(value, { maximumFractionDigits: 1 })}
             </span>
         </div>
@@ -85,32 +152,103 @@ const RsiDisplay: React.FC<{ value: number | null }> = memo(({ value }) => {
 });
 RsiDisplay.displayName = 'RsiDisplay';
 
-// Forecast Range
-const ForecastDisplay: React.FC<{ low: number | null; high: number | null }> = memo(({ low, high }) => {
-    if (low === null || high === null) return <span className="text-gray-400 text-sm">N/A</span>;
+// Price & Date Display
+const PriceDateDisplay: React.FC<{ price: number | null; date: string | null }> = memo(({ price, date }) => {
+    if (price === null) return <span className="text-gray-400 text-xs">N/A</span>;
+    
+    const formattedDate = date ? formatDate(date) : 'N/A';
     
     return (
-        <div className="text-right">
-            <div className="flex items-center justify-end gap-2">
-                <span className="text-sm font-semibold text-nextrow-danger">{formatNumber(low)}</span>
-                <span className="text-xs text-gray-400">-</span>
-                <span className="text-sm font-semibold text-nextrow-success">{formatNumber(high)}</span>
+        <div className="space-y-0.5 text-center">
+            <div className="text-sm font-bold text-gray-900 dark:text-white">
+                ${formatNumber(price, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                {formattedDate}
             </div>
         </div>
     );
 });
-ForecastDisplay.displayName = 'ForecastDisplay';
+PriceDateDisplay.displayName = 'PriceDateDisplay';
+
+// Actual Range Display
+const ActualRangeDisplay: React.FC<{ low: number | null; high: number | null }> = memo(({ low, high }) => {
+    // Check if both values are null or undefined
+    if ((low === null || low === undefined) && (high === null || high === undefined)) {
+        return <span className="text-gray-400 text-sm font-medium">N/A - N/A</span>;
+    }
+    
+    // If only one value is missing, show what's available
+    if (low === null || low === undefined) {
+        return (
+            <div className="flex items-center justify-center gap-2">
+                <span className="text-sm font-medium text-gray-400">N/A</span>
+                <span className="text-xs text-gray-400">-</span>
+                <span className="text-sm font-bold text-green-600 dark:text-green-400">{formatNumber(high!, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+            </div>
+        );
+    }
+    
+    if (high === null || high === undefined) {
+        return (
+            <div className="flex items-center justify-center gap-2">
+                <span className="text-sm font-bold text-red-600 dark:text-red-400">{formatNumber(low, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <span className="text-xs text-gray-400">-</span>
+                <span className="text-sm font-medium text-gray-400">N/A</span>
+            </div>
+        );
+    }
+    
+    // Ensure correct order: low should be less than high
+    const actualLow = Math.min(low, high);
+    const actualHigh = Math.max(low, high);
+    
+    return (
+        <div className="flex items-center justify-center gap-2">
+            <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                {formatNumber(actualLow, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="text-xs text-gray-500 font-medium">-</span>
+            <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                {formatNumber(actualHigh, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+        </div>
+    );
+});
+ActualRangeDisplay.displayName = 'ActualRangeDisplay';
+
+// Expected Range Display
+const ExpectedRangeDisplay: React.FC<{ low: number | null; high: number | null }> = memo(({ low, high }) => {
+    if (low === null || high === null) return <span className="text-gray-400 text-sm font-medium">N/A</span>;
+    
+    // Ensure correct order: low should be less than high
+    const expectedLow = Math.min(low, high);
+    const expectedHigh = Math.max(low, high);
+    
+    return (
+        <div className="flex items-center justify-center gap-2">
+            <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                {formatNumber(expectedLow, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className="text-xs text-gray-500 font-medium">-</span>
+            <span className="text-sm font-bold text-green-600 dark:text-green-400">
+                {formatNumber(expectedHigh, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+        </div>
+    );
+});
+ExpectedRangeDisplay.displayName = 'ExpectedRangeDisplay';
 
 // Pattern Display
 const PatternDisplay: React.FC<{ patternName: string | null; bullish: boolean | null; patternText?: string }> = memo(({ patternName, bullish, patternText }) => {
-    if (!patternName) return <span className="text-gray-400 text-sm">-</span>;
+    if (!patternName) return <span className="text-gray-400 text-sm font-medium">-</span>;
     
     return (
         <div className="text-right">
-            <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+            <div className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${
                 bullish 
-                    ? 'bg-nextrow-success/20 text-nextrow-success' 
-                    : 'bg-nextrow-danger/20 text-nextrow-danger'
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700' 
+                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-700'
             }`}>
                 {patternText || patternName}
             </div>
@@ -140,6 +278,8 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
     const [showFavorites, setShowFavorites] = useState(false);
     const [sortBy, setSortBy] = useState<'symbol' | 'change' | 'rsi'>('symbol');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         let isMounted = true;
@@ -269,6 +409,22 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
         return null;
     }, [data]);
 
+    // Reset to first page when filters change - MUST be before any conditional returns
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, showFavorites, sortBy, sortOrder]);
+
+    // Pagination logic - MUST be before any conditional returns (all hooks must be before returns)
+    const totalPages = useMemo(() => Math.ceil(filteredData.length / itemsPerPage), [filteredData.length, itemsPerPage]);
+    const startIndex = useMemo(() => (currentPage - 1) * itemsPerPage, [currentPage, itemsPerPage]);
+    const endIndex = useMemo(() => startIndex + itemsPerPage, [startIndex, itemsPerPage]);
+    const paginatedData = useMemo(() => filteredData.slice(startIndex, endIndex), [filteredData, startIndex, endIndex]);
+
+    // Settings - can be after hooks but before returns
+    const showDisclaimer = settings?.show_watchlist_disclaimer !== 'false';
+    const disclaimerColor = settings?.watchlist_disclaimer_color || 'text-gray-500 dark:text-gray-400';
+    const disclaimerSize = settings?.watchlist_disclaimer_size || 'text-sm';
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-full min-h-[400px]">
@@ -289,190 +445,207 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
         );
     }
 
-    const showDisclaimer = settings?.show_watchlist_disclaimer !== 'false';
-    const disclaimerColor = settings?.watchlist_disclaimer_color || 'text-gray-500 dark:text-gray-400';
-    const disclaimerSize = settings?.watchlist_disclaimer_size || 'text-sm';
-
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-3">
-                            <ChartBarIcon className="w-6 h-6 text-nextrow-primary" />
-                            <span>
-                                {nextForecastDate ? (
-                                    <>{t('forecasts_for')} {formatDate(nextForecastDate)}</>
-                                ) : (
-                                    <>{t('daily_watchlist')}</>
-                                )}
-                            </span>
-                        </h1>
-                        {showDisclaimer && (
-                            <p className={`${disclaimerSize} ${disclaimerColor} mt-2`} style={{
-                                color: settings?.watchlist_disclaimer_custom_color || undefined,
-                                fontSize: settings?.watchlist_disclaimer_custom_size ? `${settings.watchlist_disclaimer_custom_size}px` : undefined
-                            }}>
-                                {t('disclaimer_educational_purposes')}
-                            </p>
-                        )}
-                    </div>
-                    
-                    {/* Stats */}
-                    <div className="flex gap-4 text-sm">
-                        <div className="text-center px-4 py-2 bg-nextrow-primary/10 rounded-lg">
-                            <div className="text-2xl font-bold text-nextrow-primary">{filteredData.length}</div>
-                            <div className="text-gray-500 dark:text-gray-400 text-xs">Total</div>
-                        </div>
-                        <div className="text-center px-4 py-2 bg-nextrow-success/10 rounded-lg">
-                            <div className="text-2xl font-bold text-nextrow-success">{filteredData.filter(item => isFavorite(item.symbol)).length}</div>
-                            <div className="text-gray-500 dark:text-gray-400 text-xs">Favorites</div>
-                        </div>
-                    </div>
+            {/* Header - بطاقة توقعات ليوم */}
+            <div className="flex justify-center">
+                <div className="w-full max-w-3xl">
+                    <DateCard 
+                        title={nextForecastDate ? t('forecasts_for') : t('daily_watchlist')}
+                        date={nextForecastDate ? formatDate(nextForecastDate) : undefined}
+                        icon={<CalendarDaysIcon className="w-6 h-6"/>}
+                        iconBgClass="bg-gradient-to-br from-purple-500 to-purple-700"
+                        gradient="from-purple-400 to-purple-600"
+                    />
+                    {showDisclaimer && (
+                        <p className={`${disclaimerSize} ${disclaimerColor} mt-4 text-center`} style={{
+                            color: settings?.watchlist_disclaimer_custom_color || undefined,
+                            fontSize: settings?.watchlist_disclaimer_custom_size ? `${settings.watchlist_disclaimer_custom_size}px` : undefined
+                        }}>
+                            {t('disclaimer_educational_purposes')}
+                        </p>
+                    )}
                 </div>
             </div>
 
-            {/* Filters */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex flex-col sm:flex-row gap-4">
-                    <div className="flex-1 relative">
-                        <input 
-                            type="text"
-                            placeholder={t('search_by_symbol_or_name')}
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
-                        />
-                        <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+            {/* Search and Filters Tools */}
+            <div className="flex justify-center">
+                <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <div className="space-y-4">
+                        {/* Search */}
+                        <div className="relative">
+                            <input 
+                                type="text"
+                                placeholder={t('search_by_symbol_or_name')}
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
+                            />
+                            <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        </div>
+                        
+                        {/* Favorites Filter */}
+                        <button
+                            onClick={() => setShowFavorites(!showFavorites)}
+                            className={`w-full px-4 py-3 rounded-md text-sm font-medium transition-all ${
+                                showFavorites 
+                                    ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+                            }`}
+                        >
+                            <StarIcon className={`w-4 h-4 inline mr-1 ${showFavorites ? 'fill-current' : ''}`} />
+                            {t('favorites')}
+                        </button>
                     </div>
-                    
-                    <button
-                        onClick={() => setShowFavorites(!showFavorites)}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                            showFavorites 
-                                ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
-                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
-                        }`}
-                    >
-                        <StarIcon className={`w-4 h-4 inline mr-1 ${showFavorites ? 'fill-current' : ''}`} />
-                        {t('favorites')}
-                    </button>
                 </div>
             </div>
 
             {/* Table */}
             {filteredData.length > 0 ? (
-                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[800px]">
-                            <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex justify-center">
+                    <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full">
+                            <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
                                 <tr>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                                    <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest w-10" title={t('column_favorite')}>
+                                        <span className="text-base">★</span>
+                                    </th>
+                                    <th className="px-3 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[70px]">
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setSortBy('symbol');
                                                 setSortOrder(sortBy === 'symbol' && sortOrder === 'asc' ? 'desc' : 'asc');
                                             }}
-                                            className="flex items-center gap-1 hover:text-nextrow-primary transition-colors"
+                                            className="flex items-center gap-2 hover:text-nextrow-primary transition-all duration-200 font-semibold"
                                         >
-                                            Symbol
-                                            {sortBy === 'symbol' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
+                                            {t('column_symbol')}
+                                            {sortBy === 'symbol' && (
+                                                <span className={`text-nextrow-primary text-sm ${sortOrder === 'asc' ? '↑' : '↓'}`}>
+                                                    {sortOrder === 'asc' ? '↑' : '↓'}
+                                                </span>
+                                            )}
                                         </button>
                                     </th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSortBy('change');
-                                                setSortOrder(sortBy === 'change' && sortOrder === 'asc' ? 'desc' : 'asc');
-                                            }}
-                                            className="flex items-center gap-1 hover:text-nextrow-primary transition-colors"
-                                        >
-                                            Price & Change
-                                            {sortBy === 'change' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
-                                        </button>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[110px]">
+                                        {t('column_price_date')}
                                     </th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSortBy('rsi');
-                                                setSortOrder(sortBy === 'rsi' && sortOrder === 'asc' ? 'desc' : 'asc');
-                                            }}
-                                            className="flex items-center gap-1 hover:text-nextrow-primary transition-colors"
-                                        >
-                                            RSI
-                                            {sortBy === 'rsi' && (sortOrder === 'asc' ? ' ↑' : ' ↓')}
-                                        </button>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[120px]">
+                                        {t('column_actual_range')}
                                     </th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Forecast</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Pattern</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wider w-12">★</th>
+                                    <th className="px-3 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[120px]">
+                                        {t('column_expected_range')}
+                                    </th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700 bg-white dark:bg-gray-800">
-                                {filteredData.map((item) => {
+                            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                {paginatedData.map((item, index) => {
                                     const patternKey = item.pattern_name ? `pattern_${item.pattern_name.toLowerCase().replace(/\s+/g, '_')}` : '';
                                     const patternText = patternKey ? t(patternKey) : item.pattern_name;
                                     
                                     return (
                                         <tr 
                                             key={item.symbol} 
-                                            className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+                                            className={`group transition-all duration-200 cursor-pointer ${
+                                                index % 2 === 0 
+                                                    ? 'bg-white dark:bg-gray-800' 
+                                                    : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                            } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
                                             onClick={() => setPage({ page: 'stock_details', symbol: item.symbol })}
                                         >
-                                            <td className="px-4 py-4 whitespace-nowrap">
-                                                <div className="text-sm font-bold text-nextrow-primary hover:underline">
-                                                    {item.symbol}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <div className="text-sm text-gray-700 dark:text-gray-300 max-w-xs truncate" title={item.stock_name || ''}>
-                                                    {item.stock_name || '-'}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 whitespace-nowrap">
-                                                <div className="text-right">
-                                                    <div className="text-sm font-semibold text-gray-900 dark:text-white mb-1">
-                                                        ${formatNumber(item.last_price)}
-                                                    </div>
-                                                    <PriceChange change={item.daily_change} changePercent={item.daily_change_percent} />
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4">
-                                                <RsiDisplay value={item.rsi} />
-                                            </td>
-                                            <td className="px-4 py-4 whitespace-nowrap">
-                                                <ForecastDisplay low={item.next_predicted_lo} high={item.next_predicted_hi} />
-                                            </td>
-                                            <td className="px-4 py-4 whitespace-nowrap">
-                                                <PatternDisplay 
-                                                    patternName={item.pattern_name} 
-                                                    bullish={item.bullish}
-                                                    patternText={patternText || undefined}
-                                                />
-                                            </td>
-                                            <td className="px-4 py-4 text-center">
+                                            <td className="px-2 py-2 text-center">
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         toggleFavorite(item.symbol);
                                                     }}
-                                                    className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors ${
-                                                        isFavorite(item.symbol) ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'
+                                                    className={`p-1 rounded-lg hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-all duration-200 transform hover:scale-110 ${
+                                                        isFavorite(item.symbol) 
+                                                            ? 'text-yellow-500 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-900/20' 
+                                                            : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'
                                                     }`}
                                                 >
-                                                    <StarIcon className={`w-5 h-5 ${isFavorite(item.symbol) ? 'fill-current' : ''}`} />
+                                                    <StarIcon className={`w-4 h-4 ${isFavorite(item.symbol) ? 'fill-current' : ''}`} />
                                                 </button>
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-left">
+                                                <div className="text-sm font-semibold text-nextrow-primary hover:text-nextrow-primary/80 hover:underline transition-colors">
+                                                    {item.symbol}
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                <PriceDateDisplay price={item.last_price} date={item.indicator_date} />
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                <ActualRangeDisplay low={item.actual_low} high={item.actual_high} />
+                                            </td>
+                                            <td className="px-3 py-2 whitespace-nowrap text-center">
+                                                <ExpectedRangeDisplay low={item.next_predicted_lo} high={item.next_predicted_hi} />
                                             </td>
                                         </tr>
                                     );
                                 })}
                             </tbody>
-                        </table>
+                            </table>
+                        </div>
+                        
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                                        <span className="font-semibold">{startIndex + 1}</span> - <span className="font-semibold">{Math.min(endIndex, filteredData.length)}</span> من <span className="font-semibold">{filteredData.length}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                                            disabled={currentPage === 1}
+                                            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {t('previous')}
+                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                                                // Show first page, last page, current page, and pages around current
+                                                if (
+                                                    page === 1 ||
+                                                    page === totalPages ||
+                                                    (page >= currentPage - 1 && page <= currentPage + 1)
+                                                ) {
+                                                    return (
+                                                        <button
+                                                            key={page}
+                                                            onClick={() => setCurrentPage(page)}
+                                                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                                                currentPage === page
+                                                                    ? 'bg-nextrow-primary text-white'
+                                                                    : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                                                            }`}
+                                                        >
+                                                            {page}
+                                                        </button>
+                                                    );
+                                                } else if (
+                                                    page === currentPage - 2 ||
+                                                    page === currentPage + 2
+                                                ) {
+                                                    return <span key={page} className="text-gray-400 dark:text-gray-600">...</span>;
+                                                }
+                                                return null;
+                                            })}
+                                        </div>
+                                        <button
+                                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                                            disabled={currentPage === totalPages}
+                                            className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                        >
+                                            {t('next')}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             ) : data.length === 0 && !loading && !error ? (

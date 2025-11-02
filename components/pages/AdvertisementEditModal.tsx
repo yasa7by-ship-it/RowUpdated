@@ -92,97 +92,183 @@ const AdvertisementEditModal: React.FC<AdvertisementEditModalProps> = ({ adverti
   const isNew = !advertisement;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full md:max-w-2xl max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex justify-center items-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl w-full max-w-sm max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <form onSubmit={handleSubmit} className="flex flex-col h-full">
-          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+          {/* Compact Header */}
+          <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-bold text-gray-900 dark:text-white">
               {isNew ? t('add_advertisement') : t('edit_advertisement')}
             </h2>
           </div>
           
-          <div className="p-6 space-y-4 overflow-y-auto">
-            {error && <div className="p-3 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-md text-sm">{error}</div>}
+          {/* Compact Form Fields */}
+          <div className="px-4 py-3 space-y-3 overflow-y-auto">
+            {error && (
+              <div className="p-2 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs">
+                {error}
+              </div>
+            )}
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                  <label htmlFor="title_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('title_en')}</label>
-                  <input type="text" id="title_en" value={titleEn} onChange={e => setTitleEn(e.target.value)} required
-                         className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                </div>
-                <div>
-                  <label htmlFor="title_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('title_ar')}</label>
-                  <input type="text" id="title_ar" value={titleAr} onChange={e => setTitleAr(e.target.value)} dir="rtl"
-                         className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                </div>
+            {/* Titles - Side by Side */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="title_en" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('title_en')}
+                </label>
+                <input 
+                  type="text" 
+                  id="title_en" 
+                  value={titleEn} 
+                  onChange={e => setTitleEn(e.target.value)} 
+                  required
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                />
+              </div>
+              <div>
+                <label htmlFor="title_ar" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('title_ar')}
+                </label>
+                <input 
+                  type="text" 
+                  id="title_ar" 
+                  value={titleAr} 
+                  onChange={e => setTitleAr(e.target.value)} 
+                  dir="rtl"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                  <label htmlFor="advertiser_name_en" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('advertiser_name_en')}</label>
-                  <input type="text" id="advertiser_name_en" value={advertiserNameEn} onChange={e => setAdvertiserNameEn(e.target.value)}
-                         className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                </div>
-                <div>
-                  <label htmlFor="advertiser_name_ar" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('advertiser_name_ar')}</label>
-                  <input type="text" id="advertiser_name_ar" value={advertiserNameAr} onChange={e => setAdvertiserNameAr(e.target.value)} dir="rtl"
-                         className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                </div>
+            {/* Advertiser Names - Side by Side */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="advertiser_name_en" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('advertiser_name_en')}
+                </label>
+                <input 
+                  type="text" 
+                  id="advertiser_name_en" 
+                  value={advertiserNameEn} 
+                  onChange={e => setAdvertiserNameEn(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                />
+              </div>
+              <div>
+                <label htmlFor="advertiser_name_ar" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('advertiser_name_ar')}
+                </label>
+                <input 
+                  type="text" 
+                  id="advertiser_name_ar" 
+                  value={advertiserNameAr} 
+                  onChange={e => setAdvertiserNameAr(e.target.value)} 
+                  dir="rtl"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                />
+              </div>
             </div>
 
-            <div>
-              <label htmlFor="image_url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('image_url')}</label>
-              <input type="url" id="image_url" value={imageUrl} onChange={e => setImageUrl(e.target.value)} required placeholder="https://example.com/image.png"
-                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-            </div>
-            <div>
-              <label htmlFor="target_url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('target_url')}</label>
-              <input type="url" id="target_url" value={targetUrl} onChange={e => setTargetUrl(e.target.value)} required placeholder="https://example.com"
-                     className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+            {/* URLs - Side by Side */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="image_url" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('image_url')}
+                </label>
+                <input 
+                  type="url" 
+                  id="image_url" 
+                  value={imageUrl} 
+                  onChange={e => setImageUrl(e.target.value)} 
+                  required 
+                  placeholder="https://..."
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500" 
+                />
+              </div>
+              <div>
+                <label htmlFor="target_url" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('target_url')}
+                </label>
+                <input 
+                  type="url" 
+                  id="target_url" 
+                  value={targetUrl} 
+                  onChange={e => setTargetUrl(e.target.value)} 
+                  required 
+                  placeholder="https://..."
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500" 
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                     <label htmlFor="is_enabled" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('is_enabled')}</label>
-                      <div className="mt-2 flex items-center">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input type="checkbox" className="sr-only peer"
-                            checked={isEnabled}
-                            onChange={(e) => setIsEnabled(e.target.checked)}
-                          />
-                          <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] rtl:after:left-auto rtl:after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
-                        </label>
-                      </div>
-                </div>
+            {/* Dates and Toggle - Side by Side */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="start_date" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('start_date')}
+                </label>
+                <input 
+                  type="datetime-local" 
+                  id="start_date" 
+                  value={startDate} 
+                  onChange={e => setStartDate(e.target.value)} 
+                  required
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                />
+              </div>
+              <div>
+                <label htmlFor="end_date" className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  {t('end_date')}
+                </label>
+                <input 
+                  type="datetime-local" 
+                  id="end_date" 
+                  value={endDate} 
+                  onChange={e => setEndDate(e.target.value)} 
+                  required
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
+                />
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                    <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('start_date')}</label>
-                    <input type="datetime-local" id="start_date" value={startDate} onChange={e => setStartDate(e.target.value)} required
-                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                </div>
-                <div>
-                    <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300">{t('end_date')}</label>
-                    <input type="datetime-local" id="end_date" value={endDate} onChange={e => setEndDate(e.target.value)} required
-                            className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-                </div>
+            {/* Toggle - Compact */}
+            <div className="flex items-center justify-between py-1">
+              <label htmlFor="is_enabled" className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                {t('is_enabled')}
+              </label>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  className="sr-only peer"
+                  checked={isEnabled}
+                  onChange={(e) => setIsEnabled(e.target.checked)}
+                />
+                <div className="w-10 h-5 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-focus:ring-2 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] rtl:after:left-auto rtl:after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600"></div>
+              </label>
             </div>
             
-            <div className="pt-2">
-                <p className="text-xs italic text-center text-gray-500 dark:text-gray-400">
-                  {t('ad_placement_note')}
-                </p>
+            {/* Note - Compact */}
+            <div className="pt-1">
+              <p className="text-[10px] italic text-center text-gray-500 dark:text-gray-400">
+                {t('ad_placement_note')}
+              </p>
             </div>
-
           </div>
           
-          <div className="px-6 py-4 bg-gray-50 dark:bg-gray-800/50 flex justify-end items-center space-x-3 rtl:space-x-reverse mt-auto">
-            <button type="button" onClick={onClose} className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+          {/* Compact Footer Buttons */}
+          <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/50 flex justify-end items-center gap-2 border-t border-gray-200 dark:border-gray-700 mt-auto">
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-1 focus:ring-gray-500 transition-colors"
+            >
               {t('cancel')}
             </button>
-            <button type="submit" disabled={isSaving}
-                    className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50">
+            <button 
+              type="submit" 
+              disabled={isSaving}
+              className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
               {isSaving ? t('saving') : t('save')}
             </button>
           </div>

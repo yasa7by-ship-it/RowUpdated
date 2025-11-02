@@ -22,6 +22,70 @@ const formatDate = (dateString: string | null | undefined, options: Intl.DateTim
     }
 };
 
+// Actual Range Display Component (same as StockAnalysis)
+const ActualRangeDisplay: React.FC<{ low: number | null; high: number | null }> = React.memo(({ low, high }) => {
+    if ((low === null || low === undefined) && (high === null || high === undefined)) {
+        return <span className="text-gray-400 text-xs font-medium">N/A - N/A</span>;
+    }
+    
+    if (low === null || low === undefined) {
+        return (
+            <div className="flex items-center justify-center gap-1">
+                <span className="text-xs font-medium text-gray-400">N/A</span>
+                <span className="text-[10px] text-gray-400">-</span>
+                <span className="text-xs font-bold text-green-600 dark:text-green-400">{formatNumber(high!)}</span>
+            </div>
+        );
+    }
+    
+    if (high === null || high === undefined) {
+        return (
+            <div className="flex items-center justify-center gap-1">
+                <span className="text-xs font-bold text-red-600 dark:text-red-400">{formatNumber(low)}</span>
+                <span className="text-[10px] text-gray-400">-</span>
+                <span className="text-xs font-medium text-gray-400">N/A</span>
+            </div>
+        );
+    }
+    
+    const actualLow = Math.min(low, high);
+    const actualHigh = Math.max(low, high);
+    
+    return (
+        <div className="flex items-center justify-center gap-1">
+            <span className="text-xs font-bold text-red-600 dark:text-red-400">
+                {formatNumber(actualLow)}
+            </span>
+            <span className="text-[10px] text-gray-500 font-medium">-</span>
+            <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                {formatNumber(actualHigh)}
+            </span>
+        </div>
+    );
+});
+ActualRangeDisplay.displayName = 'ActualRangeDisplay';
+
+// Expected Range Display Component (same as StockAnalysis)
+const ExpectedRangeDisplay: React.FC<{ low: number | null; high: number | null }> = React.memo(({ low, high }) => {
+    if (low === null || high === null) return <span className="text-gray-400 text-xs font-medium">N/A</span>;
+    
+    const expectedLow = Math.min(low, high);
+    const expectedHigh = Math.max(low, high);
+    
+    return (
+        <div className="flex items-center justify-center gap-1">
+            <span className="text-xs font-bold text-red-600 dark:text-red-400">
+                {formatNumber(expectedLow)}
+            </span>
+            <span className="text-[10px] text-gray-500 font-medium">-</span>
+            <span className="text-xs font-bold text-green-600 dark:text-green-400">
+                {formatNumber(expectedHigh)}
+            </span>
+        </div>
+    );
+});
+ExpectedRangeDisplay.displayName = 'ExpectedRangeDisplay';
+
 
 // --- START: New Indicator Visualization Components ---
 
@@ -502,6 +566,7 @@ const StockDetails: React.FC<StockDetailsProps> = ({ symbol, setPage }) => {
                 </div>
             </div>
 
+            {/* Top Row - Stock Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-md">
                     <p className="text-sm text-gray-500">{t('last_price')}</p>
@@ -523,25 +588,67 @@ const StockDetails: React.FC<StockDetailsProps> = ({ symbol, setPage }) => {
                 </div>
             </div>
             
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
-                    <h2 className="text-xl font-semibold mb-4">{t('historical_performance_15d')}</h2>
-                    <RangeBarChart data={forecast_history} hoveredIndex={hoveredChartIndex} setHoveredIndex={setHoveredChartIndex} />
-                </div>
-                <div className="lg:col-span-1 bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col justify-center text-center">
-                    <h2 className="text-xl font-semibold mb-2">{t('next_day_forecast')}</h2>
-                    {next_forecast ? (
-                        <>
-                            <p className="text-4xl font-bold my-2">
-                                <span className="text-green-500">{formatNumber(next_forecast.predicted_hi)}</span>
-                                <span className="mx-3 text-gray-400 dark:text-gray-500">-</span>
-                                <span className="text-red-500">{formatNumber(next_forecast.predicted_lo)}</span>
+            {/* Bottom Row - Next Forecast (Golden Info) on Left, Chart on Right */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Next Day Forecast - The Golden Information (Left Side) */}
+                {next_forecast && (
+                    <div className="group relative bg-gradient-to-br from-yellow-50 via-amber-50 to-orange-50 dark:from-yellow-900/30 dark:via-amber-900/30 dark:to-orange-900/30 rounded-3xl p-8 shadow-2xl hover:shadow-yellow-500/30 transition-all duration-500 transform hover:-translate-y-2 hover:scale-[1.02] border-2 border-yellow-300/50 dark:border-yellow-700/50 overflow-hidden backdrop-blur-sm">
+                        {/* Golden gradient overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-br from-yellow-400 via-amber-400 to-orange-400 opacity-0 group-hover:opacity-10 transition-opacity duration-500"></div>
+                        <div className="absolute top-0 right-0 w-48 h-48 bg-yellow-400 opacity-25 blur-3xl rounded-full -mr-24 -mt-24 group-hover:opacity-35 group-hover:scale-150 transition-all duration-700"></div>
+                        <div className="absolute bottom-0 left-0 w-40 h-40 bg-amber-400 opacity-20 blur-2xl rounded-full -ml-20 -mb-20 group-hover:opacity-30 transition-opacity duration-500"></div>
+                        
+                        {/* Decorative sparkles */}
+                        <div className="absolute top-6 right-6 w-3 h-3 bg-yellow-400 rounded-full opacity-70 animate-pulse"></div>
+                        <div className="absolute top-12 left-8 w-2 h-2 bg-amber-400 rounded-full opacity-60 animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                        <div className="absolute bottom-8 right-10 w-1.5 h-1.5 bg-orange-400 rounded-full opacity-50 animate-pulse" style={{ animationDelay: '700ms' }}></div>
+                        
+                        {/* Icon with golden glow */}
+                        <div className="relative mb-6 z-10">
+                            <div className="absolute inset-0 bg-gradient-to-br from-yellow-400 to-amber-500 opacity-40 blur-2xl rounded-3xl group-hover:opacity-50 transition-opacity duration-500" style={{ transform: 'scale(1.2)' }}></div>
+                            <div className="relative p-5 rounded-2xl bg-gradient-to-br from-yellow-400 to-amber-500 text-white shadow-2xl transform group-hover:scale-110 group-hover:rotate-3 transition-all duration-500 border-2 border-yellow-300/50">
+                                <div className="relative z-10 text-3xl">📈</div>
+                                <div className="absolute inset-0 bg-gradient-to-br from-white/30 to-transparent rounded-2xl"></div>
+                            </div>
+                        </div>
+                        
+                        {/* Title */}
+                        <div className="relative mb-6 z-10">
+                            <p className="text-sm font-bold text-yellow-700 dark:text-yellow-300 mb-3 uppercase tracking-widest">
+                                {t('next_day_forecast')}
                             </p>
-                            <p className="text-4xl font-bold font-mono text-blue-600 dark:text-blue-400 mt-2">
+                            <div className="w-16 h-1 bg-gradient-to-r from-yellow-500 via-amber-500 to-orange-500 rounded-full"></div>
+                        </div>
+                        
+                        {/* Forecast Range - Large and Prominent */}
+                        <div className="relative z-10 mb-6">
+                            <div className="flex items-baseline justify-center gap-3">
+                                <span className="text-5xl md:text-6xl font-black text-red-600 dark:text-red-400 drop-shadow-lg">
+                                    {formatNumber(next_forecast.predicted_lo, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-3xl font-bold text-gray-400 dark:text-gray-500">-</span>
+                                <span className="text-5xl md:text-6xl font-black text-green-600 dark:text-green-400 drop-shadow-lg">
+                                    {formatNumber(next_forecast.predicted_hi, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                            </div>
+                        </div>
+                        
+                        {/* Date */}
+                        <div className="relative z-10">
+                            <p className="text-2xl font-bold text-yellow-700 dark:text-yellow-300 text-center">
                                 {formatDate(next_forecast.forecast_date)}
                             </p>
-                        </>
-                    ) : <p>{t('no_forecast_available')}</p>}
+                        </div>
+                        
+                        {/* Shine effect */}
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-200/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                    </div>
+                )}
+                
+                {/* Historical Performance Chart (Right Side) */}
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
+                    <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">{t('historical_performance_15d')}</h2>
+                    <RangeBarChart data={forecast_history} hoveredIndex={hoveredChartIndex} setHoveredIndex={setHoveredChartIndex} />
                 </div>
             </div>
 
@@ -560,61 +667,117 @@ const StockDetails: React.FC<StockDetailsProps> = ({ symbol, setPage }) => {
                         </div>
                     )}
                      {activeTab === 'history' && (
-                        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
-                            <table className="min-w-full text-center">
-                                <thead className="bg-gray-100 dark:bg-gray-700/50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('forecast_date')}</th>
-                                        <th className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('forecast_result')}</th>
-                                        <th className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('predicted_low')}</th>
-                                        <th className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('predicted_high')}</th>
-                                        <th className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('actual_low')}</th>
-                                        <th className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('actual_high')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {forecast_history.map((item) => (
-                                        <tr key={item.forecast_date}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg text-left text-gray-800 dark:text-gray-200">{formatDate(item.forecast_date)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <span className={`px-4 py-1.5 text-sm font-semibold rounded-full ${item.hit_range ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-                                                    {item.hit_range ? t('hit') : t('miss')}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-mono">{formatNumber(item.predicted_lo)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-mono">{formatNumber(item.predicted_hi)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-mono">{formatNumber(item.actual_low)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg font-mono">{formatNumber(item.actual_high)}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="flex justify-center">
+                            <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[90px]">
+                                                    {t('forecast_date')}
+                                                </th>
+                                                <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
+                                                    {t('forecast_result')}
+                                                </th>
+                                                <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                                                    {t('column_expected_range')}
+                                                </th>
+                                                <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                                                    {t('column_actual_range')}
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            {forecast_history.map((item, index) => (
+                                                <tr 
+                                                    key={item.forecast_date}
+                                                    className={`group transition-all duration-200 ${
+                                                        index % 2 === 0 
+                                                            ? 'bg-white dark:bg-gray-800' 
+                                                            : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                                    } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
+                                                >
+                                                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                                                        <div className="text-xs font-medium text-gray-900 dark:text-white">
+                                                            {formatDate(item.forecast_date)}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                                                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${
+                                                            item.hit_range 
+                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 border border-green-200 dark:border-green-700' 
+                                                                : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300 border border-red-200 dark:border-red-700'
+                                                        }`}>
+                                                            {item.hit_range ? t('hit') : t('miss')}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                                                        <ExpectedRangeDisplay low={item.predicted_lo} high={item.predicted_hi} />
+                                                    </td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                                                        <ActualRangeDisplay low={item.actual_low} high={item.actual_high} />
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     )}
                      {activeTab === 'patterns' && (
-                         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
-                             <table className="min-w-full">
-                                <thead className="bg-gray-100 dark:bg-gray-700/50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('date')}</th>
-                                        <th className="px-6 py-3 text-left text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('pattern')}</th>
-                                        <th className="px-6 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-300 uppercase">{t('sentiment')}</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {recent_patterns.map((item, index) => (
-                                        <tr key={`${item.date}-${item.pattern_name}`} className={index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-800/50'}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg text-left text-gray-800 dark:text-gray-200">{formatDate(item.date)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-lg text-left text-gray-800 dark:text-gray-200">{item.pattern_name}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-center text-lg">
-                                                 <span className={`px-3 py-1 text-sm font-semibold rounded-full ${item.bullish ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-                                                    {item.bullish ? t('bullish') : t('bearish')}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="flex justify-center">
+                            <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
+                                            <tr>
+                                                <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[90px]">
+                                                    {t('date')}
+                                                </th>
+                                                <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[120px]">
+                                                    {t('pattern')}
+                                                </th>
+                                                <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
+                                                    {t('sentiment')}
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                                            {recent_patterns.map((item, index) => (
+                                                <tr 
+                                                    key={`${item.date}-${item.pattern_name}`}
+                                                    className={`group transition-all duration-200 ${
+                                                        index % 2 === 0 
+                                                            ? 'bg-white dark:bg-gray-800' 
+                                                            : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                                    } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
+                                                >
+                                                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                                                        <div className="text-xs font-medium text-gray-900 dark:text-white">
+                                                            {formatDate(item.date)}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-left">
+                                                        <div className="text-xs font-semibold text-gray-900 dark:text-white">
+                                                            {item.pattern_name}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                                                        <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-semibold ${
+                                                            item.bullish 
+                                                                ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 border border-green-200 dark:border-green-700' 
+                                                                : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300 border border-red-200 dark:border-red-700'
+                                                        }`}>
+                                                            {item.bullish ? t('bullish') : t('bearish')}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

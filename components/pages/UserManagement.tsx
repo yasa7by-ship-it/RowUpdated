@@ -24,13 +24,13 @@ const UserManagement: React.FC = () => {
   const [activatingUserId, setActivatingUserId] = useState<string | null>(null);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
 
-  const fetchData = useCallback(async (signal: AbortSignal) => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
         const [profilesRes, rolesRes] = await Promise.all([
-            supabase.rpc('get_all_users_with_roles').abortSignal(signal),
-            supabase.rpc('get_all_roles').abortSignal(signal)
+            supabase.rpc('get_all_users_with_roles'),
+            supabase.rpc('get_all_roles')
         ]);
 
         if (profilesRes.error) throw profilesRes.error;
@@ -39,23 +39,17 @@ const UserManagement: React.FC = () => {
         setProfiles(profilesRes.data as unknown as ProfileWithRole[]);
         setRoles(rolesRes.data || []);
     } catch (fetchError: any) {
-        if (fetchError.name !== 'AbortError') {
+        if (fetchError.name !== 'AbortError' && fetchError.message !== 'signal is aborted without reason') {
             console.error('Error fetching data:', fetchError);
-            setError(fetchError.message);
+            setError(fetchError.message || 'فشل تحميل البيانات');
         }
     } finally {
-        if (!signal.aborted) {
-            setLoading(false);
-        }
+        setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
-    fetchData(controller.signal);
-    return () => {
-      controller.abort();
-    };
+    fetchData();
   }, [fetchData]);
 
   const handleAddNewUser = () => {
@@ -85,8 +79,7 @@ const UserManagement: React.FC = () => {
         setNotification({ type: 'error', message: t('user_activation_failed') });
       } else {
         setNotification({ type: 'success', message: t('user_activated_successfully') });
-        const controller = new AbortController();
-        fetchData(controller.signal); // Refresh the list
+        fetchData(); // Refresh the list
       }
       setActivatingUserId(null);
       setTimeout(() => setNotification(null), 5000);
@@ -145,8 +138,7 @@ const UserManagement: React.FC = () => {
       }
     }
     
-    const controller = new AbortController();
-    fetchData(controller.signal);
+    fetchData();
   };
 
 
@@ -164,84 +156,152 @@ const UserManagement: React.FC = () => {
   );
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('user_management')}</h1>
-        <button
-          onClick={handleAddNewUser}
-          className="flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <PlusIcon className="w-5 h-5 mr-2 rtl:mr-0 rtl:ml-2" />
-          {t('add_new_user')}
-        </button>
+    <div className="space-y-6">
+      {/* Title Section - مميز */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl">
+          <div className="relative mb-6">
+            <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-blue-600 via-purple-600 to-indigo-600 dark:from-blue-400 dark:via-purple-400 dark:to-indigo-400 bg-clip-text text-transparent drop-shadow-lg text-center mb-2">
+              {t('user_management')}
+            </h1>
+            <div className="flex justify-center">
+              <div className="w-24 h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-indigo-500 rounded-full"></div>
+            </div>
+          </div>
+        </div>
       </div>
 
-       {notification && (
-          <div className={`mb-4 p-4 text-sm rounded-md ${
+      {/* Notification */}
+      {notification && (
+        <div className="flex justify-center">
+          <div className={`w-full max-w-2xl p-4 text-sm rounded-lg ${
               notification.type === 'success'
                   ? 'bg-green-50 text-green-800 dark:bg-green-900/30 dark:text-green-300'
                   : 'bg-red-50 text-red-800 dark:bg-red-900/30 dark:text-red-300'
           }`}>
               {notification.message}
           </div>
+        </div>
       )}
 
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-          <thead className="bg-gray-50 dark:bg-gray-700">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('full_name')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('email')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('role')}</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('status')}</th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('actions')}</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-            {profiles.map((profile) => (
-              <tr key={profile.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{profile.full_name || t('n_a')}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{profile.email}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {profile.roles?.name ? t(`role_${profile.roles.name}`) : <span className="text-xs italic">{t('no_role')}</span>}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                  {profile.email_confirmed_at ? (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                      {t('confirmed')}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
-                      {t('pending_confirmation')}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                  <div className="flex items-center justify-end space-x-2 rtl:space-x-reverse">
-                    {!profile.email_confirmed_at && (
-                      <button 
-                        onClick={() => handleActivateUser(profile)}
-                        disabled={activatingUserId === profile.id}
-                        className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-200 disabled:opacity-50 disabled:cursor-wait"
-                        title={t('activate_user')}
-                      >
-                        {activatingUserId === profile.id ? <SpinnerIcon /> : <CheckBadgeIcon className="w-5 h-5" />}
-                      </button>
-                    )}
-                    <button 
-                      onClick={() => handleEditUser(profile)} 
-                      className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={profile.id === currentUserProfile?.id && profiles.filter(p => p.roles?.name === 'Admin').length <= 1}
-                      title={profile.id === currentUserProfile?.id && profiles.filter(p => p.roles?.name === 'Admin').length <= 1 ? t('cannot_edit_last_admin') : t('edit')}
-                    >
-                       <PencilIcon className="w-5 h-5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Add User Button - فوق الجدول */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl">
+          <button
+            onClick={handleAddNewUser}
+            className="w-full flex items-center justify-center gap-2 py-3 px-6 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02]"
+          >
+            <PlusIcon className="w-5 h-5" />
+            {t('add_new_user')}
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="flex justify-center">
+        <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
+                <tr>
+                  <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[120px]">
+                    {t('full_name')}
+                  </th>
+                  <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[150px]">
+                    {t('email')}
+                  </th>
+                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                    {t('role')}
+                  </th>
+                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                    {t('status')}
+                  </th>
+                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
+                    {t('actions')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {profiles.map((profile, index) => (
+                  <tr 
+                    key={profile.id}
+                    className={`group transition-all duration-200 ${
+                      index % 2 === 0 
+                        ? 'bg-white dark:bg-gray-800' 
+                        : 'bg-gray-50/50 dark:bg-gray-800/50'
+                    } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
+                  >
+                    <td className="px-2 py-2 whitespace-nowrap text-left">
+                      <div className="text-xs font-semibold text-gray-900 dark:text-white">
+                        {profile.full_name || t('n_a')}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-left">
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {profile.email}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                      <div className="text-xs text-gray-600 dark:text-gray-400">
+                        {profile.roles?.name ? t(`role_${profile.roles.name}`) : <span className="text-[10px] italic text-gray-400">{t('no_role')}</span>}
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                      {profile.email_confirmed_at ? (
+                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300 border border-green-200 dark:border-green-700">
+                          {t('confirmed')}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 rounded text-xs font-semibold bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-700">
+                          {t('pending_confirmation')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        {!profile.email_confirmed_at && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleActivateUser(profile);
+                            }}
+                            disabled={activatingUserId === profile.id}
+                            className="p-1 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-all duration-200 transform hover:scale-110 text-green-600 dark:text-green-400 disabled:opacity-50 disabled:cursor-wait"
+                            title={t('activate_user')}
+                          >
+                            {activatingUserId === profile.id ? (
+                              <SpinnerIcon className="w-4 h-4" />
+                            ) : (
+                              <CheckBadgeIcon className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditUser(profile);
+                          }} 
+                          className="p-1 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-all duration-200 transform hover:scale-110 text-blue-600 dark:text-blue-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={profile.id === currentUserProfile?.id && profiles.filter(p => p.roles?.name === 'Admin').length <= 1}
+                          title={profile.id === currentUserProfile?.id && profiles.filter(p => p.roles?.name === 'Admin').length <= 1 ? t('cannot_edit_last_admin') : t('edit')}
+                        >
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {profiles.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                      {t('no_users_found') || 'لا توجد مستخدمين'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
       
       {isModalOpen && (
