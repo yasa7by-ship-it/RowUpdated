@@ -1,0 +1,109 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Completely Remove AI Summary Feature
+-- #
+-- # Purpose: This script removes all database objects related to the
+-- # AI-powered summary feature, including the table, functions, cron job,
+-- # and translations, as per the request to remove all Gemini API usage.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Unschedule and drop the daily cron job for summary generation.
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'unschedule' AND pronamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'cron')) THEN
+        PERFORM cron.unschedule(job_name) FROM cron.job WHERE job_name = 'daily-ai-summary-generation';
+        RAISE NOTICE 'SUCCESS: Unscheduled the "daily-ai-summary-generation" cron job if it existed.';
+    ELSE
+        RAISE NOTICE 'INFO: pg_cron extension not available or job does not exist. Skipping unschedule.';
+    END IF;
+END;
+$$;
+
+
+-- Step 2: Drop all RPC functions related to the AI summary feature.
+DROP FUNCTION IF EXISTS public.generate_all_daily_summaries();
+RAISE NOTICE 'SUCCESS: Dropped function "generate_all_daily_summaries".';
+
+
+-- Step 3: Drop the table used to cache the summaries.
+-- Using CASCADE to also remove any dependent objects.
+DROP TABLE IF EXISTS public.stock_analysis_summaries CASCADE;
+RAISE NOTICE 'SUCCESS: Dropped the "stock_analysis_summaries" table.';
+
+
+-- Step 4: Update the stock details function to remove the summary field.
+CREATE OR REPLACE FUNCTION public.get_stock_details_page_data(p_symbol TEXT)
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+WITH latest_indicator_date AS (
+    SELECT max(date) AS value
+    FROM public.technical_indicators ti
+    WHERE ti.stock_symbol = p_symbol
+)
+SELECT json_build_object(
+    'details', (
+        SELECT row_to_json(s)
+        FROM public.stocks s
+        WHERE s.symbol = p_symbol
+    ),
+    'next_forecast', (
+        SELECT row_to_json(f)
+        FROM public.forecasts f
+        WHERE f.stock_symbol = p_symbol
+        ORDER BY f.forecast_date DESC
+        LIMIT 1
+    ),
+    'historical_data', (
+        SELECT COALESCE(json_agg(h ORDER BY h.date ASC), '[]'::json) -- Order ASC for charting
+        FROM (
+            SELECT * FROM public.historical_data
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 90
+        ) h
+    ),
+    'latest_indicators', (
+        SELECT row_to_json(ti)
+        FROM public.technical_indicators ti
+        WHERE ti.stock_symbol = p_symbol AND ti.date = (SELECT value FROM latest_indicator_date)
+        LIMIT 1
+    ),
+    'forecast_history', (
+        SELECT COALESCE(json_agg(fch ORDER BY fch.forecast_date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.forecast_check_history
+            WHERE stock_symbol = p_symbol
+            ORDER BY forecast_date DESC
+            LIMIT 10
+        ) fch
+    ),
+    'recent_patterns', (
+         SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.candle_patterns
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 5
+        ) cp
+    )
+    -- The 'stock_summary' field has been removed from this object.
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_details_page_data" updated to remove AI summary field.';
+
+
+-- Step 5: Delete all translation keys related to the feature.
+DELETE FROM public.translations
+WHERE key IN (
+  'quick_look_analysis'
+);
+RAISE NOTICE 'SUCCESS: Deleted all translation keys related to the AI summary feature.';
+
+COMMIT;

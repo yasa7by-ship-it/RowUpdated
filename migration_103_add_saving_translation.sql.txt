@@ -1,0 +1,34 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add "Saving..." Translation Key
+-- #
+-- # Purpose: This script adds the missing translation key for the "Saving..."
+-- # state on buttons, ensuring it's correctly translated into Arabic. It
+-- # also includes the ellipsis in the translation value for consistency.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'saving', 'Saving...'),
+('ar', 'saving', 'جاري الحفظ...')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: The "saving" translation has been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

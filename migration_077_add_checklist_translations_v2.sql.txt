@@ -1,0 +1,48 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add V2 Daily Checklist Translations
+-- #
+-- # Purpose: This script adds all the UI translation keys required for the new
+-- # table headers and filter controls on the redesigned "Last Work Day" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Column Headers for Checklist Table
+('en', 'last_price', 'Last Price'),
+('ar', 'last_price', 'آخر سعر'),
+('en', 'actual_range', 'Actual Range'),
+('ar', 'actual_range', 'النطاق الفعلي'),
+('en', 'predicted_range', 'Predicted Range'),
+('ar', 'predicted_range', 'النطاق المتوقع'),
+('en', 'forecast_result', 'Forecast Result'),
+('ar', 'forecast_result', 'نتيجة التوقع'),
+
+-- Filter Controls
+('en', 'filter_by_result', 'Filter by result'),
+('ar', 'filter_by_result', 'تصفية حسب النتيجة'),
+('en', 'hits', 'Hits'),
+('ar', 'hits', 'ناجحة'),
+('en', 'misses', 'Misses'),
+('ar', 'misses', 'خاطئة')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

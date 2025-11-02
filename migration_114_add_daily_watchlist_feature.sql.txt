@@ -1,0 +1,124 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Daily Watchlist Feature
+-- #
+-- # Purpose: This script introduces the backend infrastructure for the new
+-- # "Daily Watchlist" page, which shows forecasts for the next trading day.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the new permission for viewing the watchlist.
+INSERT INTO public.permissions (action, description)
+VALUES ('view:daily_watchlist', 'Can view the daily watchlist of stock forecasts.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+RAISE NOTICE 'SUCCESS: Permission "view:daily_watchlist" added or updated.';
+
+-- Step 2: Assign the new permission to both Admin and User roles.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    user_role_id UUID;
+    view_watchlist_perm_id UUID;
+BEGIN
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO user_role_id FROM public.roles WHERE name = 'User';
+    SELECT id INTO view_watchlist_perm_id FROM public.permissions WHERE action = 'view:daily_watchlist';
+
+    IF admin_role_id IS NOT NULL AND view_watchlist_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, view_watchlist_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+    END IF;
+    
+    IF user_role_id IS NOT NULL AND view_watchlist_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (user_role_id, view_watchlist_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+    END IF;
+
+    RAISE NOTICE 'SUCCESS: Assigned "view:daily_watchlist" permission to Admin and User roles.';
+END $$;
+
+-- Step 3: Add UI translations for the new feature.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'daily_watchlist', 'Daily Watchlist'),
+('ar', 'daily_watchlist', 'قائمة المراقبة اليومية'),
+('en', 'perm_view_daily_watchlist', 'View Daily Watchlist'),
+('ar', 'perm_view_daily_watchlist', 'عرض قائمة المراقبة اليومية'),
+('en', 'perm_view_daily_watchlist_desc', 'Can view the daily watchlist of stock forecasts.'),
+('ar', 'perm_view_daily_watchlist_desc', 'يمكنه عرض قائمة المراقبة اليومية لتوقعات الأسهم.'),
+('en', 'watchlist_description', 'This is a list of stocks to watch for the upcoming trading day, based on our latest forecast models. This is not investment advice.'),
+('ar', 'watchlist_description', 'هذه قائمة بالأسهم التي يجب مراقبتها ليوم التداول القادم، بناءً على أحدث نماذج التوقعات لدينا. هذه ليست نصيحة استثمارية.'),
+('en', 'key_technical_levels', 'Key Technical Levels'),
+('ar', 'key_technical_levels', 'المستويات الفنية الرئيسية'),
+('en', 'last_technical_signal', 'Last Technical Signal'),
+('ar', 'last_technical_signal', 'آخر إشارة فنية')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+RAISE NOTICE 'SUCCESS: Translations for Daily Watchlist feature added.';
+
+-- Step 4: Create the RPC function to fetch the watchlist data.
+CREATE OR REPLACE FUNCTION public.get_daily_watchlist_data()
+RETURNS TABLE (
+    symbol text,
+    stock_name text,
+    last_close real,
+    predicted_lo real,
+    predicted_hi real,
+    sma20 real,
+    sma50 real,
+    pattern_name text,
+    bullish boolean,
+    forecast_date date
+)
+LANGUAGE plpgsql STABLE
+AS $$
+DECLARE
+    latest_forecast_date date;
+    latest_indicator_date date;
+BEGIN
+    -- Find the latest date for which we have a forecast. This is for "tomorrow".
+    SELECT max(f.forecast_date) INTO latest_forecast_date FROM public.forecasts f;
+
+    -- Find the latest date for which we have indicators, which is "today".
+    SELECT max(ti.date) INTO latest_indicator_date FROM public.technical_indicators ti WHERE ti.date < latest_forecast_date;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,
+        s.name AS stock_name,
+        s.price AS last_close,
+        f.predicted_lo,
+        f.predicted_hi,
+        ti.sma20,
+        ti.sma50,
+        cp.pattern_name,
+        cp.bullish,
+        f.forecast_date
+    FROM
+        public.forecasts f
+    JOIN
+        public.stocks s ON f.stock_symbol = s.symbol
+    LEFT JOIN
+        public.technical_indicators ti ON f.stock_symbol = ti.stock_symbol AND ti.date = latest_indicator_date
+    LEFT JOIN
+        (
+            -- Get only the first/most relevant pattern for the indicator date to avoid duplicate rows
+            SELECT DISTINCT ON (cp_inner.stock_symbol) *
+            FROM public.candle_patterns cp_inner
+            WHERE cp_inner.date = latest_indicator_date
+        ) cp ON f.stock_symbol = cp.stock_symbol
+    WHERE
+        f.forecast_date = latest_forecast_date
+        AND s.is_tracked = true
+    ORDER BY
+        s.symbol;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_daily_watchlist_data" created or updated.';
+
+COMMIT;

@@ -1,0 +1,136 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Automated Forecast Evaluation Procedure
+-- #
+-- # Purpose: This script creates a single, efficient PostgreSQL function
+-- # named `evaluate_and_save_forecasts()`. This function entirely replaces
+-- # the external `forecast_check_run.py` script by performing all evaluation
+-- # logic directly within the database.
+-- #
+-- # When called, it will:
+-- # 1. Find all forecasts that haven't been evaluated yet.
+-- # 2. Join them with available historical data for the same day.
+-- # 3. Calculate the hit/miss status and error metrics.
+-- # 4. Atomically save the results to `forecast_check_history`,
+-- #    `forecast_check_latest`, and `Forcast_Result` using UPSERT logic.
+-- #
+-- # This server-side approach is significantly more efficient and robust.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.evaluate_and_save_forecasts(p_date_filter date DEFAULT NULL)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    processed_count integer;
+BEGIN
+    -- This single WITH clause performs all calculations and insertions atomically.
+    WITH new_evaluations AS (
+        -- Calculate the results for all forecasts that have matching historical data.
+        -- This allows re-evaluation if historical data changes or logic is updated.
+        SELECT
+            f.stock_symbol,
+            s.name AS stock_name,
+            f.forecast_date,
+            f.predicted_price,
+            f.predicted_lo,
+            f.predicted_hi,
+            f.confidence,
+            h.low AS actual_low,
+            h.high AS actual_high,
+            h.close AS actual_close,
+            -- Core "hit" logic: TRUE if the predicted range overlaps with the actual range.
+            (f.predicted_lo <= h.high AND h.low <= f.predicted_hi) AS hit_range,
+            -- Calculate error metrics, avoiding division by zero with NULLIF.
+            ABS(f.predicted_price - h.close) AS abs_error,
+            ABS(f.predicted_price - h.close) / NULLIF(h.close, 0) AS pct_error
+        FROM
+            public.forecasts f
+        JOIN
+            public.stocks s ON f.stock_symbol = s.symbol
+        JOIN
+            public.historical_data h ON f.stock_symbol = h.stock_symbol AND f.forecast_date = h.date
+        -- Filter by date if provided, otherwise process all.
+        WHERE (p_date_filter IS NULL OR f.forecast_date = p_date_filter)
+    ),
+    insert_history AS (
+        INSERT INTO public.forecast_check_history (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        SELECT
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+        RETURNING 1
+    ),
+    upsert_latest AS (
+        INSERT INTO public.forecast_check_latest (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        -- Select only the single most recent evaluation for each stock symbol
+        -- from the set of new evaluations to prevent the "cannot affect row a second time" error.
+        SELECT DISTINCT ON (stock_symbol)
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ORDER BY stock_symbol, forecast_date DESC -- Crucial for DISTINCT ON to pick the latest
+        ON CONFLICT (stock_symbol) DO UPDATE SET
+            forecast_date = EXCLUDED.forecast_date,
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+    ),
+    insert_legacy AS (
+        INSERT INTO public."Forcast_Result" (
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, is_hit
+        )
+        SELECT
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, hit_range
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            is_hit = EXCLUDED.is_hit,
+            created_at = NOW()
+    )
+    SELECT count(*) INTO processed_count FROM insert_history;
+        
+    RAISE NOTICE '% forecast(s) evaluated and saved.', processed_count;
+    
+    RETURN processed_count;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: Function "evaluate_and_save_forecasts" created or updated.';
+
+COMMIT;

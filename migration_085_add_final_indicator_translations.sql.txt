@@ -1,0 +1,82 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Final Indicator Translations for Visual Redesign
+-- #
+-- # Purpose: This script adds all the new and updated translation keys needed
+-- # for the redesigned technical indicator analysis panel to precisely match
+-- # the user's screenshot.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Main Panel Title
+('en', 'technical_analysis_for', 'Technical Analysis for {stock}'),
+('ar', 'technical_analysis_for', 'التحليل الفني لسهم {stock}'),
+
+-- RSI Gauge Card
+('en', 'rsi_indicator_14', 'RSI (14)'),
+('ar', 'rsi_indicator_14', 'مؤشر القوة النسبية (14)'),
+('en', 'overbought', 'Overbought'),
+('ar', 'overbought', 'تشبع شرائي'),
+('en', 'oversold', 'Oversold'),
+('ar', 'oversold', 'تشبع بيعي'),
+('en', 'neutral', 'Neutral'),
+('ar', 'neutral', 'محايد'),
+
+-- MACD Card
+('en', 'macd_indicator', 'MACD Indicator'),
+('ar', 'macd_indicator', 'مؤشر الماكد'),
+('en', 'macd_line', 'MACD'),
+('ar', 'macd_line', 'خط الماكد'),
+('en', 'signal_line', 'Signal'),
+('ar', 'signal_line', 'خط الإشارة'),
+('en', 'histogram', 'Hist.'),
+('ar', 'histogram', 'الرسم البياني'),
+
+-- Trend & Momentum Card
+('en', 'trend_momentum', 'Trend & Momentum'),
+('ar', 'trend_momentum', 'الاتجاه والزخم'),
+('en', 'price_vs_sma_20', 'Price vs 20-Day SMA'),
+('ar', 'price_vs_sma_20', 'السعر مقابل متوسط 20 يوم'),
+('en', 'price_vs_sma_50', 'Price vs 50-Day SMA'),
+('ar', 'price_vs_sma_50', 'السعر مقابل متوسط 50 يوم'),
+('en', 'price_vs_sma_200', 'Price vs 200-Day SMA'),
+('ar', 'price_vs_sma_200', 'السعر مقابل متوسط 200 يوم'),
+('en', 'above', 'Above'),
+('ar', 'above', 'أعلى'),
+('en', 'below', 'Below'),
+('ar', 'below', 'أسفل'),
+
+-- Volatility Card
+('en', 'volatility', 'Volatility'),
+('ar', 'volatility', 'التقلب'),
+('en', 'atr_14', 'Average True Range (14)'),
+('ar', 'atr_14', 'متوسط النطاق الحقيقي (14)'),
+
+-- Oscillators Card
+('en', 'stochastic_indicator_kd', 'Stochastic (%K)'),
+('ar', 'stochastic_indicator_kd', 'مؤشر ستوكاستيك (%K)'),
+('en', 'williams_r_indicator', 'Williams %R'),
+('ar', 'williams_r_indicator', 'مؤشر ويليامز R%'),
+
+-- General
+('en', 'no_indicator_data', 'No technical indicator data available for this date.'),
+('ar', 'no_indicator_data', 'لا توجد بيانات مؤشرات فنية متاحة لهذا التاريخ.'),
+('en', 'n_a', 'N/A'),
+('ar', 'n_a', 'غ/م')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,58 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Definitive Announcements RLS Fix
+-- #
+-- # Purpose: This script provides a definitive fix for the issue where the
+-- # "Save" button on the "Edit Announcement" modal was failing silently. It
+-- # replaces all previous policies with a clean, explicit, and robust set.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Drop all existing policies on the table to avoid any conflicts.
+DROP POLICY IF EXISTS "Allow public read access for active announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Public read access for active announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Allow managers full access" ON public.global_announcements;
+DROP POLICY IF EXISTS "Allow managers to SELECT all announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Managers can read all announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Allow managers to INSERT announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Managers can insert announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Allow managers to UPDATE announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Managers can update announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Allow managers to DELETE announcements" ON public.global_announcements;
+DROP POLICY IF EXISTS "Managers can delete announcements" ON public.global_announcements;
+
+-- Create the correct, explicit policies from scratch.
+
+-- 1. Public can read active announcements.
+CREATE POLICY "Public read access for active announcements"
+    ON public.global_announcements FOR SELECT
+    USING ( is_enabled = true AND now() >= start_date AND now() <= end_date );
+
+-- 2. Managers can read ALL announcements (active, expired, disabled, etc.).
+CREATE POLICY "Managers can read all announcements"
+    ON public.global_announcements FOR SELECT
+    USING ( public.has_permission('manage:announcements') );
+
+-- 3. Managers can insert new announcements.
+CREATE POLICY "Managers can insert announcements"
+    ON public.global_announcements FOR INSERT
+    WITH CHECK ( public.has_permission('manage:announcements') );
+
+-- 4. Managers can update announcements. This is the critical fix.
+CREATE POLICY "Managers can update announcements"
+    ON public.global_announcements FOR UPDATE
+    USING ( public.has_permission('manage:announcements') )
+    WITH CHECK ( public.has_permission('manage:announcements') );
+
+-- 5. Managers can delete announcements.
+CREATE POLICY "Managers can delete announcements"
+    ON public.global_announcements FOR DELETE
+    USING ( public.has_permission('manage:announcements') );
+    
+RAISE NOTICE 'SUCCESS: Replaced all RLS policies on global_announcements with a definitive, robust set.';
+
+COMMIT;

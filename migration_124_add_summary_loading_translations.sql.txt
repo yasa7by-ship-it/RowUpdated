@@ -1,0 +1,33 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Summary Loading States
+-- #
+-- # Purpose: This script adds new UI translation keys to provide clearer
+-- # feedback to the user while fetching the pre-generated AI summary.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'loading_summary', 'Loading summary'),
+('ar', 'loading_summary', 'جاري تحميل الخلاصة'),
+('en', 'summary_not_available_yet', 'Summary for this date is not available yet. Please check back later.'),
+('ar', 'summary_not_available_yet', 'الخلاصة لهذا التاريخ غير متوفرة بعد. يرجى المراجعة لاحقًا.'),
+('en', 'summary_fetch_error', 'An error occurred while fetching the summary.'),
+('ar', 'summary_fetch_error', 'حدث خطأ أثناء جلب الخلاصة.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for summary loading states have been added.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

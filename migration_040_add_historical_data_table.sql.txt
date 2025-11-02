@@ -1,0 +1,62 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Historical Stock Data Table
+-- #
+-- # Purpose: This script adds the `historical_data` table to store daily
+-- # price information for stocks.
+-- #
+-- # It performs three key actions:
+-- # 1. Creates the `historical_data` table with appropriate constraints and a
+-- #    foreign key relationship to the `stocks` table.
+-- # 2. Adds a composite B-tree index on `stock_symbol` and `date` for fast lookups.
+-- # 3. Sets up Row Level Security (RLS) policies, allowing public read access
+-- #    and write access for users with the 'manage:stocks' permission.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the historical_data table.
+-- The IF NOT EXISTS clause prevents errors if the table already exists.
+CREATE TABLE IF NOT EXISTS public.historical_data (
+  id serial NOT NULL,
+  stock_symbol text NULL,
+  date date NOT NULL,
+  open real NULL,
+  high real NULL,
+  low real NULL,
+  close real NULL,
+  volume bigint NULL,
+  CONSTRAINT historical_data_pkey PRIMARY KEY (id),
+  CONSTRAINT historical_data_stock_symbol_date_key UNIQUE (stock_symbol, date),
+  CONSTRAINT historical_data_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.historical_data IS 'Stores daily open, high, low, close, and volume data for stocks.';
+
+
+-- Step 2: Create a B-tree index for efficient querying by symbol and date.
+CREATE INDEX IF NOT EXISTS idx_hist_symbol_date ON public.historical_data USING btree (stock_symbol, date);
+
+
+-- Step 3: Set up Row Level Security (RLS) on the new table.
+ALTER TABLE public.historical_data ENABLE ROW LEVEL SECURITY;
+
+-- Policy 1: Allow anyone to read all historical data.
+DROP POLICY IF EXISTS "Allow public read access on historical_data" ON public.historical_data;
+CREATE POLICY "Allow public read access on historical_data" ON public.historical_data
+FOR SELECT USING (true);
+
+-- Policy 2: Allow users with 'manage:stocks' permission full access.
+-- This reuses the existing permission for managing stocks, as it's related data.
+DROP POLICY IF EXISTS "Allow managers full access on historical_data" ON public.historical_data;
+CREATE POLICY "Allow managers full access on historical_data" ON public.historical_data
+FOR ALL USING (public.has_permission('manage:stocks'));
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

@@ -1,0 +1,72 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Translations for Indicator Visuals
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the
+-- # redesigned, more visual technical indicator components on the Stock Details page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Moving Averages Card
+('en', 'price_vs_sma_20', 'Price vs. 20-Day SMA'),
+('ar', 'price_vs_sma_20', 'السعر مقابل متوسط 20 يوم'),
+('en', 'price_vs_sma_50', 'Price vs. 50-Day SMA'),
+('ar', 'price_vs_sma_50', 'السعر مقابل متوسط 50 يوم'),
+('en', 'price_vs_sma_200', 'Price vs. 200-Day SMA'),
+('ar', 'price_vs_sma_200', 'السعر مقابل متوسط 200 يوم'),
+
+-- Volatility Card
+('en', 'historical_volatility_20d', 'Historical Volatility (20D)'),
+('ar', 'historical_volatility_20d', 'التقلب التاريخي (20 يومًا)'),
+('en', 'atr_14', 'Average True Range (14)'),
+('ar', 'atr_14', 'متوسط النطاق الحقيقي (14)'),
+
+-- Stochastic Gauge
+('en', 'percent_k', '%K'),
+('ar', 'percent_k', '%K'),
+('en', 'percent_d', '%D'),
+('ar', 'percent_d', '%D'),
+('en', 'stochastic_oscillator', 'Stochastic Oscillator'),
+('ar', 'stochastic_oscillator', 'مذبذب ستوكاستيك'),
+
+
+-- Bollinger Bands Viz
+('en', 'price_above_band', 'Price is trading above the upper band.'),
+('ar', 'price_above_band', 'السعر يتداول فوق النطاق العلوي.'),
+('en', 'price_below_band', 'Price is trading below the lower band.'),
+('ar', 'price_below_band', 'السعر يتداول أسفل النطاق السفلي.'),
+('en', 'price_inside_bands', 'Price is trading within the bands.'),
+('ar', 'price_inside_bands', 'السعر يتداول داخل النطاقات.'),
+('en', 'bollinger_bands_20_2', 'Bollinger Bands (20, 2)'),
+('ar', 'bollinger_bands_20_2', 'نطاقات بولينجر (20, 2)'),
+
+-- MACD Viz
+('en', 'macd_indicator_full', 'MACD (12, 26, 9)'),
+('ar', 'macd_indicator_full', 'مؤشر الماكد (12, 26, 9)'),
+('en', 'cross_status', 'Cross Status'),
+('ar', 'cross_status', 'حالة التقاطع'),
+('en', 'bullish_cross', 'Bullish Cross'),
+('ar', 'bullish_cross', 'تقاطع صاعد'),
+('en', 'bearish_cross', 'Bearish Cross'),
+('ar', 'bearish_cross', 'تقاطع هابط'),
+('en', 'no_cross', 'No Cross'),
+('ar', 'no_cross', 'لا يوجد تقاطع')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for the visual indicator dashboard have been updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

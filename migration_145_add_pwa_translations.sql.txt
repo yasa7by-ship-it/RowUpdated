@@ -1,0 +1,33 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add PWA "Add to Home Screen" Translations
+-- #
+-- # Purpose: This script adds the UI translation keys required for the new
+-- # "Add to Home Screen" prompt for PWA installation on mobile devices.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'a2hs_ios_prompt_1', 'To install, tap'),
+('ar', 'a2hs_ios_prompt_1', 'للتثبيت، اضغط'),
+('en', 'a2hs_ios_prompt_2', 'then'),
+('ar', 'a2hs_ios_prompt_2', 'ثم'),
+('en', 'add_to_home_screen', 'Add to Home Screen'),
+('ar', 'add_to_home_screen', 'إضافة إلى الشاشة الرئيسية'),
+('en', 'a2hs_android_prompt', 'Add this app to your home screen for a better experience.'),
+('ar', 'a2hs_android_prompt', 'أضف هذا التطبيق إلى شاشتك الرئيسية لتجربة أفضل.')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

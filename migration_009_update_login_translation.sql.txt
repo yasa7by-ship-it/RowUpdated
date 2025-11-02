@@ -1,0 +1,29 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update "Login" Translation
+-- #
+-- # Purpose: This is a safe, data-only script. It updates the Arabic
+-- # translation for the 'login' key to be more accurate ('تسجيل الدخول').
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Update the Arabic translation for the 'login' key.
+-- The ON CONFLICT clause ensures this works as an upsert, which is safe.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('ar', 'login', 'تسجيل الدخول')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

@@ -1,0 +1,48 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translation Management UI Translations
+-- #
+-- # Purpose: This script adds all the translation keys needed for the new
+-- # Translation Management page and updates related permission descriptions.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'translation_management', 'Translation Management'),
+('ar', 'translation_management', 'إدارة الترجمات'),
+('en', 'perm_manage_translations', 'Manage Translations'),
+('ar', 'perm_manage_translations', 'إدارة الترجمات'),
+('en', 'perm_manage_translations_desc', 'Can edit UI translation values for all languages.'),
+('ar', 'perm_manage_translations_desc', 'يمكنه تعديل قيم ترجمة واجهة المستخدم لجميع اللغات.'),
+('en', 'translation_key', 'Key'),
+('ar', 'translation_key', 'المفتاح'),
+('en', 'english_translation', 'English Translation'),
+('ar', 'english_translation', 'الترجمة الإنجليزية'),
+('en', 'arabic_translation', 'Arabic Translation'),
+('ar', 'arabic_translation', 'الترجمة العربية'),
+('en', 'search_by_key_or_value', 'Search by key or value...'),
+('ar', 'search_by_key_or_value', 'ابحث بالمفتاح أو القيمة...'),
+('en', 'translation_saved_successfully', 'Translation saved successfully!'),
+('ar', 'translation_saved_successfully', 'تم حفظ الترجمة بنجاح!'),
+('en', 'translation_save_failed', 'Failed to save translation.'),
+('ar', 'translation_save_failed', 'فشل حفظ الترجمة.'),
+-- Update manage:settings description as it no longer handles translations
+('en', 'perm_manage_settings_desc', 'Can update site-wide application settings like logo and landing page content.'),
+('ar', 'perm_manage_settings_desc', 'يمكنه تحديث إعدادات التطبيق على مستوى الموقع مثل الشعار ومحتوى الصفحة الرئيسية.')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

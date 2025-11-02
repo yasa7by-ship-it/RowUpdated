@@ -1,0 +1,39 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Dashboard and Add Language Translations
+-- #
+-- # Purpose: This script updates the Arabic translation for 'site_settings'
+-- # to match the user interface and adds new translation keys for language tabs.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- 1. Update the Arabic translation for 'site_settings'
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('ar', 'site_settings', 'الإعدادات العامة')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- 2. Add new translations for language tabs
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'lang_english', 'English'),
+('ar', 'lang_english', 'الإنجليزية'),
+('en', 'lang_arabic', 'Arabic'),
+('ar', 'lang_arabic', 'العربية')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

@@ -1,0 +1,49 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Indicators Function and Update View
+-- #
+-- # Purpose: This script enhances the backend for the "Last Work Day" page.
+-- # It adds the forecast date to the main view and creates a new RPC function
+-- # to fetch detailed technical indicators for a selected stock.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Update the view to include the forecast date.
+CREATE OR REPLACE VIEW public.vw_Last_dayCheckList AS
+SELECT
+  fr.stock_symbol,
+  fr.stock_name,
+  s.last_updated,
+  s.price,
+  fr.actual_low,
+  fr.actual_high,
+  fr.predicted_lo,
+  fr.predicted_hi,
+  fr.is_hit,
+  fr.forecast_date -- Add the forecast date to the view
+FROM public."Forcast_Result" AS fr
+JOIN public.stocks AS s
+  ON s.symbol = fr.stock_symbol
+ORDER BY fr.stock_symbol;
+
+RAISE NOTICE 'SUCCESS: View "vw_Last_dayCheckList" updated to include forecast_date.';
+
+
+-- Step 2: Create an RPC function to fetch technical indicators for a stock on a specific date.
+CREATE OR REPLACE FUNCTION public.get_indicators_for_stock_date(p_symbol text, p_date date)
+RETURNS SETOF public.technical_indicators
+LANGUAGE sql STABLE
+AS $$
+  SELECT *
+  FROM public.technical_indicators
+  WHERE stock_symbol = p_symbol AND date = p_date
+  LIMIT 1;
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_indicators_for_stock_date" created or updated.';
+
+COMMIT;

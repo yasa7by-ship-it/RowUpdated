@@ -1,0 +1,27 @@
+{
+  "short_name": "MRowDir",
+  "name": "MRowDir",
+  "description": "Professional and visually engaging stock price predictions for the U.S. markets.",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "scope": "/",
+  "theme_color": "#4338ca",
+  "background_color": "#ffffff"
+}

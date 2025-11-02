@@ -1,0 +1,222 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Data Fetching Functions
+-- #
+-- # Purpose: This script refactors data access by creating a set of PostgreSQL
+-- # functions. The application will call these functions via RPC instead of
+-- # querying tables directly. This improves abstraction, security, and can
+-- # centralize complex query logic for better performance and maintenance.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Function to get active announcements for the public banner
+CREATE OR REPLACE FUNCTION public.get_active_announcements()
+RETURNS SETOF public.global_announcements
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT *
+  FROM public.global_announcements
+  WHERE is_enabled = true
+    AND now() >= start_date
+    AND now() <= end_date
+  ORDER BY created_at DESC;
+$$;
+RAISE NOTICE 'Function "get_active_announcements" created or updated.';
+
+-- Function to get all app settings
+CREATE OR REPLACE FUNCTION public.get_all_app_settings()
+RETURNS SETOF public.app_settings
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT * FROM public.app_settings;
+$$;
+RAISE NOTICE 'Function "get_all_app_settings" created or updated.';
+
+-- Function to get translations for a specific language
+CREATE OR REPLACE FUNCTION public.get_translations(p_lang_code TEXT)
+RETURNS SETOF public.translations
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT id, lang_id, key, value
+  FROM public.translations
+  WHERE lang_id = p_lang_code;
+$$;
+RAISE NOTICE 'Function "get_translations" created or updated.';
+
+-- Function to get a single user's profile with nested permissions
+-- Returns a single JSON object to match the client-side type structure
+CREATE OR REPLACE FUNCTION public.get_user_profile_and_permissions(p_user_id UUID)
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+SELECT
+    json_build_object(
+        'id', p.id,
+        'full_name', p.full_name,
+        'email', p.email,
+        'role_id', p.role_id,
+        'email_confirmed_at', p.email_confirmed_at,
+        'preferred_language', p.preferred_language,
+        'roles', (
+            SELECT
+                json_build_object(
+                    'name', r.name,
+                    'permissions', (
+                        SELECT COALESCE(json_agg(json_build_object('action', perm.action)), '[]'::json)
+                        FROM public.role_permissions rp
+                        JOIN public.permissions perm ON rp.permission_id = perm.id
+                        WHERE rp.role_id = p.role_id
+                    )
+                )
+            FROM public.roles r
+            WHERE r.id = p.role_id
+        )
+    )
+FROM
+    public.profiles p
+WHERE
+    p.id = p_user_id
+LIMIT 1;
+$$;
+RAISE NOTICE 'Function "get_user_profile_and_permissions" created or updated.';
+
+-- Function to get dashboard statistics
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS TABLE(user_count BIGINT, role_count BIGINT)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT
+    (SELECT count(*) FROM public.profiles) AS user_count,
+    (SELECT count(*) FROM public.roles) AS role_count;
+$$;
+RAISE NOTICE 'Function "get_dashboard_stats" created or updated.';
+
+-- Function to get all users with their role name for the User Management page.
+-- This function uses SECURITY DEFINER to bypass a circular dependency issue in RLS
+-- where the policy on `profiles` needs to call a function that reads from `profiles`.
+-- It is secure because it first checks if the calling user has the required permission.
+CREATE OR REPLACE FUNCTION public.get_all_users_with_roles()
+RETURNS TABLE (
+    id uuid,
+    full_name text,
+    email text,
+    role_id uuid,
+    email_confirmed_at timestamptz,
+    roles json
+)
+-- Must be plpgsql to use IF statements
+LANGUAGE plpgsql
+-- Use SECURITY DEFINER to bypass RLS, but check permissions inside
+SECURITY DEFINER
+-- Set search_path to ensure functions like has_permission can be found
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- First, check if the *actual* calling user has the 'manage:users' permission.
+  -- This is the security gate.
+  IF public.has_permission('manage:users') THEN
+    -- If they do, run the query without RLS (due to SECURITY DEFINER) and return all users.
+    RETURN QUERY
+      SELECT
+          p.id,
+          p.full_name,
+          p.email,
+          p.role_id,
+          p.email_confirmed_at,
+          json_build_object('name', r.name) as roles
+      FROM
+          public.profiles p
+      LEFT JOIN
+          public.roles r ON p.role_id = r.id;
+  ELSE
+    -- If the user does not have permission, they should not see any users.
+    -- A simple RETURN exits the function, returning an empty table.
+    RETURN;
+  END IF;
+END;
+$$;
+RAISE NOTICE 'Function "get_all_users_with_roles" has been updated to fix permission issues.';
+
+
+-- Function to get all roles (used in User Management and Role Management)
+CREATE OR REPLACE FUNCTION public.get_all_roles()
+RETURNS SETOF public.roles
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT id, name, description, created_at FROM public.roles;
+$$;
+RAISE NOTICE 'Function "get_all_roles" created or updated.';
+
+-- Function to get all data needed for the Role Management page in a single call
+CREATE OR REPLACE FUNCTION public.get_role_management_data()
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+SELECT json_build_object(
+    'roles', (SELECT COALESCE(json_agg(r), '[]'::json) FROM public.roles r),
+    'permissions', (
+        SELECT COALESCE(json_agg(p), '[]'::json)
+        FROM public.permissions p
+        WHERE p.action != 'manage:advertisements' -- Filter out obsolete permission
+    ),
+    'role_permissions', (SELECT COALESCE(json_agg(rp), '[]'::json) FROM public.role_permissions rp)
+);
+$$;
+RAISE NOTICE 'Function "get_role_management_data" created or updated.';
+
+-- Function to get all announcements for the management page
+CREATE OR REPLACE FUNCTION public.get_all_announcements()
+RETURNS SETOF public.global_announcements
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT *
+  FROM public.global_announcements
+  ORDER BY start_date DESC;
+$$;
+RAISE NOTICE 'Function "get_all_announcements" created or updated.';
+
+
+-- Function to get all users for Gemini analysis
+CREATE OR REPLACE FUNCTION public.get_all_users_for_analysis()
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT COALESCE(json_agg(
+        json_build_object(
+            'full_name', p.full_name,
+            'email', p.email,
+            'roles', json_build_object('name', r.name)
+        )
+    ), '[]'::json)
+    FROM public.profiles p
+    LEFT JOIN public.roles r on p.role_id = r.id;
+$$;
+RAISE NOTICE 'Function "get_all_users_for_analysis" created or updated.';
+
+-- Function to get specific translation values for a key across relevant languages
+CREATE OR REPLACE FUNCTION public.get_translations_for_key(p_key TEXT)
+RETURNS SETOF public.translations
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT id, lang_id, key, value
+  FROM public.translations
+  WHERE key = p_key AND (lang_id = 'en' OR lang_id = 'ar');
+$$;
+RAISE NOTICE 'Function "get_translations_for_key" created or updated.';
+
+
+COMMIT;

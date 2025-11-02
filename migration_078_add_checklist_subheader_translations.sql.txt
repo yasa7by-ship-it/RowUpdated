@@ -1,0 +1,43 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Checklist Sub-Header Translations
+-- #
+-- # Purpose: This script adds the UI translation keys required for the
+-- # sub-header columns ("Low", "High") on the "Last Work Day" page,
+-- # fixing an issue where English keys were displayed in the Arabic UI.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/update the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English (more concise for sub-headers)
+('en', 'actual_low', 'Low'),
+('en', 'actual_high', 'High'),
+('en', 'predicted_low', 'Low'),
+('en', 'predicted_high', 'High'),
+
+-- Arabic
+('ar', 'actual_low', 'الأدنى'),
+('ar', 'actual_high', 'الأعلى'),
+('ar', 'predicted_low', 'الأدنى'),
+('ar', 'predicted_high', 'الأعلى')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

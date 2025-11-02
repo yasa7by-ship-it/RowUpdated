@@ -1,0 +1,61 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Correct Default User Role Permissions
+-- #
+-- # Purpose: This script fixes the default permissions for the standard 'User'
+-- # role to align with the principle that the dashboard is for admins only.
+-- #
+-- # It performs two key actions:
+-- # 1. It REMOVES the 'view:dashboard' permission from the 'User' role.
+-- # 2. It GRANTS the 'view:stock_analysis' permission to the 'User' role,
+-- #    making it the default accessible feature for standard users.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+DO $$
+DECLARE
+    user_role_id UUID;
+    view_dashboard_perm_id UUID;
+    view_analysis_perm_id UUID;
+BEGIN
+    -- Get the IDs for the 'User' role and the relevant permissions.
+    SELECT id INTO user_role_id FROM public.roles WHERE name = 'User';
+    SELECT id INTO view_dashboard_perm_id FROM public.permissions WHERE action = 'view:dashboard';
+    SELECT id INTO view_analysis_perm_id FROM public.permissions WHERE action = 'view:stock_analysis';
+
+    -- Ensure all required entities were found before proceeding.
+    IF user_role_id IS NULL OR view_dashboard_perm_id IS NULL OR view_analysis_perm_id IS NULL THEN
+        RAISE WARNING 'Could not find "User" role or required permissions. Skipping permission update.';
+        RETURN;
+    END IF;
+
+    -- 1. Remove the incorrect 'view:dashboard' permission from the 'User' role.
+    DELETE FROM public.role_permissions
+    WHERE role_id = user_role_id AND permission_id = view_dashboard_perm_id;
+    
+    IF FOUND THEN
+    ELSE
+    END IF;
+
+    -- 2. Add the correct 'view:stock_analysis' permission to the 'User' role.
+    INSERT INTO public.role_permissions (role_id, permission_id)
+    VALUES (user_role_id, view_analysis_perm_id)
+    ON CONFLICT (role_id, permission_id) DO NOTHING;
+
+    IF FOUND THEN
+        RAISE NOTICE 'SUCCESS: Assigned "view:stock_analysis" permission to the "User" role.';
+    ELSE
+        RAISE NOTICE 'INFO: "User" role already had "view:stock_analysis" permission. No action taken.';
+    END IF;
+
+END $$;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

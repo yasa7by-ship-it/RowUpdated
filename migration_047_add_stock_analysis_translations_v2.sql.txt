@@ -1,0 +1,53 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add V2 Stock Analysis UI Translations
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the
+-- # redesigned Stock Analysis dashboard page, including the new stat cards
+-- # and the "Market Highlights" section.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- New Stat Cards
+('en', 'correct_forecasts', 'Correct Forecasts'),
+('ar', 'correct_forecasts', 'التوقعات الصحيحة'),
+('en', 'incorrect_forecasts', 'Incorrect Forecasts'),
+('ar', 'incorrect_forecasts', 'التوقعات غير الصحيحة'),
+
+-- Market Highlights Section
+('en', 'market_highlights', 'Market Highlights'),
+('ar', 'market_highlights', 'أبرز ما في السوق'),
+('en', 'recent_hits', 'Recent Hits'),
+('ar', 'recent_hits', 'أحدث التوقعات الصحيحة'),
+('en', 'recent_misses', 'Recent Misses'),
+('ar', 'recent_misses', 'أحدث التوقعات الخاطئة'),
+('en', 'stock', 'Stock'),
+('ar', 'stock', 'السهم'),
+('en', 'predicted', 'Predicted'),
+('ar', 'predicted', 'المتوقع'),
+
+-- Updated Description
+('en', 'perm_view_stock_analysis_desc', 'Provides an overview of forecast accuracy and detailed analysis for individual stocks.'),
+('ar', 'perm_view_stock_analysis_desc', 'يوفر نظرة عامة على دقة التوقعات وتحليلاً مفصلاً للأسهم الفردية.')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

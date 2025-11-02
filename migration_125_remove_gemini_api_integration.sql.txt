@@ -1,0 +1,44 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Remove All Gemini API Integration
+-- #
+-- # Purpose: This script completely removes all database objects and data
+-- # related to the Gemini API integration, including the "Trader's Summary"
+-- # feature. This follows a request to remove all usage of the Gemini API.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Unschedule and drop the daily cron job for summary generation.
+-- The IF EXISTS is important so it doesn't fail if already removed.
+SELECT cron.unschedule(job_name) FROM cron.job WHERE job_name = 'daily-trader-summary-generation';
+RAISE NOTICE 'SUCCESS: Unscheduled the "daily-trader-summary-generation" cron job if it existed.';
+
+-- Step 2: Drop all RPC functions related to the Gemini summary feature.
+DROP FUNCTION IF EXISTS public.generate_and_cache_all_trader_summaries(date);
+DROP FUNCTION IF EXISTS public.get_trader_summary(text, date);
+DROP FUNCTION IF EXISTS public.save_trader_summary(text, date, text, text);
+RAISE NOTICE 'SUCCESS: Dropped all RPC functions related to trader summaries.';
+
+-- Step 3: Drop the table used to cache the summaries.
+-- Using CASCADE to also remove any dependent objects.
+DROP TABLE IF EXISTS public.trader_summaries CASCADE;
+RAISE NOTICE 'SUCCESS: Dropped the "trader_summaries" table.';
+
+-- Step 4: Delete all translation keys related to the feature.
+DELETE FROM public.translations
+WHERE key IN (
+  'traders_summary',
+  'generating_summary',
+  'summary_generation_error',
+  'not_enough_data_for_summary',
+  'loading_summary',
+  'summary_not_available_yet',
+  'summary_fetch_error'
+);
+RAISE NOTICE 'SUCCESS: Deleted all translation keys related to the Trader''s Summary feature.';
+
+COMMIT;

@@ -1,0 +1,99 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add User Favorites System for Stocks
+-- #
+-- # Purpose: This script introduces the full backend system for allowing
+-- # users to "favorite" stocks.
+-- #
+-- # It performs three key actions:
+-- # 1. Creates a new `user_favorite_stocks` table to store the relationship
+-- #    between users and their favorited stock symbols.
+-- # 2. Sets up Row Level Security (RLS) to ensure users can only access and
+-- #    modify their own favorites.
+-- # 3. Creates two RPC functions (`get_user_favorite_stocks` and `toggle_favorite_stock`)
+-- #    for the client application to securely interact with the favorites data.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the user_favorite_stocks table.
+CREATE TABLE IF NOT EXISTS public.user_favorite_stocks (
+  user_id uuid NOT NULL,
+  stock_symbol text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT user_favorite_stocks_pkey PRIMARY KEY (user_id, stock_symbol),
+  CONSTRAINT user_favorite_stocks_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE,
+  CONSTRAINT user_favorite_stocks_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks(symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.user_favorite_stocks IS 'Stores the stocks that a user has marked as their favorite.';
+RAISE NOTICE 'SUCCESS: Table "user_favorite_stocks" created or already exists.';
+
+
+-- Step 2: Set up Row Level Security (RLS) on the new table.
+ALTER TABLE public.user_favorite_stocks ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Allow users full control (SELECT, INSERT, DELETE) over their own favorite entries.
+-- A user should never be able to see or modify another user's favorites.
+DROP POLICY IF EXISTS "Allow users full access to their own favorites" ON public.user_favorite_stocks;
+CREATE POLICY "Allow users full access to their own favorites"
+    ON public.user_favorite_stocks FOR ALL
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+RAISE NOTICE 'SUCCESS: RLS policies for "user_favorite_stocks" created or updated.';
+
+
+-- Step 3: Create an RPC function to GET the current user's favorite stock symbols.
+CREATE OR REPLACE FUNCTION public.get_user_favorite_stocks()
+RETURNS TABLE (stock_symbol text)
+LANGUAGE sql STABLE
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+  SELECT ufs.stock_symbol
+  FROM public.user_favorite_stocks ufs
+  WHERE ufs.user_id = auth.uid();
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_user_favorite_stocks" created or updated.';
+
+
+-- Step 4: Create an RPC function to toggle a stock's favorite status for the current user.
+CREATE OR REPLACE FUNCTION public.toggle_favorite_stock(p_symbol text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- Check if the entry already exists for the current user and the given symbol.
+  IF EXISTS (SELECT 1 FROM public.user_favorite_stocks WHERE user_id = auth.uid() AND stock_symbol = p_symbol) THEN
+    -- If it exists, DELETE it.
+    DELETE FROM public.user_favorite_stocks WHERE user_id = auth.uid() AND stock_symbol = p_symbol;
+  ELSE
+    -- If it does not exist, INSERT it.
+    INSERT INTO public.user_favorite_stocks (user_id, stock_symbol)
+    VALUES (auth.uid(), p_symbol);
+  END IF;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "toggle_favorite_stock" created or updated.';
+
+-- Step 5: Add required translations for the new feature
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'favorites_filter', 'Favorites'),
+('ar', 'favorites_filter', 'المفضلة'),
+('en', 'add_to_favorites', 'Add to favorites'),
+('ar', 'add_to_favorites', 'إضافة إلى المفضلة'),
+('en', 'remove_from_favorites', 'Remove from favorites'),
+('ar', 'remove_from_favorites', 'إزالة من المفضلة')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

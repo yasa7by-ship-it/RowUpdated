@@ -1,0 +1,76 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Consolidate Stock Analysis Functions
+-- #
+-- # Purpose: This script refactors the data fetching for the Stock Analysis page
+-- # by replacing three separate functions with a single, efficient RPC function.
+-- # This improves performance by reducing network requests.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the new consolidated function.
+CREATE OR REPLACE FUNCTION public.get_daily_stock_analysis_page_data()
+RETURNS json
+LANGUAGE sql STABLE AS $$
+WITH latest_date AS (
+    SELECT max(forecast_date) as value FROM public.forecasts
+)
+SELECT json_build_object(
+    'summary', (
+        WITH daily_metrics AS (
+            SELECT
+                afm.hit_range,
+                afm.predicted_price,
+                afm.actual_close
+            FROM public.audit_forecast_metrics afm
+            WHERE afm.forecast_date = (SELECT value FROM latest_date) AND afm.actual_close IS NOT NULL
+        )
+        SELECT json_build_object(
+            'forecast_date', (SELECT value FROM latest_date),
+            'total_forecasts', (SELECT count(*) FROM daily_metrics),
+            'hits', (SELECT count(*) FROM daily_metrics WHERE hit_range = true),
+            'misses', (SELECT count(*) FROM daily_metrics WHERE hit_range = false),
+            'hit_rate', (SELECT avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END) FROM daily_metrics)
+        )
+    ),
+    'results', (
+        SELECT COALESCE(json_agg(res), '[]'::json)
+        FROM (
+            SELECT
+                afm.stock_symbol,
+                s.name as stock_name,
+                afm.forecast_date,
+                afm.predicted_lo::real,
+                afm.predicted_hi::real,
+                afm.actual_close::real,
+                hd.low as actual_low,
+                hd.high as actual_high,
+                afm.hit_range as is_hit
+            FROM
+                public.audit_forecast_metrics afm
+            JOIN
+                public.stocks s ON afm.stock_symbol = s.symbol
+            LEFT JOIN
+                public.historical_data hd ON afm.stock_symbol = hd.stock_symbol AND afm.forecast_date = hd.date
+            WHERE
+                afm.forecast_date = (SELECT value FROM latest_date)
+            ORDER BY
+                afm.stock_symbol
+        ) res
+    )
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_daily_stock_analysis_page_data" created or updated.';
+
+
+-- Step 2: Drop the old, now redundant functions.
+DROP FUNCTION IF EXISTS public.get_latest_forecast_date();
+DROP FUNCTION IF EXISTS public.get_daily_analysis_summary(p_date date);
+DROP FUNCTION IF EXISTS public.get_daily_forecast_results(p_date date);
+RAISE NOTICE 'SUCCESS: Old stock analysis functions have been dropped.';
+
+COMMIT;

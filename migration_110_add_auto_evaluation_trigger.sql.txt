@@ -1,0 +1,173 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Automated Forecast Evaluation Trigger
+-- #
+-- # Purpose: This script automates the execution of the forecast evaluation
+-- # process. It creates a trigger that runs after a new forecast is inserted.
+-- # This trigger checks if the batch of forecasts for a given day is complete
+-- # (by comparing forecast counts to tracked stock counts). If complete, it
+-- # automatically calls the `evaluate_and_save_forecasts()` function.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Ensure the main evaluation function is up-to-date.
+-- This is the function that will be called by the trigger.
+CREATE OR REPLACE FUNCTION public.evaluate_and_save_forecasts(p_date_filter date DEFAULT NULL)
+RETURNS integer
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    processed_count integer;
+BEGIN
+    -- This single WITH clause performs all calculations and insertions atomically.
+    WITH new_evaluations AS (
+        -- Calculate the results for all forecasts that have matching historical data.
+        -- This allows re-evaluation if historical data changes or logic is updated.
+        SELECT
+            f.stock_symbol,
+            s.name AS stock_name,
+            f.forecast_date,
+            f.predicted_price,
+            f.predicted_lo,
+            f.predicted_hi,
+            f.confidence,
+            h.low AS actual_low,
+            h.high AS actual_high,
+            h.close AS actual_close,
+            -- Core "hit" logic: TRUE if the predicted range overlaps with the actual range.
+            (f.predicted_lo <= h.high AND h.low <= f.predicted_hi) AS hit_range,
+            -- Calculate error metrics, avoiding division by zero with NULLIF.
+            ABS(f.predicted_price - h.close) AS abs_error,
+            ABS(f.predicted_price - h.close) / NULLIF(h.close, 0) AS pct_error
+        FROM
+            public.forecasts f
+        JOIN
+            public.stocks s ON f.stock_symbol = s.symbol
+        JOIN
+            public.historical_data h ON f.stock_symbol = h.stock_symbol AND f.forecast_date = h.date
+        -- Filter by date if provided, otherwise process all.
+        WHERE (p_date_filter IS NULL OR f.forecast_date = p_date_filter)
+    ),
+    insert_history AS (
+        INSERT INTO public.forecast_check_history (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        SELECT
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+        RETURNING 1
+    ),
+    upsert_latest AS (
+        INSERT INTO public.forecast_check_latest (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        -- Select only the single most recent evaluation for each stock symbol
+        -- from the set of new evaluations to prevent the "cannot affect row a second time" error.
+        SELECT DISTINCT ON (stock_symbol)
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ORDER BY stock_symbol, forecast_date DESC -- Crucial for DISTINCT ON to pick the latest
+        ON CONFLICT (stock_symbol) DO UPDATE SET
+            forecast_date = EXCLUDED.forecast_date,
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+    ),
+    insert_legacy AS (
+        INSERT INTO public."Forcast_Result" (
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, is_hit
+        )
+        SELECT
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, hit_range
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            is_hit = EXCLUDED.is_hit,
+            created_at = NOW()
+    )
+    SELECT count(*) INTO processed_count FROM insert_history;
+        
+    RETURN processed_count;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Function "evaluate_and_save_forecasts" created or updated.';
+
+
+-- Step 2: Create the trigger function that decides when to run the evaluation.
+CREATE OR REPLACE FUNCTION public.trigger_forecast_evaluation()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    tracked_stock_count integer;
+    forecast_count_for_date integer;
+BEGIN
+    -- 1. Get the counts to check if the batch is complete.
+    SELECT count(*)
+    INTO tracked_stock_count
+    FROM public.stocks
+    WHERE is_tracked = true;
+
+    SELECT count(*)
+    INTO forecast_count_for_date
+    FROM public.forecasts
+    WHERE forecast_date = NEW.forecast_date;
+
+    -- 2. If the number of forecasts for the day matches or exceeds the number of tracked stocks,
+    --    assume the batch is complete and run the evaluation function for that specific day.
+    IF forecast_count_for_date >= tracked_stock_count THEN
+        RAISE NOTICE 'Forecast batch for % appears complete. Triggering evaluation.', NEW.forecast_date;
+        -- The function is now able to handle updates, so we call it for the specific date.
+        PERFORM public.evaluate_and_save_forecasts(NEW.forecast_date);
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Function "trigger_forecast_evaluation" for the trigger has been created or updated.';
+
+
+-- Step 3: Create the trigger and attach it to the forecasts table.
+DROP TRIGGER IF EXISTS tr_evaluate_forecasts_on_batch_complete ON public.forecasts;
+CREATE TRIGGER tr_evaluate_forecasts_on_batch_complete
+  AFTER INSERT ON public.forecasts
+  FOR EACH ROW
+  EXECUTE PROCEDURE public.trigger_forecast_evaluation();
+  
+RAISE NOTICE 'SUCCESS: Trigger "tr_evaluate_forecasts_on_batch_complete" has been created on the forecasts table.';
+
+COMMIT;

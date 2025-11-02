@@ -1,0 +1,81 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Trader Summaries System
+-- #
+-- # Purpose: This script creates the database infrastructure for storing and
+-- # retrieving the AI-generated "Trader's Summary" for each stock, improving
+-- # performance by caching the generated content.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the table to store the summaries.
+CREATE TABLE IF NOT EXISTS public.trader_summaries (
+  stock_symbol text NOT NULL,
+  "date" date NOT NULL,
+  summary_en text NOT NULL,
+  summary_ar text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT trader_summaries_pkey PRIMARY KEY (stock_symbol, date),
+  CONSTRAINT trader_summaries_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks(symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.trader_summaries IS 'Stores AI-generated trader summaries for a stock on a specific date.';
+RAISE NOTICE 'SUCCESS: Table "trader_summaries" created or already exists.';
+
+
+-- Step 2: Set up Row Level Security (RLS) for the new table.
+ALTER TABLE public.trader_summaries ENABLE ROW LEVEL SECURITY;
+
+-- Policy 1: Allow anyone to read the summaries.
+DROP POLICY IF EXISTS "Allow public read access on trader_summaries" ON public.trader_summaries;
+CREATE POLICY "Allow public read access on trader_summaries"
+    ON public.trader_summaries FOR SELECT
+    USING (true);
+
+-- Policy 2: Allow any authenticated user to save/update summaries.
+-- Since generation is client-side, this allows the app to persist the results.
+DROP POLICY IF EXISTS "Allow authenticated users to save summaries" ON public.trader_summaries;
+CREATE POLICY "Allow authenticated users to save summaries"
+    ON public.trader_summaries FOR ALL
+    USING (auth.role() = 'authenticated');
+RAISE NOTICE 'SUCCESS: RLS policies for "trader_summaries" created or updated.';
+
+
+-- Step 3: Create an RPC function to GET a summary.
+CREATE OR REPLACE FUNCTION public.get_trader_summary(p_symbol text, p_date date)
+RETURNS public.trader_summaries
+LANGUAGE sql STABLE
+AS $$
+  SELECT *
+  FROM public.trader_summaries
+  WHERE stock_symbol = p_symbol AND "date" = p_date
+  LIMIT 1;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_trader_summary" created or updated.';
+
+
+-- Step 4: Create an RPC function to SAVE (UPSERT) a summary.
+CREATE OR REPLACE FUNCTION public.save_trader_summary(
+    p_symbol text,
+    p_date date,
+    p_summary_en text,
+    p_summary_ar text
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO public.trader_summaries (stock_symbol, "date", summary_en, summary_ar)
+  VALUES (p_symbol, p_date, p_summary_en, p_summary_ar)
+  ON CONFLICT (stock_symbol, "date") DO UPDATE SET
+    summary_en = p_summary_en,
+    summary_ar = p_summary_ar,
+    created_at = now();
+END;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "save_trader_summary" created or updated.';
+
+COMMIT;

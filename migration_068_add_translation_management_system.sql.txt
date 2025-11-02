@@ -1,0 +1,81 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translation Management System
+-- #
+-- # Purpose: This script introduces the backend infrastructure for the new
+-- # Translation Management page.
+-- #
+-- # It performs four key actions:
+-- # 1. Creates a new permission `manage:translations`.
+-- # 2. Assigns this permission to the 'Admin' role.
+-- # 3. Updates the RLS policy on the `translations` table to use this
+-- #    more specific permission for write access.
+-- # 4. Creates an efficient RPC function `get_all_translations_for_management`
+-- #    to fetch data for the UI.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the new permission to the permissions table.
+INSERT INTO public.permissions (action, description)
+VALUES ('manage:translations', 'Can edit UI translation values for all languages.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+RAISE NOTICE 'SUCCESS: Permission "manage:translations" added or updated.';
+
+-- Step 2: Assign the new permission to the Admin role.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    manage_translations_perm_id UUID;
+BEGIN
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO manage_translations_perm_id FROM public.permissions WHERE action = 'manage:translations';
+
+    IF admin_role_id IS NOT NULL AND manage_translations_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, manage_translations_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+        
+        IF FOUND THEN
+             RAISE NOTICE 'SUCCESS: Assigned "manage:translations" permission to Admin role.';
+        ELSE
+             RAISE NOTICE 'INFO: Admin role already has "manage:translations" permission.';
+        END IF;
+    END IF;
+END $$;
+
+-- Step 3: Update RLS policies for the `translations` table for better security.
+-- The old policy allowed `manage:settings` to edit translations. This is more specific.
+DROP POLICY IF EXISTS "Allow managers full access" ON "public"."translations";
+DROP POLICY IF EXISTS "Allow settings managers full access on translations" ON "public"."translations";
+CREATE POLICY "Allow translation managers full access" ON "public"."translations"
+FOR ALL USING (public.has_permission('manage:translations'));
+RAISE NOTICE 'SUCCESS: RLS policy for "translations" table updated to use new permission.';
+
+-- Step 4: Create the RPC function to fetch pivoted translation data.
+CREATE OR REPLACE FUNCTION public.get_all_translations_for_management()
+RETURNS TABLE (
+    key text,
+    value_en text,
+    value_ar text
+)
+LANGUAGE sql STABLE AS $$
+SELECT
+    t.key,
+    MAX(CASE WHEN t.lang_id = 'en' THEN t.value ELSE NULL END) as value_en,
+    MAX(CASE WHEN t.lang_id = 'ar' THEN t.value ELSE NULL END) as value_ar
+FROM
+    public.translations t
+WHERE
+    t.lang_id IN ('en', 'ar')
+GROUP BY
+    t.key
+ORDER BY
+    t.key;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_all_translations_for_management" created or updated.';
+
+COMMIT;

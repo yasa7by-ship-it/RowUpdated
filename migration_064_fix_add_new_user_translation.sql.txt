@@ -1,0 +1,36 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix "add_new_user" Translation
+-- #
+-- # Purpose: This script specifically fixes an issue where the "Add New User"
+-- # button was not translated into Arabic. It ensures the correct translation
+-- # key is present in the database.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translation for 'add_new_user' in Arabic.
+-- The ON CONFLICT clause makes this script safe to re-run and ensures
+-- the value is updated if it already exists.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'add_new_user', 'Add New User'),
+('ar', 'add_new_user', 'إضافة مستخدم جديد')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: The "add_new_user" translation has been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

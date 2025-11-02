@@ -1,0 +1,30 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add "Login Failed" Translation
+-- #
+-- # Purpose: This is a safe, data-only script. It adds the translation key
+-- # needed for the error message when header login fails.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'login_failed', 'Invalid login credentials. Please try again.'),
+('ar', 'login_failed', 'بيانات الدخول غير صحيحة. يرجى المحاولة مرة أخرى.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

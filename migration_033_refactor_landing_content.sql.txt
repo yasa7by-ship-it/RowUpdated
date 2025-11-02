@@ -1,0 +1,51 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Refactor Landing Page Content Storage
+-- #
+-- # Purpose: This script refactors the way landing page content is stored in
+-- # the `app_settings` table. It consolidates four separate language-specific
+-- # keys into two keys that use JSON objects, making the system more robust
+-- # and easier to manage. It safely migrates any existing content.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;
+
+-- Step 1: Create the new JSON-based settings by aggregating the old ones.
+-- We use a CTE to fetch old values safely, handling cases where they might be NULL.
+WITH old_values AS (
+    SELECT
+        (SELECT value FROM app_settings WHERE key = 'landing_article_title_en') as title_en,
+        (SELECT value FROM app_settings WHERE key = 'landing_article_title_ar') as title_ar,
+        (SELECT value FROM app_settings WHERE key = 'landing_article_body_en') as body_en,
+        (SELECT value FROM app_settings WHERE key = 'landing_article_body_ar') as body_ar
+)
+INSERT INTO public.app_settings (key, value)
+SELECT 'landing_article_title', json_build_object('en', COALESCE(title_en, ''), 'ar', COALESCE(title_ar, ''))::text FROM old_values
+UNION ALL
+SELECT 'landing_article_body', json_build_object('en', COALESCE(body_en, ''), 'ar', COALESCE(body_ar, ''))::text FROM old_values
+ON CONFLICT (key)
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Consolidated landing page content into JSON format.';
+
+-- Step 2: Delete the old, language-specific keys.
+DELETE FROM public.app_settings
+WHERE key IN (
+    'landing_article_title_en',
+    'landing_article_title_ar',
+    'landing_article_body_en',
+    'landing_article_body_ar'
+);
+
+RAISE NOTICE 'SUCCESS: Removed old language-specific landing page content keys.';
+
+-- Re-enable RLS
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,1 @@
+-- This migration is obsolete as the AI summary feature has been removed.

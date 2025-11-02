@@ -1,0 +1,60 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Revert "First User as Super Admin" Logic
+-- #
+-- # Purpose: This script completely removes the special "super admin" logic
+-- # for the first user and reverts the security policies back to a simple,
+-- # permission-based system.
+-- #
+-- # It performs two main actions:
+-- # 1. It drops the `is_first_user()` helper function.
+-- # 2. It reverts the security policies on all tables to ONLY use the
+-- #    `has_permission()` check, removing the "OR is_first_user()" clause.
+-- #
+-- # This script restores the simple, database-driven security model.
+-- #
+-- #############################################################################
+
+-- Step 1: Drop the `is_first_user` helper function.
+DROP FUNCTION IF EXISTS public.is_first_user();
+RAISE NOTICE 'SUCCESS: Helper function `is_first_user` has been removed.';
+
+
+-- Step 2: Revert RLS policy for the 'profiles' table.
+-- Allows access ONLY for users with 'manage:users'.
+DROP POLICY IF EXISTS "Allow managers full access on profiles" ON "public"."profiles";
+CREATE POLICY "Allow managers full access on profiles" ON "public"."profiles"
+FOR ALL USING (public.has_permission('manage:users'));
+RAISE NOTICE 'SUCCESS: Reverted RLS policies for "profiles" table.';
+
+
+-- Step 3: Revert RLS policies for roles & permissions management tables.
+-- Allows access ONLY for users with 'manage:roles'.
+DROP POLICY IF EXISTS "Allow role managers full access on roles" ON "public"."roles";
+CREATE POLICY "Allow role managers full access on roles" ON "public"."roles"
+FOR ALL USING (public.has_permission('manage:roles'));
+
+DROP POLICY IF EXISTS "Allow role managers full access on permissions" ON "public"."permissions";
+CREATE POLICY "Allow role managers full access on permissions" ON "public"."permissions"
+FOR ALL USING (public.has_permission('manage:roles'));
+
+DROP POLICY IF EXISTS "Allow role managers full access on role_permissions" ON "public"."role_permissions";
+CREATE POLICY "Allow role managers full access on role_permissions" ON "public"."role_permissions"
+FOR ALL USING (public.has_permission('manage:roles'));
+RAISE NOTICE 'SUCCESS: Reverted RLS policies for roles and permissions tables.';
+
+
+-- Step 4: Revert RLS policies for settings management tables.
+-- Allows access ONLY for users with 'manage:settings'.
+DROP POLICY IF EXISTS "Allow settings managers full access on translations" ON "public"."translations";
+CREATE POLICY "Allow settings managers full access on translations" ON "public"."translations"
+FOR ALL USING (public.has_permission('manage:settings'));
+
+DROP POLICY IF EXISTS "Allow settings managers full access on app_settings" ON "public"."app_settings";
+CREATE POLICY "Allow settings managers full access on app_settings" ON "public"."app_settings"
+FOR ALL USING (public.has_permission('manage:settings'));
+RAISE NOTICE 'SUCCESS: Reverted RLS policies for settings and translations tables.';
+
+RAISE NOTICE '----------------------------------------------------------';
+RAISE NOTICE 'REVERSION COMPLETE: "Super Admin" logic has been removed.';
+RAISE NOTICE '----------------------------------------------------------';

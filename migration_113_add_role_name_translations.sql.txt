@@ -1,0 +1,36 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Role Name Translations
+-- #
+-- # Purpose: This script adds the UI translation keys required to display
+-- # role names (like 'Admin', 'User') in different languages. This fixes
+-- # an issue where role names appeared in English in the Arabic UI.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for role names.
+-- We include 'Supervisor' as it may have been added manually by users.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'role_Admin', 'Admin'),
+('ar', 'role_Admin', 'مدير'),
+('en', 'role_User', 'User'),
+('ar', 'role_User', 'مستخدم'),
+('en', 'role_Supervisor', 'Supervisor'),
+('ar', 'role_Supervisor', 'مشرف')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for role names have been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,74 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Forecast Check Tables
+-- #
+-- # Purpose: This script creates two new tables, `forecast_check_latest` and
+-- # `forecast_check_history`, to store the results of forecast evaluations.
+-- # These tables replace the previous audit system.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Table 1: Latest forecast check results for each active stock
+CREATE TABLE IF NOT EXISTS public.forecast_check_latest (
+  stock_symbol    text PRIMARY KEY,
+  forecast_date   date NOT NULL,
+  predicted_price double precision,
+  predicted_lo    double precision NOT NULL,
+  predicted_hi    double precision NOT NULL,
+  actual_low      double precision NOT NULL,
+  actual_high     double precision NOT NULL,
+  actual_close    double precision,
+  hit_range       boolean NOT NULL,
+  abs_error       double precision,
+  pct_error       double precision,
+  confidence      double precision,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT forecast_check_latest_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.forecast_check_latest IS 'Stores the latest forecast check results for each active stock.';
+CREATE INDEX IF NOT EXISTS idx_fcl_date ON public.forecast_check_latest(forecast_date);
+
+-- RLS for forecast_check_latest
+ALTER TABLE public.forecast_check_latest ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on forecast_check_latest" ON public.forecast_check_latest;
+CREATE POLICY "Allow public read access on forecast_check_latest" ON public.forecast_check_latest FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on forecast_check_latest" ON public.forecast_check_latest;
+CREATE POLICY "Allow managers full access on forecast_check_latest" ON public.forecast_check_latest FOR ALL USING (public.has_permission('manage:stocks'));
+RAISE NOTICE 'SUCCESS: Table "forecast_check_latest" created and secured.';
+
+
+-- Table 2: Historical forecast check results for all stocks
+CREATE TABLE IF NOT EXISTS public.forecast_check_history (
+  stock_symbol    text   NOT NULL,
+  forecast_date   date   NOT NULL,
+  predicted_price double precision,
+  predicted_lo    double precision NOT NULL,
+  predicted_hi    double precision NOT NULL,
+  actual_low      double precision NOT NULL,
+  actual_high     double precision NOT NULL,
+  actual_close    double precision,
+  hit_range       boolean NOT NULL,
+  abs_error       double precision,
+  pct_error       double precision,
+  confidence      double precision,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT forecast_check_history_pkey PRIMARY KEY (stock_symbol, forecast_date),
+  CONSTRAINT forecast_check_history_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.forecast_check_history IS 'Stores all historical forecast check results.';
+CREATE INDEX IF NOT EXISTS idx_fch_date ON public.forecast_check_history(forecast_date);
+CREATE INDEX IF NOT EXISTS idx_fch_symbol ON public.forecast_check_history(stock_symbol);
+
+-- RLS for forecast_check_history
+ALTER TABLE public.forecast_check_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on forecast_check_history" ON public.forecast_check_history;
+CREATE POLICY "Allow public read access on forecast_check_history" ON public.forecast_check_history FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on forecast_check_history" ON public.forecast_check_history;
+CREATE POLICY "Allow managers full access on forecast_check_history" ON public.forecast_check_history FOR ALL USING (public.has_permission('manage:stocks'));
+RAISE NOTICE 'SUCCESS: Table "forecast_check_history" created and secured.';
+
+COMMIT;

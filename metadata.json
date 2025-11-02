@@ -1,0 +1,5 @@
+{
+  "name": "Secure Admin Dashboard",
+  "description": "A secure, role-based admin dashboard built from the ground up with React and Supabase. Features clean architecture, a robust permission system, and a professional user interface.",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,41 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Core Permission Checking Function
+-- #
+-- # Purpose: This script fixes a critical bug in the `has_permission` database
+-- # function that was causing pages to get stuck in a loading state. The
+-- # function was missing the 'auth' schema in its search path, preventing it
+-- # from correctly identifying the logged-in user.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.has_permission(permission_action text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+-- FIX: Added 'auth' to the search_path so the function can find `auth.uid()`.
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- This query now works correctly because auth.uid() can be resolved.
+  RETURN EXISTS (
+    SELECT 1
+    FROM public.profiles p
+    JOIN public.role_permissions rp ON p.role_id = rp.role_id
+    JOIN public.permissions perm ON rp.permission_id = perm.id
+    WHERE p.id = uid() AND perm.action = permission_action
+  );
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: The `has_permission` function has been corrected.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

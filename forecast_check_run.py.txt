@@ -1,0 +1,273 @@
+
+import os
+import psycopg2
+from psycopg2 import sql
+from psycopg2.extras import DictCursor
+from dotenv import load_dotenv
+
+# -- Settings and Database Connection --
+
+# Load environment variables from a .env file (optional, but good practice)
+load_dotenv()
+
+# Retrieve connection info from environment variables
+DB_HOST = os.getenv("DB_HOST", "your_supabase_host.supabase.co")
+DB_NAME = os.getenv("DB_NAME", "postgres")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "your_supabase_db_password")
+DB_PORT = os.getenv("DB_PORT", "5432")
+
+def get_db_connection():
+    """Create and return a database connection."""
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            dbname=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            port=DB_PORT
+        )
+        print("Successfully connected to the database.")
+        return conn
+    except psycopg2.OperationalError as e:
+        print(f"Database connection error: {e}")
+        return None
+
+# -- Data Fetching Functions --
+
+def get_latest_unevaluated_forecasts_per_stock(cursor):
+    """
+    Fetch the single most recent forecast for each tracked stock
+    that does not yet have an entry in the forecast_check_history table.
+    """
+    query = sql.SQL("""
+        WITH latest_forecasts AS (
+            SELECT DISTINCT ON (f.stock_symbol)
+                f.stock_symbol,
+                s.name as stock_name,
+                f.forecast_date,
+                f.predicted_price,
+                f.predicted_lo,
+                f.predicted_hi,
+                f.confidence
+            FROM public.forecasts f
+            JOIN public.stocks s ON f.stock_symbol = s.symbol
+            WHERE s.is_tracked = TRUE
+            ORDER BY f.stock_symbol, f.forecast_date DESC
+        )
+        SELECT lf.*
+        FROM latest_forecasts lf
+        LEFT JOIN public.forecast_check_history h
+            ON lf.stock_symbol = h.stock_symbol AND lf.forecast_date = h.forecast_date
+        WHERE h.stock_symbol IS NULL;
+    """)
+    cursor.execute(query)
+    forecasts = cursor.fetchall()
+    print(f"Found {len(forecasts)} new/unevaluated latest forecasts to check.")
+    return forecasts
+
+def get_historical_prices_for_forecasts(cursor, forecasts):
+    """Fetch historical price data for a list of forecasts."""
+    if not forecasts:
+        return {}
+
+    # Create a list of (symbol, date) tuples for the WHERE IN clause
+    symbol_date_pairs = tuple([(f['stock_symbol'], f['forecast_date']) for f in forecasts])
+    
+    if not symbol_date_pairs:
+        return{}
+
+    query = sql.SQL("""
+        SELECT stock_symbol, date, "open", high, low, "close", volume
+        FROM public.historical_data
+        WHERE (stock_symbol, date) IN %s;
+    """)
+    
+    cursor.execute(query, (symbol_date_pairs,))
+    
+    # Create a dictionary with a composite key for easy lookup: 'SYMBOL-YYYY-MM-DD'
+    price_data = {f"{row['stock_symbol']}-{row['date']}": row for row in cursor.fetchall()}
+    print(f"Found historical price data for {len(price_data)} matching stock/date pairs.")
+    return price_data
+
+# -- Processing and Saving Functions --
+
+def evaluate_forecast(forecast, actual_price):
+    """Evaluate a forecast against actual price data."""
+    if not actual_price:
+        return None
+
+    predicted_lo = forecast['predicted_lo']
+    predicted_hi = forecast['predicted_hi']
+    actual_low = actual_price['low']
+    actual_high = actual_price['high']
+    actual_close = actual_price.get('close')
+    predicted_price = forecast.get('predicted_price')
+
+    # Hit logic: Does the predicted range overlap with the actual range?
+    is_hit = (predicted_lo <= actual_high) and (actual_low <= predicted_hi)
+
+    # Calculate error metrics (if data is available)
+    abs_error = None
+    pct_error = None
+    if predicted_price is not None and actual_close is not None:
+        abs_error = abs(predicted_price - actual_close)
+        if actual_close > 0:
+            pct_error = (abs_error / actual_close)
+        else:
+            pct_error = 0 # Avoid division by zero
+
+    return {
+        'stock_symbol': forecast['stock_symbol'],
+        'stock_name': forecast['stock_name'],
+        'forecast_date': forecast['forecast_date'],
+        'predicted_price': predicted_price,
+        'predicted_lo': predicted_lo,
+        'predicted_hi': predicted_hi,
+        'actual_low': actual_low,
+        'actual_high': actual_high,
+        'actual_close': actual_close,
+        'is_hit': is_hit,
+        'abs_error': abs_error,
+        'pct_error': pct_error,
+        'confidence': forecast.get('confidence')
+    }
+
+def save_results(cursor, results):
+    """Save the evaluation results to all three database tables."""
+    if not results:
+        print("No results to save.")
+        return
+
+    # 1. Save to forecast_check_history
+    history_query = sql.SQL("""
+        INSERT INTO public.forecast_check_history (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        ) VALUES (
+            %(stock_symbol)s, %(forecast_date)s, %(predicted_price)s, %(predicted_lo)s, %(predicted_hi)s,
+            %(actual_low)s, %(actual_high)s, %(actual_close)s, %(is_hit)s, %(abs_error)s, %(pct_error)s, %(confidence)s
+        ) ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW();
+    """)
+    
+    # 2. Save to forecast_check_latest
+    latest_query = sql.SQL("""
+        INSERT INTO public.forecast_check_latest (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        ) VALUES (
+            %(stock_symbol)s, %(forecast_date)s, %(predicted_price)s, %(predicted_lo)s, %(predicted_hi)s,
+            %(actual_low)s, %(actual_high)s, %(actual_close)s, %(is_hit)s, %(abs_error)s, %(pct_error)s, %(confidence)s
+        ) ON CONFLICT (stock_symbol) DO UPDATE SET
+            forecast_date = EXCLUDED.forecast_date,
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW();
+    """)
+    
+    # 3. Save to Forcast_Result
+    forcast_result_query = sql.SQL("""
+        INSERT INTO public."Forcast_Result" (
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, is_hit
+        ) VALUES (
+            %(stock_symbol)s, %(stock_name)s, %(forecast_date)s, %(predicted_lo)s, %(predicted_hi)s,
+            %(actual_low)s, %(actual_high)s, %(is_hit)s
+        ) ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            is_hit = EXCLUDED.is_hit,
+            created_at = NOW();
+    """)
+
+    try:
+        psycopg2.extras.execute_batch(cursor, history_query, results)
+        psycopg2.extras.execute_batch(cursor, latest_query, results)
+        psycopg2.extras.execute_batch(cursor, forcast_result_query, results)
+        print(f"Successfully saved {len(results)} results to all three tables.")
+    except Exception as e:
+        print(f"An error occurred while saving results: {e}")
+        # This will be caught by the main try/except and cause a rollback
+        raise
+
+# -- Main Execution Function --
+
+def main():
+    """Main function to run the forecast check process."""
+    print("Starting forecast check process...")
+    
+    conn = get_db_connection()
+    if not conn:
+        return
+
+    evaluated_results = []
+    
+    try:
+        # Use a transaction block to ensure all or no data is written
+        with conn:
+            with conn.cursor(cursor_factory=DictCursor) as cursor:
+                # 1. Get the latest unevaluated forecast for each tracked stock
+                forecasts_to_check = get_latest_unevaluated_forecasts_per_stock(cursor)
+                if not forecasts_to_check:
+                    print("No new forecasts to evaluate. Process complete.")
+                    return
+
+                # 2. Get the required actual prices for these forecasts in a single batch
+                actual_prices = get_historical_prices_for_forecasts(cursor, forecasts_to_check)
+
+                # 3. Evaluate each forecast if its corresponding historical data was found
+                for forecast in forecasts_to_check:
+                    symbol = forecast['stock_symbol']
+                    f_date = forecast['forecast_date']
+                    lookup_key = f"{symbol}-{f_date}"
+                    
+                    actual_price_data = actual_prices.get(lookup_key)
+                    
+                    if actual_price_data:
+                        result = evaluate_forecast(forecast, actual_price_data)
+                        if result:
+                            evaluated_results.append(result)
+                    else:
+                        print(f"Info: No historical price data found for {symbol} on {f_date}. This forecast will be re-checked on the next run.")
+
+                # 4. Save results to all tables
+                if evaluated_results:
+                    save_results(cursor, evaluated_results)
+                else:
+                    print("No results were evaluated (likely due to missing historical data for the forecasts).")
+    
+    except Exception as e:
+        print(f"An unexpected error occurred during the process: {e}")
+        # The 'with conn' block handles rollback on exception automatically
+    finally:
+        if conn:
+            conn.close()
+            print("Database connection closed.")
+            
+    print("...Forecast check process finished.")
+
+
+if __name__ == "__main__":
+    main()

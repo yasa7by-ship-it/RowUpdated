@@ -1,0 +1,68 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Simplify Next Day Forecast Logic
+-- #
+-- # Purpose: This script simplifies and corrects the logic for determining the
+-- # "Next Day Forecast" on the Stock Details page, as per user feedback.
+-- #
+-- # The function now uses the `historical_data` table as the direct source
+-- # of truth for the last closing day, which is simpler and more robust than
+-- # the previous implementation that used `forecast_check_history`.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_stock_details_page_data(p_symbol TEXT)
+RETURNS json
+LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    latest_historical_date date;
+    next_forecast_json json;
+BEGIN
+    -- Step 1: Find the latest date we have actual closing data for this stock from the definitive source.
+    SELECT max(hd.date) INTO latest_historical_date
+    FROM public.historical_data hd
+    WHERE hd.stock_symbol = p_symbol;
+
+    IF latest_historical_date IS NOT NULL THEN
+        -- Step 2: If we have historical data, find the very next forecast *after* that date.
+        SELECT row_to_json(f) INTO next_forecast_json
+        FROM public.forecasts f
+        WHERE f.stock_symbol = p_symbol AND f.forecast_date > latest_historical_date
+        ORDER BY f.forecast_date ASC -- Get the first one after the last known date
+        LIMIT 1;
+    ELSE
+        -- Step 3: If there's no history (e.g., a new stock), get the earliest forecast available.
+        SELECT row_to_json(f) INTO next_forecast_json
+        FROM public.forecasts f
+        WHERE f.stock_symbol = p_symbol
+        ORDER BY f.forecast_date ASC -- Get the very first forecast for this new stock
+        LIMIT 1;
+    END IF;
+
+    -- The rest of the function remains the same, returning all necessary data for the page.
+    RETURN json_build_object(
+        'details', (SELECT row_to_json(s) FROM public.stocks s WHERE s.symbol = p_symbol),
+        'next_forecast', next_forecast_json,
+        'historical_data', (SELECT COALESCE(json_agg(h ORDER BY h.date ASC), '[]'::json) FROM (SELECT * FROM public.historical_data WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 90) h),
+        'latest_indicators', (SELECT row_to_json(ti) FROM public.technical_indicators ti WHERE ti.stock_symbol = p_symbol ORDER BY ti.date DESC LIMIT 1),
+        'forecast_history', (
+            SELECT COALESCE(json_agg(fch ORDER BY fch.forecast_date ASC), '[]'::json)
+            FROM (
+                SELECT * FROM public.forecast_check_history
+                WHERE stock_symbol = p_symbol
+                ORDER BY forecast_date DESC
+                LIMIT 15
+            ) fch
+        ),
+        'recent_patterns', (SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json) FROM (SELECT * FROM public.candle_patterns WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 5) cp)
+    );
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_details_page_data" updated with simpler, more direct "next forecast" logic.';
+
+COMMIT;

@@ -1,0 +1,58 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Daily Checklist View and Function
+-- #
+-- # Purpose: This script implements the user's request by creating a new
+-- # SQL view (`vw_Last_dayCheckList`) and an RPC function to fetch data from it.
+-- # This provides the backend for the redesigned "Last Work Day" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the SQL View as provided by the user.
+CREATE OR REPLACE VIEW public.vw_Last_dayCheckList AS
+SELECT
+  fr.stock_symbol,
+  fr.stock_name,
+  s.last_updated,
+  s.price,
+  fr.actual_low,
+  fr.actual_high,
+  fr.predicted_lo,
+  fr.predicted_hi,
+  fr.is_hit
+FROM public."Forcast_Result" AS fr
+JOIN public.stocks AS s
+  ON s.symbol = fr.stock_symbol
+ORDER BY fr.stock_symbol;
+
+--RAISE NOTICE 'SUCCESS: View "vw_Last_dayCheckList" created or updated.';
+
+
+-- Step 2: Apply Row Level Security to the new view.
+-- Since the underlying tables are public, a simple public read policy is sufficient.
+ALTER VIEW public.vw_Last_dayCheckList OWNER TO postgres;
+-- RLS policies are not directly applicable to views in the same way as tables,
+-- access is controlled by the underlying tables' policies. We will create
+-- an RPC function to ensure controlled access.
+
+
+-- Step 3: Create an RPC function to fetch data from the view.
+-- This is the recommended way to expose data to the client-side.
+CREATE OR REPLACE FUNCTION public.get_daily_checklist()
+RETURNS SETOF public.vw_Last_dayCheckList
+LANGUAGE sql STABLE
+AS $$
+  SELECT * FROM public.vw_Last_dayCheckList;
+$$;
+
+--RAISE NOTICE 'SUCCESS: RPC function "get_daily_checklist" created or updated.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

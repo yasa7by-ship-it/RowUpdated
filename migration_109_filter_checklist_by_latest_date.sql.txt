@@ -1,0 +1,32 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Filter Daily Checklist by Latest Date
+-- #
+-- # Purpose: This script updates the `get_daily_checklist` function to return
+-- # data ONLY for the single most recent forecast date available in the
+-- # `Forcast_Result` table. This ensures the "Last Work Day" page calculates
+-- # statistics based solely on the latest data, as requested.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_daily_checklist()
+RETURNS SETOF public.vw_Last_dayCheckList
+LANGUAGE sql STABLE
+AS $$
+  -- This function now returns data ONLY for the single most recent forecast date
+  -- available in the Forcast_Result table. The UI then calculates stats on this filtered data.
+  WITH latest_date AS (
+    SELECT max(forecast_date) AS value FROM public."Forcast_Result"
+  )
+  SELECT * 
+  FROM public.vw_Last_dayCheckList
+  WHERE forecast_date = (SELECT value FROM latest_date);
+$$;
+
+RAISE NOTICE 'SUCCESS: Function "get_daily_checklist" updated to filter for the latest forecast date.';
+
+COMMIT;

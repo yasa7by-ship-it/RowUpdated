@@ -1,0 +1,156 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add "Archive & Clear Activity Log" Feature
+-- #
+-- # Purpose: This script replaces the simple "truncate" functionality with a
+-- # more robust, multi-step archive and delete process.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Drop the old "truncate_activity_logs" function as it's being replaced.
+DROP FUNCTION IF EXISTS public.truncate_activity_logs();
+RAISE NOTICE 'SUCCESS: Dropped old "truncate_activity_logs" function.';
+
+
+-- Step 2: Create a function to EXPORT logs older than a specified period.
+CREATE OR REPLACE FUNCTION public.export_activity_logs(p_older_than_months integer)
+RETURNS TABLE(file_content text, record_count integer)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+    cutoff_date timestamptz;
+    log_record record;
+    formatted_log text;
+    header_text text;
+BEGIN
+    IF NOT public.has_permission('truncate:activity_log') THEN
+        RAISE EXCEPTION 'Insufficient permissions';
+    END IF;
+
+    cutoff_date := now() - (p_older_than_months * interval '1 month');
+    
+    header_text := format(
+        'Activity Log Archive%s'
+        '========================================%s'
+        'Generated On: %s%s'
+        'Period: Older than %s month(s)%s'
+        'Cutoff Date: %s%s%s',
+        E'\n', E'\n', now()::text, E'\n', p_older_than_months, E'\n', cutoff_date::text, E'\n', E'\n'
+    );
+    
+    file_content := header_text;
+    record_count := 0;
+
+    FOR log_record IN
+        SELECT
+            al.id,
+            al.created_at,
+            COALESCE(p.full_name, 'System') as user_full_name,
+            COALESCE(p.email, 'N/A') as user_email,
+            al.action,
+            al.ip_address,
+            al.details
+        FROM public.activity_logs al
+        LEFT JOIN public.profiles p ON al.user_id = p.id
+        WHERE al.created_at < cutoff_date
+        ORDER BY al.created_at ASC
+    LOOP
+        formatted_log := format(
+            E'----------------------------------------\n' ||
+            'Log ID:     %s\n' ||
+            'Date:       %s\n' ||
+            'User:       %s (%s)\n' ||
+            'IP Address: %s\n' ||
+            'Action:     %s\n' ||
+            'Details:\n%s\n\n',
+            log_record.id,
+            log_record.created_at,
+            log_record.user_full_name,
+            log_record.user_email,
+            COALESCE(log_record.ip_address::text, 'N/A'),
+            log_record.action,
+            jsonb_pretty(log_record.details)
+        );
+        file_content := file_content || formatted_log;
+        record_count := record_count + 1;
+    END LOOP;
+
+    RETURN NEXT;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "export_activity_logs" created.';
+
+
+-- Step 3: Create a function to DELETE logs older than a specified period.
+CREATE OR REPLACE FUNCTION public.delete_activity_logs(p_older_than_months integer)
+RETURNS integer
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+    deleted_count integer;
+    cutoff_date timestamptz;
+BEGIN
+    IF NOT public.has_permission('truncate:activity_log') THEN
+        RAISE EXCEPTION 'Insufficient permissions';
+    END IF;
+    
+    cutoff_date := now() - (p_older_than_months * interval '1 month');
+
+    WITH deleted AS (
+        DELETE FROM public.activity_logs
+        WHERE created_at < cutoff_date
+        RETURNING id
+    )
+    SELECT count(*) INTO deleted_count FROM deleted;
+    
+    RETURN deleted_count;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "delete_activity_logs" created.';
+
+-- Step 4: Add UI translations for the new feature.
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'archive_and_clear', 'Archive & Clear'),
+('ar', 'archive_and_clear', 'أرشفة ومسح'),
+('en', 'archive_and_clear_log', 'Archive & Clear Activity Log'),
+('ar', 'archive_and_clear_log', 'أرشفة ومسح سجل الأنشطة'),
+('en', 'archive_period_select_desc', 'This tool will generate a text file archive of old records and then permanently delete them. Select a time period to begin.'),
+('ar', 'archive_period_select_desc', 'ستقوم هذه الأداة بإنشاء أرشيف نصي للسجلات القديمة ثم حذفها بشكل دائم. حدد فترة زمنية للبدء.'),
+('en', 'older_than_1_month', 'Older than 1 month'),
+('ar', 'older_than_1_month', 'أقدم من شهر واحد'),
+('en', 'older_than_x_months', 'Older than {count} months'),
+('ar', 'older_than_x_months', 'أقدم من {count} أشهر'),
+('en', 'generate_archive', 'Generate Archive'),
+('ar', 'generate_archive', 'إنشاء الأرشيف'),
+('en', 'archive_downloaded', 'Archive Downloaded'),
+('ar', 'archive_downloaded', 'تم تنزيل الأرشيف'),
+('en', 'archive_download_confirm_desc', 'An archive of {count} records has been downloaded to your computer. Are you sure you want to permanently delete these records from the database? This action cannot be undone.'),
+('ar', 'archive_download_confirm_desc', 'تم تنزيل أرشيف يحتوي على {count} سجل إلى جهاز الكمبيوتر الخاص بك. هل أنت متأكد من رغبتك في حذف هذه السجلات بشكل دائم من قاعدة البيانات؟ لا يمكن التراجع عن هذا الإجراء.'),
+('en', 'delete_records_confirm', 'Yes, Delete {count} Records'),
+('ar', 'delete_records_confirm', 'نعم، حذف {count} سجلات'),
+('en', 'archive_generation_failed', 'Failed to generate archive'),
+('ar', 'archive_generation_failed', 'فشل إنشاء الأرشيف'),
+('en', 'deletion_failed', 'Deletion failed'),
+('ar', 'deletion_failed', 'فشل الحذف'),
+('en', 'log_archived_and_deleted', 'Logs have been successfully archived and deleted.'),
+('ar', 'log_archived_and_deleted', 'تم أرشفة وحذف السجلات بنجاح.'),
+('en', 'no_logs_to_archive_for_period', 'There are no logs in the selected period to archive.'),
+('ar', 'no_logs_to_archive_for_period', 'لا توجد سجلات في الفترة المحددة للأرشفة.')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Remove old, now-unused translations.
+DELETE FROM public.translations WHERE key IN ('clear_log', 'confirm_clear_log', 'log_cleared_successfully', 'log_clear_failed');
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+RAISE NOTICE 'SUCCESS: Added translations for the archive and clear feature.';
+
+COMMIT;

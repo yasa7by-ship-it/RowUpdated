@@ -1,0 +1,43 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Indicator Analysis Translations
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the
+-- # interactive technical indicator analysis panel on the "Last Work Day" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'indicator_analysis_for', 'Indicator Analysis for {stock}'),
+('ar', 'indicator_analysis_for', 'تحليل المؤشرات لسهم {stock}'),
+('en', 'rsi_indicator', 'RSI (14)'),
+('ar', 'rsi_indicator', 'مؤشر القوة النسبية (14)'),
+('en', 'macd_indicator', 'MACD Hist.'),
+('ar', 'macd_indicator', 'مؤشر الماكد'),
+('en', 'sma20', 'SMA 20'),
+('ar', 'sma20', 'متوسط 20 يوم'),
+('en', 'sma50', 'SMA 50'),
+('ar', 'sma50', 'متوسط 50 يوم'),
+('en', 'bollinger_upper', 'BB Upper'),
+('ar', 'bollinger_upper', 'بولينجر العلوي'),
+('en', 'bollinger_lower', 'BB Lower'),
+('ar', 'bollinger_lower', 'بولينجر السفلي'),
+('en', 'no_indicator_data', 'No technical indicator data available for this date.'),
+('ar', 'no_indicator_data', 'لا توجد بيانات مؤشرات فنية متاحة لهذا التاريخ.')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

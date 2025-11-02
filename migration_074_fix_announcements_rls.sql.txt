@@ -1,0 +1,30 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Announcements RLS Policy for Managers
+-- #
+-- # Purpose: This script fixes a critical bug where users with management
+-- # permissions could not see any announcements on the management page.
+-- # A previous migration removed the general-purpose "full access" policy
+-- # but failed to add back an explicit SELECT policy for managers.
+-- #
+-- # This script adds the missing SELECT policy, allowing managers to view all
+-- # announcements (active, scheduled, expired, etc.) as intended.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Add a specific SELECT policy for users with the 'manage:announcements' permission.
+-- This works in conjunction with the existing public read policy.
+-- Managers will match this policy and see all announcements.
+-- The public will not match this and will fall back to the public policy, seeing only active ones.
+DROP POLICY IF EXISTS "Allow managers to SELECT all announcements" ON public.global_announcements;
+CREATE POLICY "Allow managers to SELECT all announcements"
+    ON public.global_announcements FOR SELECT
+    USING (public.has_permission('manage:announcements'));
+
+RAISE NOTICE 'SUCCESS: Added missing SELECT RLS policy for announcement managers.';
+
+COMMIT;

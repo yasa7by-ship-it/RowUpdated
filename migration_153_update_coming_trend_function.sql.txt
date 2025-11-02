@@ -1,0 +1,102 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update "The Coming Trend" Data Function
+-- #
+-- # Purpose: This script updates the RPC function for "The Coming Trend" page
+-- # to include data for the latest detected candlestick pattern. This supports
+-- # the new, more visual UI design.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Update the RPC function to join with candle_patterns and return the latest pattern.
+CREATE OR REPLACE FUNCTION public.get_the_coming_trend_data()
+RETURNS TABLE (
+    -- Stock info
+    symbol TEXT,
+    stock_name TEXT,
+    last_price REAL,
+    daily_change REAL,
+    daily_change_percent REAL,
+    
+    -- Next upcoming forecast
+    next_forecast_date DATE,
+    next_predicted_lo REAL,
+    next_predicted_hi REAL,
+    
+    -- Latest technical indicators
+    indicator_date DATE,
+    rsi REAL,
+    macd REAL,
+    macd_signal REAL,
+    sma20 REAL,
+    sma50 REAL,
+
+    -- Latest candle pattern
+    pattern_name TEXT,
+    bullish BOOLEAN
+)
+LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    latest_historical_date DATE;
+BEGIN
+    -- Find the date of the latest available historical data. This represents "today" or the last trading day.
+    SELECT MAX(date) INTO latest_historical_date FROM public.historical_data;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,
+        s.name AS stock_name,
+        s.price AS last_price,
+        s.change AS daily_change,
+        s.change_percent AS daily_change_percent,
+        
+        -- Next upcoming forecast (the one with the date after the latest historical date)
+        nf.forecast_date AS next_forecast_date,
+        nf.predicted_lo AS next_predicted_lo,
+        nf.predicted_hi AS next_predicted_hi,
+        
+        -- Latest technical indicators (for the latest historical day)
+        ti.date AS indicator_date,
+        ti.rsi::real,
+        ti.macd::real,
+        ti.macd_signal::real,
+        ti.sma20::real,
+        ti.sma50::real,
+
+        -- Latest candle pattern
+        cp.pattern_name,
+        cp.bullish
+        
+    FROM public.stocks s
+    
+    LEFT JOIN LATERAL (
+        SELECT *
+        FROM public.forecasts
+        WHERE stock_symbol = s.symbol AND forecast_date > latest_historical_date
+        ORDER BY forecast_date ASC
+        LIMIT 1
+    ) nf ON true
+    
+    LEFT JOIN public.technical_indicators ti ON s.symbol = ti.stock_symbol AND ti.date = latest_historical_date
+
+    LEFT JOIN LATERAL (
+        -- Get only the first/most relevant pattern for the indicator date to avoid duplicate rows
+        SELECT cp_inner.pattern_name, cp_inner.bullish
+        FROM public.candle_patterns cp_inner
+        WHERE cp_inner.stock_symbol = s.symbol AND cp_inner.date = latest_historical_date
+        ORDER BY cp_inner.confidence DESC NULLS LAST
+        LIMIT 1
+    ) cp ON true
+    
+    WHERE s.is_tracked = true
+    ORDER BY s.symbol;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_the_coming_trend_data" updated to include candlestick pattern data.';
+
+COMMIT;

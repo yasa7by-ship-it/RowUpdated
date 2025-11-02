@@ -1,0 +1,89 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Stocks Table and Tracking System
+-- #
+-- # Purpose: This script introduces the core table for storing stock data.
+-- #
+-- # It performs several key actions:
+-- # 1. Enables the `pg_trgm` extension required for efficient text searching.
+-- # 2. Creates the `stocks` table to store stock information.
+-- # 3. Adds GIN indexes to the `symbol` and `name` columns for performance.
+-- # 4. Sets up Row Level Security (RLS) for public read access and
+-- #    restricted write access for managers.
+-- # 5. Creates a new permission `manage:stocks` and assigns it to the 'Admin' role.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Enable the pg_trgm extension for text searching.
+CREATE EXTENSION IF NOT EXISTS "pg_trgm" WITH SCHEMA "extensions";
+
+-- Step 2: Create the stocks table.
+-- The user-provided schema is used, wrapped in an IF NOT EXISTS block for safety.
+CREATE TABLE IF NOT EXISTS public.stocks (
+  symbol text NOT NULL,
+  name text NOT NULL,
+  price real NULL,
+  change real NULL,
+  change_percent real NULL,
+  volume bigint NULL,
+  market_cap bigint NULL,
+  last_updated timestamp with time zone NULL,
+  is_tracked boolean NULL DEFAULT true,
+  CONSTRAINT stocks_pkey PRIMARY KEY (symbol)
+);
+COMMENT ON TABLE public.stocks IS 'Stores information about individual stocks.';
+
+
+-- Step 3: Create indexes for efficient searching.
+CREATE INDEX IF NOT EXISTS idx_stocks_symbol_trgm ON public.stocks USING gin (symbol extensions.gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_stocks_name_trgm ON public.stocks USING gin (name extensions.gin_trgm_ops);
+
+
+-- Step 4: Set up Row Level Security (RLS) on the new table.
+ALTER TABLE public.stocks ENABLE ROW LEVEL SECURITY;
+
+-- Policy 1: Allow anyone to read all stock data.
+DROP POLICY IF EXISTS "Allow public read access on stocks" ON public.stocks;
+CREATE POLICY "Allow public read access on stocks" ON public.stocks
+FOR SELECT USING (true);
+
+-- Policy 2: Allow users with 'manage:stocks' permission full access.
+DROP POLICY IF EXISTS "Allow managers full access on stocks" ON public.stocks;
+CREATE POLICY "Allow managers full access on stocks" ON public.stocks
+FOR ALL USING (public.has_permission('manage:stocks'));
+
+
+-- Step 5: Add the new permission to the permissions table.
+INSERT INTO public.permissions (action, description)
+VALUES ('manage:stocks', 'Can add, update, and track stocks.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+
+
+-- Step 6: Assign the new permission to the Admin role.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    manage_stocks_perm_id UUID;
+BEGIN
+    -- Get IDs
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO manage_stocks_perm_id FROM public.permissions WHERE action = 'manage:stocks';
+
+    -- Assign the permission to Admin if both exist
+    IF admin_role_id IS NOT NULL AND manage_stocks_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, manage_stocks_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+    END IF;
+END $$;
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

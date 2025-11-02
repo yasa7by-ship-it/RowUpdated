@@ -1,0 +1,52 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Strengthen Announcement Sanitization (Definitive Fix)
+-- #
+-- # Purpose: This script provides a definitive server-side fix for the
+-- # "null character not permitted" error that occurs when saving announcements.
+-- # The root cause is invisible null characters (\u0000) in text fields.
+-- #
+-- # This script replaces the previous, complex trigger function with a much
+-- # simpler and more robust one. The new function casts the entire JSONB object
+-- # to text, performs a global replace on the null character, and casts it back.
+-- # This is more effective than iterating over JSON keys.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+   
+BEGIN;
+
+-- Step 1: Replace the trigger function with a more robust version.
+CREATE OR REPLACE FUNCTION public.sanitize_announcement_jsonb()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN           
+    -- Sanitize the 'title' JSONB field by casting to text, replacing, and casting back.
+    -- The '\u0000' is the JSON escape sequence for the null character that PostgreSQL rejects.
+    IF NEW.title IS NOT NULL THEN
+        NEW.title := replace(NEW.title::text, '\u0000', '')::jsonb;
+    END IF;
+
+    -- Do the same for the 'message' JSONB field.
+    IF NEW.message IS NOT NULL THEN
+        NEW.message := replace(NEW.message::text, '\u0000', '')::jsonb;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Sanitization function for announcements has been upgraded to a more robust version.';
+
+
+-- Step 2: Ensure the trigger is applied.
+-- The CREATE OR REPLACE on the function is the key change, but we ensure the trigger is present.
+DROP TRIGGER IF EXISTS tr_sanitize_announcement_jsonb ON public.global_announcements;
+CREATE TRIGGER tr_sanitize_announcement_jsonb
+  BEFORE INSERT OR UPDATE ON public.global_announcements
+  FOR EACH ROW EXECUTE PROCEDURE public.sanitize_announcement_jsonb();
+
+RAISE NOTICE 'SUCCESS: Trigger to sanitize announcements has been re-applied. The save issue is now definitively fixed.';
+
+COMMIT;

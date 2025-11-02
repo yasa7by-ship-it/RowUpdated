@@ -1,0 +1,42 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fortify Advertisements Table
+-- #
+-- # Purpose: This script improves the structure of the `advertisements` table
+-- # to support the new ad card design and ensure data integrity.
+-- #
+-- # It performs three key actions:
+-- # 1. Adds a new `advertiser_name` column to store the brand name.
+-- # 2. Enforces a `NOT NULL` constraint on `image_url`.
+-- # 3. Enforces a `NOT NULL` constraint on `target_url`.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the new advertiser_name column with a default value.
+-- This prevents errors on existing rows and ensures the column is always populated.
+DO $$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='advertisements' AND column_name='advertiser_name') THEN
+       ALTER TABLE public.advertisements ADD COLUMN advertiser_name JSONB NOT NULL DEFAULT '{"en": "Advertiser", "ar": "المعلن"}'::jsonb;
+       RAISE NOTICE 'SUCCESS: Column "advertiser_name" added to "advertisements" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "advertiser_name" already exists. No action taken.';
+    END IF;
+END $$;
+
+-- Step 2: Enforce NOT NULL constraints on essential columns.
+-- This ensures that all future advertisements will have an image and a link.
+ALTER TABLE public.advertisements ALTER COLUMN image_url SET NOT NULL;
+ALTER TABLE public.advertisements ALTER COLUMN target_url SET NOT NULL;
+
+RAISE NOTICE 'SUCCESS: Enforced NOT NULL constraints on advertisements table.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

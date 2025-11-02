@@ -1,0 +1,39 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Site Title Fetching Error
+-- #
+-- # Purpose: This script provides a definitive fix for the "Error fetching site
+-- # titles" issue seen on the dashboard. The error was likely caused by the
+-- # `get_translations_for_key` function not having sufficient privileges to
+-- # bypass RLS when called from the client.
+-- #
+-- # This script modifies the function to run with `SECURITY DEFINER`, allowing
+-- # it to reliably fetch the required translation keys regardless of the
+-- # calling user's RLS context. This is a safe and standard pattern for
+-- # controlled data access functions.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_translations_for_key(p_key TEXT)
+RETURNS SETOF public.translations
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT id, lang_id, key, value
+  FROM public.translations
+  WHERE key = p_key AND (lang_id = 'en' OR lang_id = 'ar');
+$$;
+
+RAISE NOTICE 'SUCCESS: The "get_translations_for_key" function has been updated with SECURITY DEFINER to fix fetching errors.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

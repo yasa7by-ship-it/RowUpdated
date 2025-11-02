@@ -1,0 +1,35 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Disclaimer Translation
+-- #
+-- # Purpose: This script adds the missing translation for the disclaimer text
+-- # on "The Coming Trend" page, fixing a UI issue where the key was
+-- # displayed instead of the translated text.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'disclaimer_educational_purposes', 'Disclaimer: For educational purposes only.'),
+('ar', 'disclaimer_educational_purposes', 'إخلاء مسؤولية: هذه المعلومات للأغراض التعليمية فقط.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: The "disclaimer_educational_purposes" translation has been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

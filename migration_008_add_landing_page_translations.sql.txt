@@ -1,0 +1,32 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Landing Page Translations
+-- #
+-- # Purpose: This is a safe, additive-only script. It inserts the new
+-- # translation keys required for the new public landing page.
+-- # It will not delete or alter any existing tables or data.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to insert system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Seed the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures that if a key already exists, it will be
+-- updated instead of causing an error, making the script safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'landing_page_description', 'Welcome to your secure management portal.'),
+('ar', 'landing_page_description', 'أهلاً بك في بوابة الإدارة الآمنة.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

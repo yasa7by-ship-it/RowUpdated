@@ -1,0 +1,93 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Stock Analysis Backend
+-- #
+-- # Purpose: This script enhances the backend functions for the Stock Analysis
+-- # page to provide more detailed statistics and highlights.
+-- #
+-- # It performs two key actions:
+-- # 1. Updates the `get_stock_analysis_summary` RPC function to include
+-- #    counts for total hits, misses, and evaluated forecasts.
+-- # 2. Creates a new `get_market_highlights` RPC function to fetch the most
+-- #    recent hits and misses for a new UI component.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Update the summary function to include more stats.
+CREATE OR REPLACE FUNCTION public.get_stock_analysis_summary()
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+WITH last_run AS (
+    SELECT id FROM public.audit_runs ORDER BY started_at DESC LIMIT 1
+), metrics AS (
+    SELECT hit_range FROM public.audit_forecast_metrics WHERE run_id = (SELECT id FROM last_run)
+)
+SELECT json_build_object(
+    'tracked_stocks_count', (SELECT count(*) FROM public.stocks WHERE is_tracked = true),
+    'latest_forecast_date', (SELECT max(forecast_date) FROM public.forecasts),
+    'last_audit_mape', (SELECT mape FROM public.audit_runs WHERE id = (SELECT id FROM last_run)),
+    'last_audit_hit_rate', (SELECT avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END) FROM metrics),
+    'last_audit_hits', (SELECT count(*) FROM metrics WHERE hit_range = true),
+    'last_audit_misses', (SELECT count(*) FROM metrics WHERE hit_range = false),
+    'last_audit_evaluated_count', (SELECT count(*) FROM metrics)
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_analysis_summary" updated with hit/miss counts.';
+
+
+-- Step 2: Create a new function to get market highlights (recent hits/misses).
+CREATE OR REPLACE FUNCTION public.get_market_highlights()
+RETURNS json
+LANGUAGE sql STABLE AS $$
+WITH last_run AS (
+    SELECT id FROM public.audit_runs ORDER BY started_at DESC LIMIT 1
+)
+SELECT json_build_object(
+    'recent_hits', (
+        SELECT COALESCE(json_agg(hits.*), '[]'::json)
+        FROM (
+            SELECT
+                afm.stock_symbol,
+                s.name as stock_name,
+                afm.forecast_date,
+                afm.predicted_price,
+                afm.actual_close
+            FROM public.audit_forecast_metrics afm
+            JOIN public.stocks s ON afm.stock_symbol = s.symbol
+            WHERE afm.run_id = (SELECT id FROM last_run) AND afm.hit_range = true
+            ORDER BY afm.forecast_date DESC
+            LIMIT 5
+        ) hits
+    ),
+    'recent_misses', (
+        SELECT COALESCE(json_agg(misses.*), '[]'::json)
+        FROM (
+             SELECT
+                afm.stock_symbol,
+                s.name as stock_name,
+                afm.forecast_date,
+                afm.predicted_price,
+                afm.actual_close
+            FROM public.audit_forecast_metrics afm
+            JOIN public.stocks s ON afm.stock_symbol = s.symbol
+            WHERE afm.run_id = (SELECT id FROM last_run) AND afm.hit_range = false
+            ORDER BY afm.forecast_date DESC
+            LIMIT 5
+        ) misses
+    )
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_market_highlights" created.';
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

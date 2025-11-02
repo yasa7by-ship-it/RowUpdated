@@ -1,0 +1,34 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix 'get_all_app_settings' Function Return Type
+-- #
+-- # Purpose: This script provides a definitive fix for the "return type mismatch"
+-- # error that occurred when calling the `get_all_app_settings` function.
+-- #
+-- # The previous version used `RETURNS SETOF public.app_settings`, which can be
+-- # brittle. This version explicitly defines the return columns using
+-- # `RETURNS TABLE(key text, value text)`. This creates a stable contract for
+-- # the function that is not affected by potential underlying table changes,
+-- # resolving the error permanently.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_all_app_settings()
+RETURNS TABLE(key text, value text)
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  -- Explicitly select the two columns that match the RETURNS TABLE definition.
+  -- Using an alias 'a' for clarity.
+  SELECT a.key, a.value FROM public.app_settings AS a;
+$$;
+
+RAISE NOTICE 'SUCCESS: The "get_all_app_settings" function has been corrected with an explicit return type to fix the mismatch error.';
+
+COMMIT;

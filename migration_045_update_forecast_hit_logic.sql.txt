@@ -1,0 +1,96 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Forecast Hit Logic
+-- #
+-- # Purpose: This script updates the logic for determining a forecast "hit"
+-- # in the stock analysis deep dive. The new logic considers a forecast a hit
+-- # if the predicted range [predicted_lo, predicted_hi] overlaps with the
+-- # actual daily range [actual_low, actual_high].
+-- #
+-- # It updates the `get_stock_deep_dive` function to perform this calculation
+-- # on the fly by joining with the `historical_data` table.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Update the RPC function to fetch all schema information.
+CREATE OR REPLACE FUNCTION public.get_stock_deep_dive(p_symbol TEXT)
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+SELECT json_build_object(
+    'details', (
+        SELECT row_to_json(s)
+        FROM public.stocks s
+        WHERE s.symbol = p_symbol
+    ),
+    'historical_data', (
+        SELECT COALESCE(json_agg(h ORDER BY h.date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.historical_data
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 90
+        ) h
+    ),
+    'technical_indicators', (
+        SELECT COALESCE(json_agg(ti ORDER BY ti.date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.technical_indicators
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 90
+        ) ti
+    ),
+    'candle_patterns', (
+         SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.candle_patterns
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 30
+        ) cp
+    ),
+    'latest_forecast', (
+        SELECT row_to_json(f)
+        FROM public.forecasts f
+        WHERE f.stock_symbol = p_symbol
+        ORDER BY f.forecast_date DESC
+        LIMIT 1
+    ),
+    'forecast_history', (
+        SELECT COALESCE(json_agg(fc ORDER BY fc.forecast_date DESC), '[]'::json)
+        FROM (
+            SELECT
+                afm.run_id,
+                afm.stock_symbol,
+                afm.forecast_date,
+                afm.predicted_price,
+                afm.actual_close,
+                -- New hit logic: True if predicted range overlaps with actual daily range.
+                (afm.predicted_lo <= hd.high AND hd.low <= afm.predicted_hi) as hit_range
+            FROM
+                public.audit_forecast_metrics afm
+            JOIN
+                public.historical_data hd ON afm.stock_symbol = hd.stock_symbol AND afm.forecast_date = hd.date
+            WHERE
+                afm.stock_symbol = p_symbol
+            ORDER BY
+                afm.forecast_date DESC
+            LIMIT 10
+        ) fc
+    )
+);
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_deep_dive" updated with new forecast hit logic.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

@@ -1,0 +1,99 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Stock Details Function to Include Summary
+-- #
+-- # Purpose: This script enhances the `get_stock_details_page_data` RPC
+-- # function to include the pre-generated `stock_summary`. This makes the
+-- # data fetching for the Stock Details page more efficient by gathering all
+-- # necessary data in a single network request.
+-- #
+-- # V2 Update: Added a safeguard to create the dependent table if it's missing,
+-- # preventing errors if migrations are run out of order.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Defensive Step: Ensure the 'stock_analysis_summaries' table exists.
+-- This is a safeguard in case migrations were run out of order or a previous one failed.
+CREATE TABLE IF NOT EXISTS public.stock_analysis_summaries (
+  stock_symbol text NOT NULL,
+  "date" date NOT NULL,
+  summary jsonb NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT stock_analysis_summaries_pkey PRIMARY KEY (stock_symbol, "date"),
+  CONSTRAINT stock_analysis_summaries_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks(symbol) ON DELETE CASCADE
+);
+RAISE NOTICE 'INFO: Safeguard check complete. Table "stock_analysis_summaries" exists.';
+
+
+-- Update the RPC function to fetch all data for the details page, now including the summary.
+CREATE OR REPLACE FUNCTION public.get_stock_details_page_data(p_symbol TEXT)
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+WITH latest_indicator_date AS (
+    SELECT max(date) AS value
+    FROM public.technical_indicators ti
+    WHERE ti.stock_symbol = p_symbol
+)
+SELECT json_build_object(
+    'details', (
+        SELECT row_to_json(s)
+        FROM public.stocks s
+        WHERE s.symbol = p_symbol
+    ),
+    'next_forecast', (
+        SELECT row_to_json(f)
+        FROM public.forecasts f
+        WHERE f.stock_symbol = p_symbol
+        ORDER BY f.forecast_date DESC
+        LIMIT 1
+    ),
+    'historical_data', (
+        SELECT COALESCE(json_agg(h ORDER BY h.date ASC), '[]'::json) -- Order ASC for charting
+        FROM (
+            SELECT * FROM public.historical_data
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 90
+        ) h
+    ),
+    'latest_indicators', (
+        SELECT row_to_json(ti)
+        FROM public.technical_indicators ti
+        WHERE ti.stock_symbol = p_symbol AND ti.date = (SELECT value FROM latest_indicator_date)
+        LIMIT 1
+    ),
+    'forecast_history', (
+        SELECT COALESCE(json_agg(fch ORDER BY fch.forecast_date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.forecast_check_history
+            WHERE stock_symbol = p_symbol
+            ORDER BY forecast_date DESC
+            LIMIT 10
+        ) fch
+    ),
+    'recent_patterns', (
+         SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.candle_patterns
+            WHERE stock_symbol = p_symbol
+            ORDER BY date DESC
+            LIMIT 5
+        ) cp
+    ),
+    'stock_summary', (
+        SELECT sas.summary
+        FROM public.stock_analysis_summaries sas
+        WHERE sas.stock_symbol = p_symbol AND sas.date = (SELECT value FROM latest_indicator_date)
+        LIMIT 1
+    )
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_details_page_data" has been enhanced to include the automated summary.';
+
+COMMIT;

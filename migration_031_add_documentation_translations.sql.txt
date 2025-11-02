@@ -1,0 +1,68 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add System Documentation UI Translations
+-- #
+-- # Purpose: This is a safe, data-only script. It adds all the translation
+-- # keys needed for the new system documentation feature.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'system_documentation', 'System Documentation'),
+('ar', 'system_documentation', 'توثيق النظام'),
+('en', 'perm_view_system_documentation', 'View System Documentation'),
+('ar', 'perm_view_system_documentation', 'عرض توثيق النظام'),
+('en', 'perm_view_system_documentation_desc', 'Can view the auto-generated database and system documentation.'),
+('ar', 'perm_view_system_documentation_desc', 'يمكنه عرض التوثيق التلقائي لقاعدة البيانات والنظام.'),
+('en', 'refresh', 'Refresh'),
+('ar', 'refresh', 'تحديث'),
+('en', 'download_as_txt', 'Download as .txt'),
+('ar', 'download_as_txt', 'تنزيل كملف نصي'),
+('en', 'tables_and_views', 'Tables & Views'),
+('ar', 'tables_and_views', 'الجداول والعروض'),
+('en', 'columns', 'Columns'),
+('ar', 'columns', 'الأعمدة'),
+('en', 'column_name', 'Column Name'),
+('ar', 'column_name', 'اسم العمود'),
+('en', 'data_type', 'Data Type'),
+('ar', 'data_type', 'نوع البيانات'),
+('en', 'is_nullable', 'Nullable'),
+('ar', 'is_nullable', 'يقبل NULL'),
+('en', 'default_value', 'Default Value'),
+('ar', 'default_value', 'القيمة الافتراضية'),
+('en', 'description', 'Description'),
+('ar', 'description', 'الوصف'),
+('en', 'user_defined_functions', 'User-Defined Functions'),
+('ar', 'user_defined_functions', 'الدوال المعرفة من المستخدم'),
+('en', 'function_definition', 'Function Definition'),
+('ar', 'function_definition', 'تعريف الدالة'),
+('en', 'rls_policies', 'Row Level Security Policies'),
+('ar', 'rls_policies', 'سياسات أمان مستوى الصف'),
+('en', 'policy_name', 'Policy Name'),
+('ar', 'policy_name', 'اسم السياسة'),
+('en', 'applies_to', 'Applies To'),
+('ar', 'applies_to', 'تنطبق على'),
+('en', 'policy_definition', 'Definition (USING)'),
+('ar', 'policy_definition', 'التعريف (USING)'),
+('en', 'check_expression', 'CHECK Expression'),
+('ar', 'check_expression', 'تعبير التحقق (WITH CHECK)'),
+('en', 'no_description_available', 'No description available.'),
+('ar', 'no_description_available', 'لا يوجد وصف متاح.'),
+('en', 'no_policies_found', 'No policies found for this table.'),
+('ar', 'no_policies_found', 'لم يتم العثور على سياسات لهذا الجدول.'),
+('en', 'documentation_intro', 'This page provides live documentation of the database schema. All information is queried directly from the database catalog.'),
+('ar', 'documentation_intro', 'توفر هذه الصفحة توثيقًا مباشرًا لمخطط قاعدة البيانات. يتم الاستعلام عن جميع المعلومات مباشرة من كتالوج قاعدة البيانات.')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,33 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add URL Validation to Advertisements Table
+-- #
+-- # Purpose: This script adds a robust layer of data integrity to the
+-- # `advertisements` table by adding database-level validation for the URL fields.
+-- # While the frontend now cleans and validates URLs, this ensures that no
+-- # malformed data can enter the database through other means (e.g., direct API calls).
+-- #
+-- # It adds a CHECK constraint using a regular expression to both `image_url`
+-- # and `target_url` to ensure they start with http:// or https://.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- First, drop the old constraints if they exist, to ensure a clean update.
+ALTER TABLE public.advertisements DROP CONSTRAINT IF EXISTS advertisements_image_url_check;
+ALTER TABLE public.advertisements DROP CONSTRAINT IF EXISTS advertisements_target_url_check;
+
+-- Now, add the new, more robust CHECK constraints.
+-- This regex checks if the string starts with http:// or https:// in a case-insensitive way.
+ALTER TABLE public.advertisements
+ADD CONSTRAINT advertisements_image_url_check CHECK (image_url ~* '^https?://.+');
+
+ALTER TABLE public.advertisements
+ADD CONSTRAINT advertisements_target_url_check CHECK (target_url ~* '^https?://.+');
+
+RAISE NOTICE 'SUCCESS: Added robust URL format validation to the advertisements table.';
+
+COMMIT;

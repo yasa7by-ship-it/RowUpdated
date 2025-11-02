@@ -1,0 +1,73 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add More Indicator Translations
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the
+-- # expanded, visually rich technical indicator analysis panel.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'technical_analysis_for', 'Technical Analysis for {stock}'),
+('ar', 'technical_analysis_for', 'التحليل الفني لسهم {stock}'),
+('en', 'overbought', 'Overbought'),
+('ar', 'overbought', 'تشبع شرائي'),
+('en', 'oversold', 'Oversold'),
+('ar', 'oversold', 'تشبع بيعي'),
+('en', 'neutral', 'Neutral'),
+('ar', 'neutral', 'محايد'),
+('en', 'macd_line', 'MACD Line'),
+('ar', 'macd_line', 'خط الماكد'),
+('en', 'signal_line', 'Signal Line'),
+('ar', 'signal_line', 'خط الإشارة'),
+('en', 'histogram', 'Histogram'),
+('ar', 'histogram', 'الرسم البياني'),
+('en', 'trend_momentum', 'Trend & Momentum'),
+('ar', 'trend_momentum', 'الاتجاه والزخم'),
+('en', 'price_vs_sma', 'Price vs. SMA {period}'),
+('ar', 'price_vs_sma', 'السعر مقابل متوسط {period} يوم'),
+('en', 'above', 'Above'),
+('ar', 'above', 'أعلى'),
+('en', 'below', 'Below'),
+('ar', 'below', 'أسفل'),
+('en', 'bollinger_bands', 'Bollinger Bands'),
+('ar', 'bollinger_bands', 'نطاقات بولينجر'),
+('en', 'price_position', 'Price Position'),
+('ar', 'price_position', 'موضع السعر'),
+('en', 'near_upper', 'Near Upper Band'),
+('ar', 'near_upper', 'قرب النطاق العلوي'),
+('en', 'near_lower', 'Near Lower Band'),
+('ar', 'near_lower', 'قرب النطاق السفلي'),
+('en', 'in_middle', 'In the Middle'),
+('ar', 'in_middle', 'في المنتصف'),
+('en', 'stochastics', 'Stochastics (%K / %D)'),
+('ar', 'stochastics', 'مؤشر ستوكاستيك (%K / %D)'),
+('en', 'williams_r', 'Williams %R'),
+('ar', 'williams_r', 'مؤشر ويليامز %R'),
+('en', 'volatility', 'Volatility'),
+('ar', 'volatility', 'التقلب'),
+('en', 'atr14', 'ATR (14)'),
+('ar', 'atr14', 'متوسط النطاق الحقيقي (14)'),
+('en', 'page_x_of_y', 'Page {currentPage} of {totalPages}'),
+('ar', 'page_x_of_y', 'صفحة {currentPage} من {totalPages}'),
+('en', 'previous', 'Previous'),
+('ar', 'previous', 'السابق'),
+('en', 'next', 'Next'),
+('ar', 'next', 'التالي'),
+('en', 'no_results_found', 'No stocks match your criteria.'),
+('ar', 'no_results_found', 'لم يتم العثور على أسهم تطابق معاييرك.')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

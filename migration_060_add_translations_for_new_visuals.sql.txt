@@ -1,0 +1,43 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for New Stock Analysis Visuals
+-- #
+-- # Purpose: This script adds the UI translation keys required for the new
+-- # components on the redesigned Stock Analysis page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'todays_top_performers', 'Today''s Top Performers (Hits)'),
+('ar', 'todays_top_performers', 'أفضل أداء اليوم (توقعات ناجحة)'),
+('en', 'todays_biggest_deviations', 'Today''s Biggest Deviations (Misses)'),
+('ar', 'todays_biggest_deviations', 'أكبر انحرافات اليوم (توقعات خاطئة)'),
+('en', 'prediction_error_distribution', 'Prediction Error Distribution'),
+('ar', 'prediction_error_distribution', 'توزيع خطأ التوقعات'),
+('en', 'pct_error', '% Error'),
+('ar', 'pct_error', 'نسبة الخطأ %'),
+('en', 'no_hits_today', 'No successful predictions today.'),
+('ar', 'no_hits_today', 'لا توجد توقعات ناجحة اليوم.'),
+('en', 'no_misses_today', 'No incorrect predictions today.'),
+('ar', 'no_misses_today', 'لا توجد توقعات خاطئة اليوم.'),
+('en', 'actual_close', 'Actual Close'),
+('ar', 'actual_close', 'الإغلاق الفعلي'),
+('en', 'detailed_results', 'Detailed Results'),
+('ar', 'detailed_results', 'النتائج التفصيلية')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

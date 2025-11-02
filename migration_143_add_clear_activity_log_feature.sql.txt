@@ -1,0 +1,77 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add "Clear Activity Log" Feature
+-- #
+-- # Purpose: This script adds the backend infrastructure for an admin to
+-- # clear all entries from the activity log table.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the new permission.
+INSERT INTO public.permissions (action, description)
+VALUES ('truncate:activity_log', 'Can permanently delete all entries from the activity log.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+RAISE NOTICE 'SUCCESS: Permission "truncate:activity_log" added or updated.';
+
+-- Step 2: Assign the permission to the Admin role.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    truncate_perm_id UUID;
+BEGIN
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO truncate_perm_id FROM public.permissions WHERE action = 'truncate:activity_log';
+
+    IF admin_role_id IS NOT NULL AND truncate_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, truncate_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+    END IF;
+END $$;
+RAISE NOTICE 'SUCCESS: Assigned "truncate:activity_log" permission to Admin role.';
+
+-- Step 3: Create the RPC function to perform the truncation.
+CREATE OR REPLACE FUNCTION public.truncate_activity_logs()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- Security Check: Only allow authorized users to run this.
+  IF NOT public.has_permission('truncate:activity_log') THEN
+    RAISE EXCEPTION 'Insufficient permissions: You need the "truncate:activity_log" permission.';
+  END IF;
+
+  -- Perform the privileged action.
+  TRUNCATE TABLE public.activity_logs RESTART IDENTITY;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "truncate_activity_logs" created.';
+
+-- Step 4: Add UI translations.
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'clear_log', 'Clear Log'),
+('ar', 'clear_log', 'مسح السجل'),
+('en', 'confirm_clear_log', 'Are you sure you want to permanently delete all activity logs? This action cannot be undone.'),
+('ar', 'confirm_clear_log', 'هل أنت متأكد من رغبتك في حذف جميع سجلات الأنشطة نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.'),
+('en', 'log_cleared_successfully', 'Activity log has been cleared successfully.'),
+('ar', 'log_cleared_successfully', 'تم مسح سجل الأنشطة بنجاح.'),
+('en', 'log_clear_failed', 'Failed to clear the activity log.'),
+('ar', 'log_clear_failed', 'فشل مسح سجل الأنشطة.'),
+('en', 'perm_truncate_activity_log', 'Clear Activity Log'),
+('ar', 'perm_truncate_activity_log', 'مسح سجل الأنشطة'),
+('en', 'perm_truncate_activity_log_desc', 'Can permanently delete all entries from the activity log.'),
+('ar', 'perm_truncate_activity_log_desc', 'يمكنه حذف جميع الإدخالات من سجل الأنشطة بشكل دائم.')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+RAISE NOTICE 'SUCCESS: Added translations for the clear log feature.';
+
+COMMIT;

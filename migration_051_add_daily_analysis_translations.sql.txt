@@ -1,0 +1,42 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Daily Stock Analysis UI Translations
+-- #
+-- # Purpose: This script adds all the translation keys needed for the new
+-- # daily-focused Stock Analysis dashboard page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'daily_forecast_analysis', 'Daily Forecast Analysis'),
+('ar', 'daily_forecast_analysis', 'تحليل التوقعات اليومي'),
+('en', 'forecasts_for_date', 'Forecasts for {date}'),
+('ar', 'forecasts_for_date', 'توقعات ليوم {date}'),
+('en', 'total_forecasts', 'Total Forecasts'),
+('ar', 'total_forecasts', 'إجمالي التوقعات'),
+('en', 'hit_rate', 'Hit Rate'),
+('ar', 'hit_rate', 'معدل النجاح'),
+('en', 'predicted_range', 'Predicted Range'),
+('ar', 'predicted_range', 'النطاق المتوقع'),
+('en', 'actual_range', 'Actual Range'),
+('ar', 'actual_range', 'النطاق الفعلي'),
+('en', 'no_forecasts_today', 'No forecast data is available for the latest date.'),
+('ar', 'no_forecasts_today', 'لا توجد بيانات توقعات متاحة لآخر تاريخ.'),
+('en', 'stock_symbol', 'Symbol'),
+('ar', 'stock_symbol', 'الرمز')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

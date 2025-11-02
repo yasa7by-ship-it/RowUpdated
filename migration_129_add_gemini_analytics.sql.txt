@@ -1,0 +1,34 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Remove Gemini Analytics Feature
+-- #
+-- # Purpose: This script completely removes all database objects and data
+-- # related to the Gemini Analytics feature, following a request to remove
+-- # all usage of the Gemini API.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Delete the 'view:gemini_analytics' permission.
+-- Deleting from the parent 'permissions' table will automatically cascade
+-- and remove any corresponding entries in 'role_permissions'.
+DELETE FROM public.permissions WHERE action = 'view:gemini_analytics';
+RAISE NOTICE 'SUCCESS: Deleted "view:gemini_analytics" permission.';
+
+-- Step 2: Delete all translation keys related to the Gemini Analytics feature.
+DELETE FROM public.translations
+WHERE key IN (
+  'gemini_analytics',
+  'perm_view_gemini_analytics',
+  'perm_view_gemini_analytics_desc',
+  'gemini_welcome_message',
+  'ask_gemini_placeholder',
+  'send',
+  'gemini_api_error'
+);
+RAISE NOTICE 'SUCCESS: Deleted all translation keys related to the Gemini Analytics feature.';
+
+COMMIT;

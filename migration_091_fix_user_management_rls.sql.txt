@@ -1,0 +1,36 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix User Management RLS Policy
+-- #
+-- # Purpose: This script fixes a critical bug where users with the 'manage:users'
+-- # permission could not see the full list of users on the management page.
+-- # A previous migration inadvertently removed the SELECT policy for managers.
+-- # This script restores it, ensuring admins can view all profiles as intended.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- This script fixes a critical bug where users with 'manage:users' permission
+-- could not see the full list of users. A previous migration (073)
+-- inadvertently removed the SELECT policy for managers. This script restores it.
+
+-- Drop any potentially conflicting old policies to ensure a clean slate.
+DROP POLICY IF EXISTS "Allow managers read access on profiles" ON "public"."profiles";
+DROP POLICY IF EXISTS "Allow managers full access on profiles" ON "public"."profiles";
+
+-- Create a new, explicit SELECT policy for managers.
+-- This allows them to view all user profiles, fixing the empty list issue.
+CREATE POLICY "Allow managers to SELECT all profiles"
+ON public.profiles FOR SELECT
+USING (public.has_permission('manage:users'));
+
+RAISE NOTICE 'SUCCESS: Restored SELECT permission for user managers on the profiles table.';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

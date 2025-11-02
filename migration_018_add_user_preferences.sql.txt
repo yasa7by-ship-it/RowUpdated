@@ -1,0 +1,37 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add User Language Preference
+-- #
+-- # Purpose: This script adds the ability for each user to have a saved
+-- # language preference, which will be automatically applied when they log in.
+-- #
+-- # It performs one key action:
+-- # 1. It adds a `preferred_language` column to the `public.profiles` table.
+-- #    This column will store the user's chosen language ('en' or 'ar').
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Add the `preferred_language` column to the `profiles` table.
+-- It defaults to 'en' for all existing and new users.
+-- This is safe to run multiple times as it checks for the column's existence first.
+DO $$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='profiles' AND column_name='preferred_language') THEN
+       ALTER TABLE public.profiles ADD COLUMN preferred_language TEXT NOT NULL DEFAULT 'en';
+       RAISE NOTICE 'SUCCESS: Column "preferred_language" added to "profiles" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "preferred_language" already exists in "profiles" table. No action taken.';
+    END IF;
+END $$;
+
+COMMENT ON COLUMN public.profiles.preferred_language IS 'Stores the user''s preferred interface language (e.g., ''en'', ''ar'').';
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

@@ -1,0 +1,49 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Activity Log Summary Translations
+-- #
+-- # Purpose: This script adds the UI translation keys required to translate
+-- # the dynamic summary descriptions in the Activity Log.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- User Role Changed
+('en', 'log_summary_USER_ROLE_CHANGED', 'Changed role for user {email}.'),
+('ar', 'log_summary_USER_ROLE_CHANGED', 'تم تغيير دور المستخدم {email}.'),
+
+-- Permission Added to Role
+('en', 'log_summary_ROLE_PERMISSION_ADDED', 'Granted permission "{permission_action}" to role "{role_name}".'),
+('ar', 'log_summary_ROLE_PERMISSION_ADDED', 'تم منح صلاحية "{permission_action}" للدور "{role_name}".'),
+
+-- Permission Removed from Role
+('en', 'log_summary_ROLE_PERMISSION_REMOVED', 'Revoked permission "{permission_action}" from role "{role_name}".'),
+('ar', 'log_summary_ROLE_PERMISSION_REMOVED', 'تم سحب صلاحية "{permission_action}" من الدور "{role_name}".'),
+
+-- App Setting Changed
+('en', 'log_summary_APP_SETTING_CHANGED', 'Updated setting "{setting_key}".'),
+('ar', 'log_summary_APP_SETTING_CHANGED', 'تم تحديث الإعداد "{setting_key}".'),
+
+-- User Created
+('en', 'log_summary_USER_CREATED', 'New user account created for {email}.'),
+('ar', 'log_summary_USER_CREATED', 'تم إنشاء حساب مستخدم جديد لـ {email}.'),
+
+-- User Login Success
+('en', 'log_summary_USER_LOGIN_SUCCESS', 'User {email} successfully logged in.'),
+('ar', 'log_summary_USER_LOGIN_SUCCESS', 'تم تسجيل دخول المستخدم {email} بنجاح.')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,34 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Remove Technical Summary Translations
+-- #
+-- # Purpose: This script removes the translation keys associated with the
+-- # "Technical Summary" feature, which has been removed from the UI.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Delete the keys related to the removed feature.
+-- 'neutral' is kept as it's used by other components.
+DELETE FROM public.translations
+WHERE key IN (
+  'technical_summary',
+  'summary_signal',
+  'strong_buy',
+  'buy',
+  'sell',
+  'strong_sell'
+);
+
+RAISE NOTICE 'SUCCESS: Removed obsolete translations for the technical summary feature.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,25 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Remove "admin_login" Translation
+-- #
+-- # Purpose: This script removes the now-unused 'admin_login' translation key
+-- # from the database to keep it clean.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Delete the 'admin_login' key for all languages.
+DELETE FROM public.translations WHERE key = 'admin_login';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

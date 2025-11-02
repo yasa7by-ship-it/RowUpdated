@@ -1,0 +1,40 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Stock Analysis UI Translations
+-- #
+-- # Purpose: This script updates the translation for "Tracked Stocks" to
+-- # "Total Number of Companies" and adds the missing translation for the
+-- # "Actual" table header on the Stock Analysis page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- 1. Update the Arabic translation for 'tracked_stocks'
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('ar', 'tracked_stocks', 'عدد الشركات الاجمالي')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- 2. Add translation for 'actual' table header
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'actual', 'Actual'),
+('ar', 'actual', 'الفعلي')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Stock Analysis translations have been updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

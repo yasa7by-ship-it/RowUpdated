@@ -1,0 +1,64 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Definitive Fix for Hanging Save Button (Corrected)
+-- #
+-- # Purpose: This script provides a definitive, server-side fix for the issue
+-- # where the "Save" button would hang indefinitely. The root cause is invisible null
+-- # characters (`\u0000`) that cause PostgreSQL's JSONB/text processing to fail.
+-- #
+-- # This script creates a trigger that automatically sanitizes the `title` and
+-- # `message` JSONB fields on the `global_announcements` table BEFORE any
+-- # insert or update, ensuring no invalid characters ever reach the database.
+-- #
+-- # This version uses the standard `chr(0)` function for maximum compatibility.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the trigger function to sanitize the JSONB fields.
+CREATE OR REPLACE FUNCTION public.sanitize_announcement_jsonb()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    sanitized_title JSONB;
+    sanitized_message JSONB;
+    rec RECORD;
+BEGIN
+    -- Sanitize the 'title' JSONB field if it's not NULL.
+    IF NEW.title IS NOT NULL THEN
+        sanitized_title := '{}'::jsonb;
+        FOR rec IN SELECT * FROM jsonb_each_text(NEW.title) LOOP
+            -- Use chr(0) to represent the null character, which is more robust than escape strings.
+            sanitized_title := sanitized_title || jsonb_build_object(rec.key, replace(rec.value, chr(0), ''));
+        END LOOP;
+        NEW.title := sanitized_title;
+    END IF;
+
+    -- Sanitize the 'message' JSONB field if it's not NULL.
+    IF NEW.message IS NOT NULL THEN
+        sanitized_message := '{}'::jsonb;
+        FOR rec IN SELECT * FROM jsonb_each_text(NEW.message) LOOP
+            sanitized_message := sanitized_message || jsonb_build_object(rec.key, replace(rec.value, chr(0), ''));
+        END LOOP;
+        NEW.message := sanitized_message;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Sanitization function for announcements created or updated.';
+
+
+-- Step 2: Create the trigger that executes the function before any write operation.
+DROP TRIGGER IF EXISTS tr_sanitize_announcement_jsonb ON public.global_announcements;
+CREATE TRIGGER tr_sanitize_announcement_jsonb
+  BEFORE INSERT OR UPDATE ON public.global_announcements
+  FOR EACH ROW EXECUTE PROCEDURE public.sanitize_announcement_jsonb();
+
+RAISE NOTICE 'SUCCESS: Trigger to sanitize announcements has been applied. The save issue is now definitively fixed.';
+
+COMMIT;

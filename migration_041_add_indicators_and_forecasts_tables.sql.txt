@@ -1,0 +1,247 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Indicators, Forecasts, and Audit Tables
+-- #
+-- # Purpose: This script adds all the necessary tables for storing technical
+-- # analysis data, model forecasts, and auditing results.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- #############################################################################
+-- # Table: indicator_definitions
+-- #############################################################################
+
+CREATE TABLE IF NOT EXISTS public.indicator_definitions (
+  id serial NOT NULL,
+  name text NOT NULL,
+  type text NOT NULL,
+  description text NULL,
+  period integer NULL,
+  requires text NULL,
+  bullish boolean NULL,
+  confidence_range text NULL,
+  CONSTRAINT indicator_definitions_pkey PRIMARY KEY (id),
+  CONSTRAINT indicator_definitions_name_key UNIQUE (name),
+  CONSTRAINT indicator_definitions_type_check CHECK (
+    (
+      type = ANY (ARRAY['technical'::text, 'candle'::text])
+    )
+  )
+);
+COMMENT ON TABLE public.indicator_definitions IS 'Stores definitions for technical indicators and candlestick patterns.';
+
+ALTER TABLE public.indicator_definitions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on indicator_definitions" ON public.indicator_definitions;
+CREATE POLICY "Allow public read access on indicator_definitions" ON public.indicator_definitions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on indicator_definitions" ON public.indicator_definitions;
+CREATE POLICY "Allow managers full access on indicator_definitions" ON public.indicator_definitions FOR ALL USING (public.has_permission('manage:stocks'));
+
+
+-- #############################################################################
+-- # Table: technical_indicators
+-- #############################################################################
+
+CREATE TABLE IF NOT EXISTS public.technical_indicators (
+  id serial NOT NULL,
+  stock_symbol text NULL,
+  date date NOT NULL,
+  rsi real NULL,
+  macd real NULL,
+  macd_signal real NULL,
+  macd_histogram real NULL,
+  sma20 real NULL,
+  sma50 real NULL,
+  sma200 real NULL,
+  ema12 real NULL,
+  ema26 real NULL,
+  boll_upper real NULL,
+  boll_middle real NULL,
+  boll_lower real NULL,
+  stochastic_k real NULL,
+  stochastic_d real NULL,
+  williams_r real NULL,
+  volatility_20 double precision NULL,
+  atr14 double precision NULL,
+  macd_cross smallint NULL,
+  rsi_zone smallint NULL,
+  CONSTRAINT technical_indicators_pkey PRIMARY KEY (id),
+  CONSTRAINT technical_indicators_stock_symbol_date_key UNIQUE (stock_symbol, date),
+  CONSTRAINT technical_indicators_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.technical_indicators IS 'Stores calculated daily technical indicator values for stocks.';
+
+CREATE INDEX IF NOT EXISTS idx_ti_symbol_date ON public.technical_indicators USING btree (stock_symbol, date);
+
+ALTER TABLE public.technical_indicators ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on technical_indicators" ON public.technical_indicators;
+CREATE POLICY "Allow public read access on technical_indicators" ON public.technical_indicators FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on technical_indicators" ON public.technical_indicators;
+CREATE POLICY "Allow managers full access on technical_indicators" ON public.technical_indicators FOR ALL USING (public.has_permission('manage:stocks'));
+
+
+-- #############################################################################
+-- # Table: candle_patterns
+-- #############################################################################
+
+CREATE TABLE IF NOT EXISTS public.candle_patterns (
+  id serial NOT NULL,
+  stock_symbol text NULL,
+  date date NOT NULL,
+  pattern_name text NOT NULL,
+  description text NULL,
+  bullish boolean NULL,
+  confidence real NULL,
+  CONSTRAINT candle_patterns_pkey PRIMARY KEY (id),
+  CONSTRAINT candle_patterns_stock_symbol_date_pattern_name_key UNIQUE (stock_symbol, date, pattern_name),
+  CONSTRAINT candle_patterns_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE,
+  CONSTRAINT candle_patterns_confidence_check CHECK (
+    (
+      (confidence >= (0)::double precision)
+      AND (confidence <= (1)::double precision)
+    )
+  )
+);
+COMMENT ON TABLE public.candle_patterns IS 'Stores detected candlestick patterns for stocks on a given day.';
+
+CREATE INDEX IF NOT EXISTS idx_candle_symbol_date ON public.candle_patterns USING btree (stock_symbol, date);
+
+ALTER TABLE public.candle_patterns ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on candle_patterns" ON public.candle_patterns;
+CREATE POLICY "Allow public read access on candle_patterns" ON public.candle_patterns FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on candle_patterns" ON public.candle_patterns;
+CREATE POLICY "Allow managers full access on candle_patterns" ON public.candle_patterns FOR ALL USING (public.has_permission('manage:stocks'));
+
+
+-- #############################################################################
+-- # Table: forecasts
+-- #############################################################################
+
+CREATE TABLE IF NOT EXISTS public.forecasts (
+  id serial NOT NULL,
+  stock_symbol text NULL,
+  forecast_date date NOT NULL,
+  predicted_price real NOT NULL,
+  confidence real NULL,
+  generated_at timestamp WITHOUT TIME ZONE NULL DEFAULT CURRENT_TIMESTAMP,
+  predicted_lo real NULL,
+  predicted_hi real NULL,
+  coverage_target real NULL,
+  model_version text NULL,
+  CONSTRAINT forecasts_pkey PRIMARY KEY (id),
+  CONSTRAINT forecasts_stock_symbol_forecast_date_key UNIQUE (stock_symbol, forecast_date),
+  CONSTRAINT forecasts_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE,
+  CONSTRAINT forecasts_confidence_check CHECK (
+    (
+      (confidence >= (0)::double precision)
+      AND (confidence <= (1)::double precision)
+    )
+  ),
+  CONSTRAINT forecasts_coverage_range_chk CHECK (
+    (
+      (coverage_target IS NULL)
+      OR (
+        (coverage_target >= (0.0)::double precision)
+        AND (coverage_target <= (1.0)::double precision)
+      )
+    )
+  ),
+  CONSTRAINT forecasts_pred_interval_chk CHECK (
+    (
+      (
+        (predicted_lo IS NULL)
+        OR (predicted_price IS NULL)
+        OR (predicted_lo <= predicted_price)
+      )
+      AND (
+        (predicted_hi IS NULL)
+        OR (predicted_price IS NULL)
+        OR (predicted_price <= predicted_hi)
+      )
+    )
+  )
+);
+COMMENT ON TABLE public.forecasts IS 'Stores price forecasts generated by machine learning models.';
+
+CREATE INDEX IF NOT EXISTS idx_forecasts_symbol_date ON public.forecasts USING btree (stock_symbol, forecast_date);
+
+ALTER TABLE public.forecasts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on forecasts" ON public.forecasts;
+CREATE POLICY "Allow public read access on forecasts" ON public.forecasts FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on forecasts" ON public.forecasts;
+CREATE POLICY "Allow managers full access on forecasts" ON public.forecasts FOR ALL USING (public.has_permission('manage:stocks'));
+
+
+-- #############################################################################
+-- # Table: audit_runs
+-- #############################################################################
+
+CREATE TABLE IF NOT EXISTS public.audit_runs (
+  id bigserial NOT NULL,
+  started_at timestamp WITH TIME ZONE NULL DEFAULT now(),
+  ended_at timestamp WITH TIME ZONE NULL,
+  status text NULL DEFAULT 'success'::text,
+  n_symbols integer NULL,
+  n_forecasts integer NULL,
+  n_evaluated integer NULL,
+  n_missing_actuals integer NULL,
+  n_duplicates integer NULL,
+  n_anomalies integer NULL,
+  mae double precision NULL,
+  mape double precision NULL,
+  notes text NULL,
+  script_version text NULL,
+  CONSTRAINT audit_runs_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_runs_status_check CHECK (
+    (
+      status = ANY (
+        ARRAY['success'::text, 'partial'::text, 'error'::text]
+      )
+    )
+  )
+);
+COMMENT ON TABLE public.audit_runs IS 'Logs the execution and results of data processing and auditing scripts.';
+
+ALTER TABLE public.audit_runs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow settings managers full access on audit_runs" ON public.audit_runs;
+CREATE POLICY "Allow settings managers full access on audit_runs" ON public.audit_runs FOR ALL USING (public.has_permission('manage:settings'));
+
+
+-- #############################################################################
+-- # Table: Forcast_Result
+-- #############################################################################
+
+CREATE TABLE IF NOT EXISTS public."Forcast_Result" (
+  stock_symbol text NOT NULL,
+  stock_name text NOT NULL,
+  forecast_date date NOT NULL,
+  predicted_lo real NOT NULL,
+  predicted_hi real NOT NULL,
+  actual_low real NOT NULL,
+  actual_high real NOT NULL,
+  is_hit boolean NOT NULL,
+  created_at timestamp WITHOUT TIME ZONE NOT NULL DEFAULT now(),
+  CONSTRAINT forcast_result_pk UNIQUE (stock_symbol, forecast_date),
+  CONSTRAINT forcast_result_symbol_fk FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE,
+  CONSTRAINT forcast_result_actual_range_chk CHECK ((actual_low <= actual_high)),
+  CONSTRAINT forcast_result_pred_range_chk CHECK ((predicted_lo <= predicted_hi))
+);
+COMMENT ON TABLE public."Forcast_Result" IS 'Stores the results of forecast evaluations against actual market data.';
+
+CREATE INDEX IF NOT EXISTS idx_forcast_result_symbol_date ON public."Forcast_Result" USING btree (stock_symbol, forecast_date);
+CREATE INDEX IF NOT EXISTS idx_forcast_result_date ON public."Forcast_Result" USING btree (forecast_date);
+
+ALTER TABLE public."Forcast_Result" ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read access on Forcast_Result" ON public."Forcast_Result";
+CREATE POLICY "Allow public read access on Forcast_Result" ON public."Forcast_Result" FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow managers full access on Forcast_Result" ON public."Forcast_Result";
+CREATE POLICY "Allow managers full access on Forcast_Result" ON public."Forcast_Result" FOR ALL USING (public.has_permission('manage:stocks'));
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

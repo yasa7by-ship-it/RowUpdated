@@ -1,0 +1,33 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Stock Analysis Stats
+-- #
+-- # Purpose: This script adds the UI translation keys required for the new
+-- # statistics cards on the "Last Work Day" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'total_forecasts', 'Total Forecasts'),
+('ar', 'total_forecasts', 'إجمالي التوقعات'),
+('en', 'correct_forecasts', 'Correct Forecasts'),
+('ar', 'correct_forecasts', 'توقعات صحيحة'),
+('en', 'incorrect_forecasts', 'Incorrect Forecasts'),
+('ar', 'incorrect_forecasts', 'توقعات خاطئة'),
+('en', 'hit_rate', 'Hit Rate'),
+('ar', 'hit_rate', 'نسبة النجاح')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

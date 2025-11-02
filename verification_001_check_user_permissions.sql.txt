@@ -1,0 +1,97 @@
+-- #############################################################################
+-- #
+-- # VERIFICATION SCRIPT: Check Current User's Permissions
+-- #
+-- # Purpose: This script HELPS DIAGNOSE permission issues without changing any
+-- # data. It checks the current logged-in user's role and permissions.
+-- #
+-- # How to use: Run this script in the Supabase SQL Editor and check the
+-- # "Results" and "Notices" tabs at the bottom.
+-- #
+-- #############################################################################
+
+DO $$
+DECLARE
+    current_user_id UUID;
+    current_user_email TEXT;
+    user_profile RECORD;
+    admin_role_id UUID;
+    manage_users_permission_id UUID;
+    has_permission_result BOOLEAN;
+    is_role_assigned BOOLEAN;
+    does_role_have_permission BOOLEAN;
+BEGIN
+    -- Step 1: Identify the current user.
+    SELECT auth.uid(), auth.jwt()->>'email' INTO current_user_id, current_user_email;
+    RAISE NOTICE '----------------------------------------------------------';
+    RAISE NOTICE 'VERIFICATION FOR USER: % (ID: %)', current_user_email, current_user_id;
+    RAISE NOTICE '----------------------------------------------------------';
+
+    IF current_user_id IS NULL THEN
+        RAISE WARNING 'TEST FAILED: Could not identify the current user. Are you logged in?';
+        RETURN;
+    END IF;
+
+    -- Step 2: Check the user's profile and assigned role.
+    -- IMPORTANT: We temporarily elevate privileges for this transaction to read the profile
+    -- for diagnostic purposes, in case RLS is the problem.
+    SET LOCAL role postgres; 
+    SELECT * INTO user_profile FROM public.profiles WHERE id = current_user_id;
+    RESET role; 
+
+    IF user_profile IS NULL THEN
+        RAISE WARNING 'TEST FAILED: No profile found for your user in the `profiles` table.';
+        RETURN;
+    END IF;
+
+    RAISE NOTICE 'STEP 1: User Profile Found:';
+    RAISE NOTICE '  - Full Name: %', user_profile.full_name;
+    RAISE NOTICE '  - Assigned Role ID: %', user_profile.role_id;
+
+    IF user_profile.role_id IS NULL THEN
+        RAISE WARNING '  - PROBLEM: Your user does not have a role assigned. The `role_id` is NULL.';
+        is_role_assigned := FALSE;
+    ELSE
+        RAISE NOTICE '  - SUCCESS: Your user has a role assigned.';
+        is_role_assigned := TRUE;
+    END IF;
+
+    -- Step 3: Check if the 'manage:users' permission exists.
+    SELECT id INTO manage_users_permission_id FROM public.permissions WHERE action = 'manage:users';
+    IF manage_users_permission_id IS NULL THEN
+        RAISE WARNING 'STEP 2: PROBLEM: The permission `manage:users` does not exist in the `permissions` table.';
+    ELSE
+        RAISE NOTICE 'STEP 2: SUCCESS: The permission `manage:users` exists.';
+    END IF;
+
+    -- Step 4: If a role is assigned, check if it has the required permission.
+    IF is_role_assigned AND manage_users_permission_id IS NOT NULL THEN
+        SELECT EXISTS (
+            SELECT 1 FROM public.role_permissions
+            WHERE role_id = user_profile.role_id AND permission_id = manage_users_permission_id
+        ) INTO does_role_have_permission;
+
+        IF does_role_have_permission THEN
+            RAISE NOTICE 'STEP 3: SUCCESS: Your assigned role has the `manage:users` permission.';
+        ELSE
+            RAISE WARNING 'STEP 3: PROBLEM: Your assigned role DOES NOT have the `manage:users` permission.';
+        END IF;
+    ELSE
+        RAISE NOTICE 'STEP 3: SKIPPED (user role or permission was not found).';
+    END IF;
+
+    -- Step 5: Directly test the `has_permission` helper function.
+    -- This is the final test that the RLS policy uses.
+    SELECT public.has_permission('manage:users') INTO has_permission_result;
+    RAISE NOTICE '----------------------------------------------------------';
+    RAISE NOTICE 'FINAL RESULT:';
+    IF has_permission_result THEN
+        RAISE NOTICE '  - SUCCESS: The final check `has_permission(''manage:users'')` returned TRUE.';
+        RAISE NOTICE '  - The user list should be visible. If it is not, the problem might be in the application code itself.';
+    ELSE
+        RAISE WARNING '  - FAILED: The final check `has_permission(''manage:users'')` returned FALSE.';
+        RAISE WARNING '  - This is why the user list is not appearing. Please review the problems identified above.';
+    END IF;
+    RAISE NOTICE '----------------------------------------------------------';
+
+END $$;

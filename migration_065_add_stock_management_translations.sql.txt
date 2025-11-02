@@ -1,0 +1,53 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Stock Management UI Translations
+-- #
+-- # Purpose: This script adds all the translation keys needed for the new
+-- # Stock Management page and its associated components.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'stock_management', 'Stock Management'),
+('ar', 'stock_management', 'إدارة الأسهم'),
+('en', 'add_new_stock', 'Add New Stock'),
+('ar', 'add_new_stock', 'إضافة سهم جديد'),
+('en', 'edit_stock', 'Edit Stock'),
+('ar', 'edit_stock', 'تعديل السهم'),
+('en', 'stock_symbol', 'Symbol'),
+('ar', 'stock_symbol', 'الرمز'),
+('en', 'stock_name', 'Name'),
+('ar', 'stock_name', 'الاسم'),
+('en', 'tracking_status', 'Tracking Status'),
+('ar', 'tracking_status', 'حالة التتبع'),
+('en', 'tracked', 'Tracked'),
+('ar', 'tracked', 'يتم تتبعه'),
+('en', 'not_tracked', 'Not Tracked'),
+('ar', 'not_tracked', 'لا يتم تتبعه'),
+('en', 'stock_saved_successfully', 'Stock saved successfully!'),
+('ar', 'stock_saved_successfully', 'تم حفظ السهم بنجاح!'),
+('en', 'stock_save_failed', 'Failed to save stock. The symbol may already exist.'),
+('ar', 'stock_save_failed', 'فشل حفظ السهم. قد يكون الرمز موجوداً بالفعل.'),
+('en', 'search_stock_symbol_or_name', 'Search by symbol or name...'),
+('ar', 'search_stock_symbol_or_name', 'ابحث بالرمز أو الاسم...')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

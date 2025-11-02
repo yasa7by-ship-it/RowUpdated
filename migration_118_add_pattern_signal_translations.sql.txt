@@ -1,0 +1,30 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Simplified Pattern Signal Translations
+-- #
+-- # Purpose: This script adds user-friendly translations to describe bullish
+-- # and bearish candle patterns, replacing technical jargon like "Shooting Star".
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'pattern_signal_bullish', 'Potential Uptrend'),
+('ar', 'pattern_signal_bullish', 'إشارة صعود محتملة'),
+('en', 'pattern_signal_bearish', 'Potential Downtrend'),
+('ar', 'pattern_signal_bearish', 'إشارة هبوط محتملة')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

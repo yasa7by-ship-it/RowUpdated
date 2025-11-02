@@ -1,0 +1,95 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Strengthen All Management RLS Policies
+-- #
+-- # Purpose: This script provides a definitive fix for issues where "Save"
+-- # buttons were failing silently. The previous general-purpose security rules
+-- # were not robust enough for INSERT/UPDATE/DELETE operations.
+-- #
+-- # This script replaces ambiguous policies with explicit, robust policies for
+-- # all managed tables. This ensures that users with the correct permissions
+-- # can reliably save, update, and delete data across the entire site.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- 1. Strengthen RLS for `global_announcements` (Fixes Announcements save button)
+RAISE NOTICE 'Updating RLS for global_announcements...';
+DROP POLICY IF EXISTS "Allow managers full access" ON public.global_announcements;
+
+-- Public read access is handled by a separate policy. We need explicit write access for managers.
+-- A SELECT policy for managers is also needed so they can see all records, not just active ones.
+-- The following policies ensure clean state and correct permissions.
+DROP POLICY IF EXISTS "Allow managers to SELECT all announcements" ON public.global_announcements;
+CREATE POLICY "Allow managers to SELECT all announcements" ON public.global_announcements FOR SELECT USING (public.has_permission('manage:announcements'));
+
+DROP POLICY IF EXISTS "Allow managers to INSERT announcements" ON public.global_announcements;
+CREATE POLICY "Allow managers to INSERT announcements" ON public.global_announcements FOR INSERT WITH CHECK (public.has_permission('manage:announcements'));
+
+DROP POLICY IF EXISTS "Allow managers to UPDATE announcements" ON public.global_announcements;
+CREATE POLICY "Allow managers to UPDATE announcements" ON public.global_announcements FOR UPDATE USING (public.has_permission('manage:announcements'));
+
+DROP POLICY IF EXISTS "Allow managers to DELETE announcements" ON public.global_announcements;
+CREATE POLICY "Allow managers to DELETE announcements" ON public.global_announcements FOR DELETE USING (public.has_permission('manage:announcements'));
+
+
+-- 2. Strengthen RLS for `profiles` (Fixes User Management save button)
+RAISE NOTICE 'Updating RLS for profiles...';
+-- The previous "FOR ALL" policy was ambiguous. Replace it with explicit UPDATE.
+DROP POLICY IF EXISTS "Allow managers full access on profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Allow managers to UPDATE profiles" ON public.profiles;
+CREATE POLICY "Allow managers to UPDATE profiles" ON public.profiles FOR UPDATE USING (public.has_permission('manage:users'));
+
+
+-- 3. Strengthen RLS for `role_permissions` (Fixes Role Management save button)
+RAISE NOTICE 'Updating RLS for role_permissions...';
+DROP POLICY IF EXISTS "Allow managers full access" ON public.role_permissions;
+DROP POLICY IF EXISTS "Allow role managers full access on role_permissions" ON public.role_permissions;
+-- The `FOR ALL` policy is ambiguous. Replace with explicit INSERT/DELETE which is what the UI uses.
+DROP POLICY IF EXISTS "Allow managers to INSERT role_permissions" ON public.role_permissions;
+CREATE POLICY "Allow managers to INSERT role_permissions" ON public.role_permissions FOR INSERT WITH CHECK (public.has_permission('manage:roles'));
+
+DROP POLICY IF EXISTS "Allow managers to DELETE role_permissions" ON public.role_permissions;
+CREATE POLICY "Allow managers to DELETE role_permissions" ON public.role_permissions FOR DELETE USING (public.has_permission('manage:roles'));
+
+
+-- 4. Strengthen RLS for `translations` (Fixes Translation Management save button)
+RAISE NOTICE 'Updating RLS for translations...';
+DROP POLICY IF EXISTS "Allow translation managers full access" ON public.translations;
+-- Public read is handled. We need explicit write access for managers (UPSERT).
+DROP POLICY IF EXISTS "Allow managers to INSERT translations" ON public.translations;
+CREATE POLICY "Allow managers to INSERT translations" ON public.translations FOR INSERT WITH CHECK (public.has_permission('manage:translations'));
+
+DROP POLICY IF EXISTS "Allow managers to UPDATE translations" ON public.translations;
+CREATE POLICY "Allow managers to UPDATE translations" ON public.translations FOR UPDATE USING (public.has_permission('manage:translations'));
+
+
+-- 5. Strengthen RLS for `app_settings` (Fixes Dashboard Settings save button)
+RAISE NOTICE 'Updating RLS for app_settings...';
+DROP POLICY IF EXISTS "Allow managers full access" ON public.app_settings;
+DROP POLICY IF EXISTS "Allow settings managers full access on app_settings" ON public.app_settings;
+-- Public read is handled. We need explicit write access for managers (UPSERT).
+DROP POLICY IF EXISTS "Allow managers to INSERT app_settings" ON public.app_settings;
+CREATE POLICY "Allow managers to INSERT app_settings" ON public.app_settings FOR INSERT WITH CHECK (public.has_permission('manage:settings'));
+
+DROP POLICY IF EXISTS "Allow managers to UPDATE app_settings" ON public.app_settings;
+CREATE POLICY "Allow managers to UPDATE app_settings" ON public.app_settings FOR UPDATE USING (public.has_permission('manage:settings'));
+
+
+-- 6. Strengthen RLS for `stocks` (Fixes Stock Management save button)
+RAISE NOTICE 'Updating RLS for stocks...';
+DROP POLICY IF EXISTS "Allow managers full access on stocks" ON public.stocks;
+-- Public read is handled. We need explicit write access for managers (UPSERT).
+DROP POLICY IF EXISTS "Allow managers to INSERT stocks" ON public.stocks;
+CREATE POLICY "Allow managers to INSERT stocks" ON public.stocks FOR INSERT WITH CHECK (public.has_permission('manage:stocks'));
+
+DROP POLICY IF EXISTS "Allow managers to UPDATE stocks" ON public.stocks;
+CREATE POLICY "Allow managers to UPDATE stocks" ON public.stocks FOR UPDATE USING (public.has_permission('manage:stocks'));
+
+
+RAISE NOTICE 'SUCCESS: All management RLS policies have been strengthened.';
+
+COMMIT;

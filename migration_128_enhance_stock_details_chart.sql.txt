@@ -1,0 +1,99 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Enhance Stock Details Chart and Add Translations
+-- #
+-- # Purpose: This script updates the backend for the Stock Details page to
+-- # support a new, more advanced historical chart. It increases the amount
+-- # of forecast history data fetched and adds new translation keys.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Update the RPC function to fetch 15 days of forecast history, ordered ascending for charting.
+CREATE OR REPLACE FUNCTION public.get_stock_details_page_data(p_symbol TEXT)
+RETURNS json
+LANGUAGE sql STABLE AS $$
+SELECT json_build_object(
+    'details', (SELECT row_to_json(s) FROM public.stocks s WHERE s.symbol = p_symbol),
+    'next_forecast', (SELECT row_to_json(f) FROM public.forecasts f WHERE f.stock_symbol = p_symbol ORDER BY f.forecast_date DESC LIMIT 1),
+    'historical_data', (SELECT COALESCE(json_agg(h ORDER BY h.date ASC), '[]'::json) FROM (SELECT * FROM public.historical_data WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 90) h),
+    'latest_indicators', (SELECT row_to_json(ti) FROM public.technical_indicators ti WHERE ti.stock_symbol = p_symbol ORDER BY ti.date DESC LIMIT 1),
+    'forecast_history', (
+        SELECT COALESCE(json_agg(fch ORDER BY fch.forecast_date ASC), '[]'::json) -- Order ASC for charting
+        FROM (
+            SELECT * FROM public.forecast_check_history
+            WHERE stock_symbol = p_symbol
+            ORDER BY forecast_date DESC
+            LIMIT 15 -- Increased from 10 to 15
+        ) fch
+    ),
+    'recent_patterns', (SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json) FROM (SELECT * FROM public.candle_patterns WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 5) cp)
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_details_page_data" updated to fetch 15 days of history.';
+
+-- Step 2: Add translations for the chart and new indicator visuals.
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'not_enough_data_for_chart', 'Not enough data to display chart.'),
+('ar', 'not_enough_data_for_chart', 'لا توجد بيانات كافية لعرض الرسم البياني.'),
+('en', 'historical_performance_15d', 'Historical Performance (15-Day Range)'),
+('ar', 'historical_performance_15d', 'الأداء التاريخي (نطاق 15 يومًا)'),
+('en', 'actual_range', 'Actual Range'),
+('ar', 'actual_range', 'النطاق الفعلي'),
+('en', 'predicted_range', 'Predicted Range'),
+('ar', 'predicted_range', 'النطاق المتوقع'),
+('en', 'neutral_zone', 'Neutral'),
+('ar', 'neutral_zone', 'محايد'),
+('en', 'stochastic_oscillator', 'Stochastic Oscillator'),
+('ar', 'stochastic_oscillator', 'مذبذب ستوكاستيك'),
+('en', 'percent_k', '%K'),
+('ar', 'percent_k', '%K'),
+('en', 'percent_d', '%D'),
+('ar', 'percent_d', '%D'),
+('en', 'williams_percent_r', 'Williams %R'),
+('ar', 'williams_percent_r', 'مؤشر ويليامز %R'),
+('en', 'overbought_zone', 'Overbought Zone'),
+('ar', 'overbought_zone', 'منطقة تشبع شرائي'),
+('en', 'oversold_zone', 'Oversold Zone'),
+('ar', 'oversold_zone', 'منطقة تشبع بيعي'),
+('en', 'bollinger_bands_20_2', 'Bollinger Bands (20, 2)'),
+('ar', 'bollinger_bands_20_2', 'نطاقات بولينجر (20, 2)'),
+('en', 'lower_band', 'Lower'),
+('ar', 'lower_band', 'السفلي'),
+('en', 'middle_band', 'Middle'),
+('ar', 'middle_band', 'الأوسط'),
+('en', 'upper_band', 'Upper'),
+('ar', 'upper_band', 'العلوي'),
+('en', 'price_above_band', 'Price is Above Band'),
+('ar', 'price_above_band', 'السعر فوق النطاق'),
+('en', 'price_below_band', 'Price is Below Band'),
+('ar', 'price_below_band', 'السعر تحت النطاق'),
+('en', 'price_inside_bands', 'Price is Inside Bands'),
+('ar', 'price_inside_bands', 'السعر داخل النطاق'),
+('en', 'macd_indicator_full', 'MACD (12, 26, 9)'),
+('ar', 'macd_indicator_full', 'مؤشر الماكد (12, 26, 9)'),
+('en', 'cross_status', 'Cross Status'),
+('ar', 'cross_status', 'حالة التقاطع'),
+('en', 'bullish_cross', 'Bullish Cross'),
+('ar', 'bullish_cross', 'تقاطع صاعد'),
+('en', 'bearish_cross', 'Bearish Cross'),
+('ar', 'bearish_cross', 'تقاطع هابط'),
+('en', 'no_cross', 'No Cross'),
+('ar', 'no_cross', 'لا يوجد تقاطع'),
+('en', 'volatility_indicators', 'Volatility'),
+('ar', 'volatility_indicators', 'التقلب'),
+('en', 'historical_volatility_20d', 'Historical Volatility (20D)'),
+('ar', 'historical_volatility_20d', 'التقلب التاريخي (20 يومًا)')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Added new translations for chart and indicator visuals.';
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

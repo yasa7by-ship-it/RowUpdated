@@ -1,0 +1,130 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Analysis Functions for New Tables
+-- #
+-- # Purpose: This script updates all stock analysis RPC functions to use the
+-- # new `forecast_check_latest` and `forecast_check_history` tables,
+-- # deprecating the old audit system.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Function 1: Update the main function for the "Last Work Day" page.
+CREATE OR REPLACE FUNCTION public.get_daily_stock_analysis_page_data()
+RETURNS json
+LANGUAGE sql STABLE AS $$
+WITH latest_date AS (
+    SELECT max(forecast_date) as value FROM public.forecast_check_latest
+)
+SELECT json_build_object(
+    'summary', (
+        SELECT json_build_object(
+            'forecast_date', (SELECT value FROM latest_date),
+            'total_forecasts', count(*),
+            'hits', count(*) FILTER (WHERE hit_range = true),
+            'misses', count(*) FILTER (WHERE hit_range = false),
+            'hit_rate', avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END)
+        )
+        FROM public.forecast_check_latest
+        WHERE forecast_date = (SELECT value FROM latest_date)
+    ),
+    'results', (
+        SELECT COALESCE(json_agg(res), '[]'::json)
+        FROM (
+            SELECT
+                fcl.stock_symbol,
+                s.name as stock_name,
+                fcl.predicted_price::real,
+                fcl.predicted_lo::real,
+                fcl.predicted_hi::real,
+                fcl.actual_close::real,
+                fcl.actual_low::real,
+                fcl.actual_high::real,
+                fcl.hit_range as is_hit
+            FROM
+                public.forecast_check_latest fcl
+            JOIN
+                public.stocks s ON fcl.stock_symbol = s.symbol
+            WHERE
+                fcl.forecast_date = (SELECT value FROM latest_date)
+            ORDER BY
+                fcl.stock_symbol
+        ) res
+    )
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_daily_stock_analysis_page_data" updated.';
+
+
+-- Function 2: Update the summary function (used by old deep dive).
+CREATE OR REPLACE FUNCTION public.get_stock_analysis_summary()
+RETURNS json
+LANGUAGE sql STABLE AS $$
+WITH latest_date AS (
+    SELECT max(forecast_date) as value FROM public.forecast_check_latest
+)
+SELECT json_build_object(
+    'tracked_stocks_count', (SELECT count(*) FROM public.stocks WHERE is_tracked = true),
+    'latest_forecast_date', (SELECT value FROM latest_date),
+    'last_audit_mape', (SELECT avg(pct_error) FROM public.forecast_check_latest WHERE forecast_date = (SELECT value FROM latest_date)),
+    'last_audit_hit_rate', (SELECT avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END) FROM public.forecast_check_latest WHERE forecast_date = (SELECT value FROM latest_date)),
+    'last_audit_hits', (SELECT count(*) FROM public.forecast_check_latest WHERE hit_range = true AND forecast_date = (SELECT value FROM latest_date)),
+    'last_audit_misses', (SELECT count(*) FROM public.forecast_check_latest WHERE hit_range = false AND forecast_date = (SELECT value FROM latest_date)),
+    'last_audit_evaluated_count', (SELECT count(*) FROM public.forecast_check_latest WHERE forecast_date = (SELECT value FROM latest_date))
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_analysis_summary" updated.';
+
+
+-- Function 3: Update the deep dive function.
+CREATE OR REPLACE FUNCTION public.get_stock_deep_dive(p_symbol TEXT)
+RETURNS json
+LANGUAGE sql
+STABLE
+AS $$
+SELECT json_build_object(
+    'details', (SELECT row_to_json(s) FROM public.stocks s WHERE s.symbol = p_symbol),
+    'historical_data', (
+        SELECT COALESCE(json_agg(h ORDER BY h.date DESC), '[]'::json)
+        FROM (SELECT * FROM public.historical_data WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 90) h
+    ),
+    'technical_indicators', (
+        SELECT COALESCE(json_agg(ti ORDER BY ti.date DESC), '[]'::json)
+        FROM (SELECT * FROM public.technical_indicators WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 90) ti
+    ),
+    'candle_patterns', (
+         SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json)
+        FROM (SELECT * FROM public.candle_patterns WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 30) cp
+    ),
+    'latest_forecast', (
+        SELECT row_to_json(f) FROM public.forecasts f WHERE f.stock_symbol = p_symbol ORDER BY f.forecast_date DESC LIMIT 1
+    ),
+    'forecast_history', (
+        SELECT COALESCE(json_agg(fch_sub), '[]'::json)
+        FROM (
+            SELECT
+                -- The type ForecastHistory expects a run_id, which no longer exists.
+                -- We'll return 0 as a placeholder since this function is not actively used.
+                0 as run_id,
+                fch.stock_symbol,
+                fch.forecast_date,
+                fch.predicted_price,
+                fch.actual_close,
+                fch.hit_range
+            FROM
+                public.forecast_check_history fch
+            WHERE
+                fch.stock_symbol = p_symbol
+            ORDER BY
+                fch.forecast_date DESC
+            LIMIT 10
+        ) fch_sub
+    )
+);
+$$;
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_deep_dive" updated.';
+
+COMMIT;

@@ -1,0 +1,93 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Landing Page Content & Ad System
+-- #
+-- # Purpose: This script introduces a complete system for managing content
+-- # on the public landing page, including a new advertisement system.
+-- #
+-- # It performs four key actions:
+-- # 1. Creates a new `advertisements` table to store commercial ads.
+-- # 2. Sets up Row Level Security (RLS) for public read and restricted write access.
+-- # 3. Creates a new permission `manage:advertisements`.
+-- # 4. Assigns the new permission to the 'Admin' role by default.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the advertisements table.
+CREATE TABLE IF NOT EXISTS public.advertisements (
+  id BIGSERIAL PRIMARY KEY,
+  title JSONB NOT NULL,
+  image_url TEXT,
+  target_url TEXT,
+  placement TEXT NOT NULL DEFAULT 'landing_sidebar' CHECK (placement IN ('landing_sidebar', 'landing_main')),
+  start_date TIMESTAMPTZ NOT NULL,
+  end_date TIMESTAMPTZ NOT NULL,
+  is_enabled BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.advertisements IS 'Stores commercial advertisements for display on public pages.';
+RAISE NOTICE 'SUCCESS: Table "advertisements" created or already exists.';
+
+
+-- Step 2: Set up Row Level Security (RLS) on the new table.
+ALTER TABLE public.advertisements ENABLE ROW LEVEL SECURITY;
+
+-- Policy 1: Allow anyone to read ads that are currently active and enabled.
+DROP POLICY IF EXISTS "Allow public read access for active ads" ON public.advertisements;
+CREATE POLICY "Allow public read access for active ads" ON public.advertisements
+FOR SELECT USING (
+  is_enabled = true AND
+  now() >= start_date AND
+  now() <= end_date
+);
+
+-- Policy 2: Allow users with the 'manage:advertisements' permission to do anything.
+DROP POLICY IF EXISTS "Allow managers full access" ON public.advertisements;
+CREATE POLICY "Allow managers full access" ON public.advertisements
+FOR ALL USING (public.has_permission('manage:advertisements'));
+RAISE NOTICE 'SUCCESS: RLS policies for "advertisements" created or updated.';
+
+
+-- Step 3: Add the new permission to the permissions table.
+INSERT INTO public.permissions (action, description)
+VALUES ('manage:advertisements', 'Can create, edit, and delete commercial advertisements.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+
+
+-- Step 4: Assign the new permission to the Admin role.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    manage_ads_perm_id UUID;
+BEGIN
+    RAISE NOTICE 'SUCCESS: Permission "manage:advertisements" added or already exists.';
+    -- Get IDs
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO manage_ads_perm_id FROM public.permissions WHERE action = 'manage:advertisements';
+
+    -- Assign the permission to Admin if both exist
+    IF admin_role_id IS NOT NULL AND manage_ads_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, manage_ads_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+        
+        IF FOUND THEN
+             RAISE NOTICE 'SUCCESS: Assigned "manage:advertisements" permission to Admin role.';
+        ELSE
+             RAISE NOTICE 'INFO: Admin role already has "manage:advertisements" permission.';
+        END IF;
+    ELSE
+        RAISE WARNING 'Could not assign "manage:advertisements" permission. Admin role or permission not found.';
+    END IF;
+END $$;
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

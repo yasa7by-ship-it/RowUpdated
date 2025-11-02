@@ -1,0 +1,121 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Enhance Daily Stock Analysis Function
+-- #
+-- # Purpose: This script replaces the existing function for the "Last Work Day"
+-- # page with a much more powerful version that returns a single, consolidated
+-- # JSON object with all data needed for the new dashboard design.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_daily_stock_analysis_page_data()
+RETURNS json
+LANGUAGE sql STABLE AS $$
+WITH latest_date AS (
+    -- Use the definitive source for the last work day's data
+    SELECT max(forecast_date) as value FROM public.forecast_check_latest
+),
+daily_results AS (
+    -- Pre-calculate all necessary daily metrics in one place
+    SELECT
+        fcl.stock_symbol,
+        s.name as stock_name,
+        fcl.forecast_date,
+        fcl.predicted_price,
+        fcl.predicted_lo,
+        fcl.predicted_hi,
+        fcl.actual_low,
+        fcl.actual_high,
+        fcl.actual_close,
+        fcl.hit_range,
+        -- Ensure pct_error is not null and handle division by zero
+        CASE
+            WHEN fcl.actual_close IS NOT NULL AND fcl.actual_close > 0 THEN abs(fcl.predicted_price - fcl.actual_close) / fcl.actual_close
+            ELSE 0
+        END as pct_error
+    FROM public.forecast_check_latest fcl
+    JOIN public.stocks s ON fcl.stock_symbol = s.symbol
+    WHERE fcl.forecast_date = (SELECT value FROM latest_date)
+)
+SELECT json_build_object(
+    'summary', (
+        SELECT json_build_object(
+            'forecast_date', (SELECT value FROM latest_date),
+            'total_forecasts', count(*),
+            'hits', count(*) FILTER (WHERE hit_range = true),
+            'misses', count(*) FILTER (WHERE hit_range = false),
+            'hit_rate', avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END)
+        )
+        FROM daily_results
+    ),
+    'results', (
+        SELECT COALESCE(json_agg(res ORDER BY res.stock_symbol), '[]'::json)
+        FROM (
+            SELECT
+                dr.stock_symbol,
+                dr.stock_name,
+                dr.predicted_price::real,
+                dr.predicted_lo::real,
+                dr.predicted_hi::real,
+                dr.actual_close::real,
+                dr.actual_low::real,
+                dr.actual_high::real,
+                dr.hit_range as is_hit,
+                dr.pct_error::real
+            FROM daily_results dr
+        ) res
+    ),
+    'highlights', (
+        SELECT json_build_object(
+            'top_hits', (
+                SELECT COALESCE(json_agg(hits ORDER BY hits.pct_error ASC), '[]'::json)
+                FROM (
+                    SELECT stock_symbol, stock_name, pct_error
+                    FROM daily_results
+                    WHERE hit_range = true
+                    ORDER BY pct_error ASC
+                    LIMIT 5
+                ) hits
+            ),
+            'top_misses', (
+                SELECT COALESCE(json_agg(misses ORDER BY misses.pct_error DESC), '[]'::json)
+                FROM (
+                    SELECT stock_symbol, stock_name, pct_error
+                    FROM daily_results
+                    WHERE hit_range = false
+                    ORDER BY pct_error DESC
+                    LIMIT 5
+                ) misses
+            )
+        )
+    ),
+    'error_distribution', (
+         SELECT COALESCE(json_agg(ed ORDER BY ed.min_error), '[]'::json)
+         FROM (
+            SELECT
+                '0-1%' as bucket, 0 as min_error, count(*)
+                FROM daily_results WHERE pct_error <= 0.01
+            UNION ALL
+            SELECT
+                '1-3%' as bucket, 1 as min_error, count(*)
+                FROM daily_results WHERE pct_error > 0.01 AND pct_error <= 0.03
+            UNION ALL
+            SELECT
+                '3-5%' as bucket, 2 as min_error, count(*)
+                FROM daily_results WHERE pct_error > 0.03 AND pct_error <= 0.05
+            UNION ALL
+            SELECT
+                '>5%' as bucket, 3 as min_error, count(*)
+                FROM daily_results WHERE pct_error > 0.05
+         ) ed
+    )
+);
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_daily_stock_analysis_page_data" has been enhanced with highlights and breakdowns.';
+
+COMMIT;

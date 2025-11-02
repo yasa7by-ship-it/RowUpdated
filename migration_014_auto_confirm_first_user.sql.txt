@@ -1,0 +1,107 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Auto-Confirm First User & Fix Existing State
+-- #
+-- # Purpose: This script solves the "catch-22" problem where an admin cannot
+-- # log in to activate users because their own account is unconfirmed and
+-- # emails are not being sent.
+-- #
+-- # It performs two key actions:
+-- # 1. FIX EXISTING STATE: It finds the first user ever created. If they are
+-- #    not yet confirmed, it confirms them immediately.
+-- # 2. FIX FUTURE STATE: It updates the `handle_new_user` trigger to
+-- #    automatically confirm the email of any new *first user*, allowing them
+-- #    to log in immediately and manage the dashboard.
+-- #
+-- # This script is safe to run multiple times and fixes the issue for both
+-- # existing and new installations.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Part 1: Fix the existing state by confirming the first-ever user if they are unconfirmed.
+DO $$
+DECLARE
+    first_user_id UUID;
+BEGIN
+    RAISE NOTICE 'Checking confirmation status of the first user...';
+
+    -- Find the ID of the first user based on creation time.
+    SELECT id INTO first_user_id
+    FROM auth.users
+    ORDER BY created_at ASC
+    LIMIT 1;
+
+    IF first_user_id IS NOT NULL THEN
+        -- If a first user exists, check if they are confirmed.
+        -- If not, confirm them now.
+        UPDATE auth.users
+        SET email_confirmed_at = now()
+        WHERE id = first_user_id AND email_confirmed_at IS NULL;
+        
+        IF FOUND THEN
+            RAISE NOTICE 'SUCCESS: The first user (ID: %) was unconfirmed and has now been activated.', first_user_id;
+        ELSE
+            RAISE NOTICE 'INFO: The first user (ID: %) is already confirmed. No changes needed.', first_user_id;
+        END IF;
+    ELSE
+        RAISE NOTICE 'INFO: No users found in the system. Nothing to fix.';
+    END IF;
+END $$;
+
+
+-- Part 2: Update the user creation trigger to handle future signups correctly.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, public
+AS $$
+DECLARE
+  user_count integer;
+  target_role_id uuid;
+BEGIN
+  -- Create the profile entry for the new user
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.email);
+
+  -- Check the total number of users
+  SELECT count(*) INTO user_count FROM auth.users;
+
+  -- Logic for the first user vs. subsequent users
+  IF user_count = 1 THEN
+    -- FIRST USER EVER: Make them an Admin and confirm their email instantly.
+    RAISE NOTICE 'First user signing up. Assigning Admin role and auto-confirming email.';
+    
+    -- 1. Find the Admin role ID
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'Admin';
+    
+    -- 2. Update the user in the auth schema to confirm them
+    -- This is a privileged operation, allowed because the function is SECURITY DEFINER.
+    UPDATE auth.users
+    SET email_confirmed_at = now()
+    WHERE id = new.id;
+
+  ELSE
+    -- SUBSEQUENT USERS: Assign the default 'User' role. They will need confirmation.
+    RAISE NOTICE 'New user signing up. Assigning default User role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'User';
+  END IF;
+
+  -- Assign the determined role to the user's profile
+  IF target_role_id IS NOT NULL THEN
+    UPDATE public.profiles
+    SET role_id = target_role_id
+    WHERE id = new.id;
+  ELSE
+     RAISE WARNING 'Could not find a suitable role (Admin or User) to assign to the new user %.', new.id;
+  END IF;
+
+  RETURN new;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: The `handle_new_user` trigger has been updated to auto-confirm the first user upon creation.';
+
+COMMIT;

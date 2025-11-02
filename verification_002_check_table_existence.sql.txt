@@ -1,0 +1,93 @@
+-- #############################################################################
+-- #
+-- # VERIFICATION SCRIPT V4: Table Verification Report (Foolproof)
+-- #
+-- # Purpose: This is a READ-ONLY script designed to be as robust as possible.
+-- # It checks for required tables and their row counts using a single query
+-- # that is guaranteed to run in the Supabase SQL editor.
+-- #
+-- # How to use: Copy and paste this entire script into the Supabase SQL
+-- # Editor and click "Run". The report will appear as a table below.
+-- #
+-- #############################################################################
+
+-- This query is constructed as a series of blocks joined by UNION ALL.
+-- Each block checks for one table, ensuring the query runs even if some tables are missing.
+
+(SELECT
+    'roles' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.roles)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'roles')
+)
+UNION ALL
+(SELECT 'roles', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'roles')
+)
+UNION ALL
+(SELECT
+    'permissions' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.permissions)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'permissions')
+)
+UNION ALL
+(SELECT 'permissions', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'permissions')
+)
+UNION ALL
+(SELECT
+    'role_permissions' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.role_permissions)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'role_permissions')
+)
+UNION ALL
+(SELECT 'role_permissions', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'role_permissions')
+)
+UNION ALL
+(SELECT
+    'profiles' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.profiles)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles')
+)
+UNION ALL
+(SELECT 'profiles', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'profiles')
+)
+UNION ALL
+(SELECT
+    'translations' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.translations)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'translations')
+)
+UNION ALL
+(SELECT 'translations', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'translations')
+)
+UNION ALL
+(SELECT
+    'app_settings' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.app_settings)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'app_settings')
+)
+UNION ALL
+(SELECT 'app_settings', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'app_settings')
+)
+UNION ALL
+(SELECT
+    'activity_logs' AS table_name,
+    '✅ Found' AS status,
+    (SELECT count(*) FROM public.activity_logs)::text AS row_count
+ WHERE EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'activity_logs')
+)
+UNION ALL
+(SELECT 'activity_logs', '❌ NOT FOUND', 'N/A'
+ WHERE NOT EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'activity_logs')
+)
+ORDER BY table_name;

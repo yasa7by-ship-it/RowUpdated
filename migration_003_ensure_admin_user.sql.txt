@@ -1,0 +1,56 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Ensure At Least One Admin User Exists
+-- #
+-- # Purpose: This script addresses the common setup issue where no user has
+-- # the 'Admin' role, preventing them from seeing the user list.
+-- #
+-- # It performs one key action:
+-- # 1. It finds the OLDEST user in the system (the first one to sign up).
+-- # 2. If NO users currently have the 'Admin' role, it assigns the 'Admin'
+-- #    role to that oldest user.
+-- #
+-- # This is a safe, one-time operation to ensure the dashboard is usable
+-- # after initial setup. It will not change anything if an Admin already exists.
+-- #
+-- #############################################################################
+
+DO $$
+DECLARE
+    admin_role_id UUID;
+    first_user_id UUID;
+    admin_count INTEGER;
+BEGIN
+    -- Step 1: Find the ID for the 'Admin' role.
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin' LIMIT 1;
+
+    IF NOT FOUND THEN
+        RAISE WARNING 'Could not find the "Admin" role. Please ensure the initial setup script has been run. Aborting.';
+        RETURN;
+    END IF;
+
+    -- Step 2: Check if any user already has the Admin role.
+    SELECT count(*) INTO admin_count FROM public.profiles WHERE role_id = admin_role_id;
+
+    IF admin_count > 0 THEN
+        RAISE NOTICE 'INFO: An Admin user already exists. No changes needed.';
+        RETURN;
+    END IF;
+
+    -- Step 3: If no admin exists, find the first user who signed up.
+    RAISE NOTICE 'No admin user found. Attempting to assign the role to the first user.';
+    SELECT u.id INTO first_user_id FROM auth.users u ORDER BY u.created_at ASC LIMIT 1;
+
+    IF NOT FOUND THEN
+        RAISE WARNING 'Could not find any users in the auth.users table. Aborting.';
+        RETURN;
+    END IF;
+
+    -- Step 4: Assign the 'Admin' role to the first user.
+    UPDATE public.profiles
+    SET role_id = admin_role_id
+    WHERE id = first_user_id;
+
+    RAISE NOTICE 'SUCCESS: Assigned the "Admin" role to the user with ID %. They can now manage the dashboard.', first_user_id;
+
+END $$;

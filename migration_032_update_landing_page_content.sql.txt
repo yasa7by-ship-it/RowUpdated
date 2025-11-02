@@ -1,0 +1,37 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Landing Page Article Content
+-- #
+-- # Purpose: This script updates the content of the article displayed on the
+-- # public landing page as per the user's request.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;
+
+-- Upsert the values for the landing page article in both English and Arabic.
+-- The ON CONFLICT clause ensures that if the keys already exist, they will be
+-- updated instead of causing an error.
+INSERT INTO public.app_settings (key, value) VALUES
+('landing_article_title_en', 'In this website:'),
+('landing_article_body_en', 'Professional and visually engaging stock price predictions for the U.S. markets, enabling users to explore daily and historical stock performance through multiple subscription plans.'),
+('landing_article_title_ar', 'في هذا الموقع'),
+('landing_article_body_ar', E'توقعات أسعار الأسهم في الأسواق الأمريكية بطريقة احترافية وبصرية جذابة\nتمكين المستخدمين من استعراض الأداء اليومي والتاريخي للأسهم وفق خطط اشتراك متعددة')
+ON CONFLICT (key)
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Landing page content has been updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

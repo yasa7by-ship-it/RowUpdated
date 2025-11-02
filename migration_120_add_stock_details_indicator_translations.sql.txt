@@ -1,0 +1,97 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Visual Indicator Dashboard
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the
+-- # redesigned, visual technical indicator panel on the Stock Details page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Card Titles
+('en', 'rsi_indicator_14', 'RSI (14)'),
+('ar', 'rsi_indicator_14', 'مؤشر القوة النسبية (14)'),
+('en', 'stochastic_oscillator', 'Stochastic (%K / %D)'),
+('ar', 'stochastic_oscillator', 'مؤشر ستوكاستيك (%K / %D)'),
+('en', 'williams_percent_r', 'Williams %R'),
+('ar', 'williams_percent_r', 'مؤشر ويليامز %R'),
+('en', 'bollinger_bands_20_2', 'Bollinger Bands (20, 2)'),
+('ar', 'bollinger_bands_20_2', 'نطاقات بولينجر (20, 2)'),
+('en', 'macd_indicator_full', 'MACD (12, 26, 9)'),
+('ar', 'macd_indicator_full', 'مؤشر الماكد (12, 26, 9)'),
+('en', 'moving_averages', 'Moving Averages'),
+('ar', 'moving_averages', 'المتوسطات المتحركة'),
+('en', 'volatility_indicators', 'Volatility'),
+('ar', 'volatility_indicators', 'التقلب'),
+
+-- Labels & Values
+('en', 'value', 'Value'),
+('ar', 'value', 'القيمة'),
+('en', 'upper_band', 'Upper'),
+('ar', 'upper_band', 'العلوي'),
+('en', 'middle_band', 'Middle'),
+('ar', 'middle_band', 'الأوسط'),
+('en', 'lower_band', 'Lower'),
+('ar', 'lower_band', 'السفلي'),
+('en', 'macd_line', 'MACD'),
+('ar', 'macd_line', 'الماكد'),
+('en', 'signal_line', 'Signal'),
+('ar', 'signal_line', 'الإشارة'),
+('en', 'histogram', 'Histogram'),
+('ar', 'histogram', 'الرسم البياني'),
+('en', 'price_position', 'Price Position'),
+('ar', 'price_position', 'موضع السعر'),
+('en', 'cross_status', 'Cross Status'),
+('ar', 'cross_status', 'حالة التقاطع'),
+('en', 'percent_k', '%K'),
+('ar', 'percent_k', '%K'),
+('en', 'percent_d', '%D'),
+('ar', 'percent_d', '%D'),
+
+-- States & Zones
+('en', 'overbought', 'Overbought'),
+('ar', 'overbought', 'تشبع شرائي'),
+('en', 'oversold', 'Oversold'),
+('ar', 'oversold', 'تشبع بيعي'),
+('en', 'neutral_zone', 'Neutral'),
+('ar', 'neutral_zone', 'محايد'),
+('en', 'bullish_cross', 'Bullish Cross'),
+('ar', 'bullish_cross', 'تقاطع صاعد'),
+('en', 'bearish_cross', 'Bearish Cross'),
+('ar', 'bearish_cross', 'تقاطع هابط'),
+('en', 'no_cross', 'No Cross'),
+('ar', 'no_cross', 'لا يوجد تقاطع'),
+('en', 'above', 'Above'),
+('ar', 'above', 'أعلى'),
+('en', 'below', 'Below'),
+('ar', 'below', 'أسفل'),
+('en', 'price_above_band', 'Price is Above'),
+('ar', 'price_above_band', 'السعر أعلى'),
+('en', 'price_below_band', 'Price is Below'),
+('ar', 'price_below_band', 'السعر أسفل'),
+('en', 'price_inside_bands', 'Price is Inside'),
+('ar', 'price_inside_bands', 'السعر بالداخل'),
+
+-- Moving Averages
+('en', 'price_vs_sma', 'Price vs. SMA'),
+('ar', 'price_vs_sma', 'السعر مقابل المتوسط المتحرك البسيط'),
+('en', 'price_vs_ema', 'Price vs. EMA'),
+('ar', 'price_vs_ema', 'السعر مقابل المتوسط المتحرك الأسي')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for the visual indicator dashboard have been added.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

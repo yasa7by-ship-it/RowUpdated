@@ -1,0 +1,36 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add/Update "Remember Me" Translation
+-- #
+-- # Purpose: This script ensures the translation key for the "Remember Me"
+-- # checkbox is present and correct in the database, fixing a UI issue where
+-- # the key was displayed instead of the translated text.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times and
+-- will update existing keys if necessary.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'remember_me', 'Remember me'),
+('ar', 'remember_me', 'تذكرني')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: The "remember_me" translation has been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

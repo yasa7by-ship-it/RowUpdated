@@ -1,0 +1,39 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Google Sign-In UI Translations
+-- #
+-- # Purpose: This script adds the UI translation keys required for the new
+-- # "Sign in with Google" feature.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'sign_in_with_google', 'Sign in with Google'),
+('ar', 'sign_in_with_google', 'تسجيل الدخول باستخدام جوجل'),
+('en', 'sign_up_with_google', 'Sign up with Google'),
+('ar', 'sign_up_with_google', 'التسجيل باستخدام جوجل'),
+('en', 'or_separator', 'OR'),
+('ar', 'or_separator', 'أو'),
+('en', 'login_with_email', 'Login with Email'),
+('ar', 'login_with_email', 'الدخول بالبريد الإلكتروني'),
+('en', 'sign_in', 'Sign In'),
+('ar', 'sign_in', 'دخول'),
+('en', 'google_sign_in_failed', 'Google sign-in failed. Please try again.'),
+('ar', 'google_sign_in_failed', 'فشل تسجيل الدخول باستخدام جوجل. يرجى المحاولة مرة أخرى.')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for Google Sign-In have been added.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

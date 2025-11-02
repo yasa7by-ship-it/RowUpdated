@@ -1,0 +1,27 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add "Signing Out..." Translation
+-- #
+-- # Purpose: This script adds the UI translation key required to show a
+-- # loading state on the "Sign Out" button, improving user feedback.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'signing_out', 'Signing Out'),
+('ar', 'signing_out', 'جاري تسجيل الخروج')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

@@ -1,0 +1,59 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for New Watchlist Visuals
+-- #
+-- # Purpose: This script adds all the translation keys needed for the new
+-- # professional table layout and visual indicators on "The Coming Trend" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Table Headers
+('en', 'last_price_change', 'Last Price / Change'),
+('ar', 'last_price_change', 'آخر سعر / التغيير'),
+('en', 'next_forecast_range', 'Next Forecast Range'),
+('ar', 'next_forecast_range', 'نطاق التوقع القادم'),
+('en', 'key_indicators', 'Key Indicators'),
+('ar', 'key_indicators', 'المؤشرات الرئيسية'),
+('en', 'last_pattern', 'Last Pattern'),
+('ar', 'last_pattern', 'آخر نمط فني'),
+
+-- Tooltips and labels for indicators
+('en', 'rsi_label', 'RSI'),
+('ar', 'rsi_label', 'قوة نسبية'),
+('en', 'macd_hist_label', 'MACD Histogram'),
+('ar', 'macd_hist_label', 'الرسم البياني للماكد'),
+('en', 'sma_label', 'Simple Moving Average'),
+('ar', 'sma_label', 'متوسط متحرك بسيط'),
+('en', 'price_above_sma', 'Price is above SMA{period}'),
+('ar', 'price_above_sma', 'السعر أعلى من متوسط {period} يوم'),
+('en', 'price_below_sma', 'Price is below SMA{period}'),
+('ar', 'price_below_sma', 'السعر أدنى من متوسط {period} يوم'),
+('en', 'overbought', 'Overbought'),
+('ar', 'overbought', 'تشبع شرائي'),
+('en', 'oversold', 'Oversold'),
+('ar', 'oversold', 'تشبع بيعي'),
+('en', 'neutral', 'Neutral'),
+('ar', 'neutral', 'محايد'),
+
+-- Pattern translations
+('en', 'no_pattern_detected', 'None detected'),
+('ar', 'no_pattern_detected', 'لم يتم رصد نمط')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for the new watchlist visuals have been added.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

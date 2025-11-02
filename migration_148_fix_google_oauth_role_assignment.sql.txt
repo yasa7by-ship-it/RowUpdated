@@ -1,0 +1,80 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Google OAuth Role Assignment (Definitive Fix)
+-- #
+-- # Purpose: This script provides a definitive fix for the issue where users
+-- # signing up with Google were not assigned a default 'User' role.
+-- #
+-- # The previous `handle_new_user` trigger had a subtle logic flaw. This
+-- # updated version is more robust:
+-- # 1. It uses `INSERT ... ON CONFLICT` to prevent errors if a profile record
+-- #    already exists for the new user's ID.
+-- # 2. It explicitly checks if the new user's profile is missing a role_id
+-- #    and assigns the default 'User' role, ensuring all new users (including
+-- #    those from OAuth providers) are correctly configured.
+-- # 3. It gracefully handles different name fields from OAuth providers.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, public
+AS $$
+DECLARE
+  user_count integer;
+  target_role_id uuid;
+  v_full_name TEXT;
+BEGIN
+  -- 1. Safely create the profile if it doesn't exist.
+  -- Use COALESCE to gracefully handle different name fields from OAuth providers.
+  v_full_name := COALESCE(new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'name');
+  
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (new.id, v_full_name, new.email)
+  ON CONFLICT (id) DO NOTHING;
+
+  -- 2. Determine which role to assign.
+  SELECT count(*) INTO user_count FROM auth.users;
+
+  IF user_count = 1 THEN
+    -- First user ever gets Admin role.
+    RAISE NOTICE 'First user signing up. Assigning Admin role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'Admin';
+  ELSE
+    -- Subsequent users get the default 'User' role.
+    RAISE NOTICE 'New user signing up. Assigning default User role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'User';
+  END IF;
+
+  -- 3. Assign the determined role, but ONLY if the user doesn't already have one.
+  -- This is the crucial part that ensures a role is assigned to new OAuth users.
+  IF target_role_id IS NOT NULL THEN
+    UPDATE public.profiles
+    SET role_id = target_role_id
+    WHERE id = new.id AND role_id IS NULL; -- Only update if role_id is currently NULL
+  ELSE
+     RAISE WARNING 'Could not find a suitable role (Admin or User) to assign to the new user %.', new.id;
+  END IF;
+  
+  -- 4. Auto-confirm the user's email so they can log in immediately.
+  -- This part remains unchanged and is important.
+  UPDATE auth.users
+  SET email_confirmed_at = now()
+  WHERE id = new.id;
+
+  -- Also log the user creation event
+  PERFORM public.log_activity(new.id, 'USER_CREATED', jsonb_build_object('user_id', new.id, 'email', new.email));
+
+  RETURN new;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: The "handle_new_user" trigger has been updated to robustly assign roles to OAuth users.';
+
+COMMIT;

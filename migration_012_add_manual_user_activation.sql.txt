@@ -1,0 +1,104 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Manual User Activation Functionality
+-- #
+-- # Purpose: This script adds the necessary database structures to allow
+-- # an admin to manually confirm/activate a user's email from the dashboard.
+-- #
+-- # It performs four key actions:
+-- # 1. Adds an `email_confirmed_at` column to the `public.profiles` table.
+-- # 2. Creates a trigger to automatically keep this new column in sync with
+-- #    the master `auth.users` table.
+-- # 3. Backfills the data for all existing users to ensure consistency.
+-- # 4. Creates a secure PostgreSQL function `manually_confirm_user` that can
+-- #    be called from the app to perform the activation.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the `email_confirmed_at` column to the `profiles` table if it doesn't exist.
+DO $$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='profiles' AND column_name='email_confirmed_at') THEN
+       ALTER TABLE public.profiles ADD COLUMN email_confirmed_at timestamp with time zone;
+       RAISE NOTICE 'SUCCESS: Column "email_confirmed_at" added to "profiles" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "email_confirmed_at" already exists in "profiles" table. No action taken.';
+    END IF;
+END $$;
+
+
+-- Step 2: Create the trigger function to sync confirmation status from auth.users to profiles.
+CREATE OR REPLACE FUNCTION public.sync_user_confirmation_to_profile()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+-- IMPORTANT: Set the search_path to handle schemas correctly.
+SET search_path = public
+AS $$
+BEGIN
+  -- When a user's confirmation status changes in auth.users, update the corresponding profile.
+  UPDATE public.profiles
+  SET email_confirmed_at = NEW.email_confirmed_at
+  WHERE id = NEW.id;
+  RETURN NEW;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Trigger function `sync_user_confirmation_to_profile` created or updated.';
+
+-- Step 3: Create the trigger on the `auth.users` table.
+-- This ensures that whenever a user is created or updated (e.g., confirms their email),
+-- the change is mirrored to their public profile.
+DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
+CREATE TRIGGER on_auth_user_updated
+  AFTER INSERT OR UPDATE OF email_confirmed_at ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.sync_user_confirmation_to_profile();
+RAISE NOTICE 'SUCCESS: Trigger `on_auth_user_updated` created on `auth.users` table.';
+
+
+-- Step 4: Backfill the `email_confirmed_at` for existing users.
+-- This ensures all current users have the correct status reflected in their profile.
+DO $$
+DECLARE
+    rows_updated integer;
+BEGIN
+    UPDATE public.profiles p
+    SET email_confirmed_at = u.email_confirmed_at
+    FROM auth.users u
+    WHERE p.id = u.id AND p.email_confirmed_at IS DISTINCT FROM u.email_confirmed_at;
+
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    RAISE NOTICE 'SUCCESS: Backfilled email confirmation status for % existing user(s).', rows_updated;
+END $$;
+
+
+-- Step 5: Create the secure RPC function for manual activation.
+CREATE OR REPLACE FUNCTION public.manually_confirm_user(user_id_to_confirm uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- Security Check: Only allow users with 'manage:users' permission to run this.
+  IF NOT public.has_permission('manage:users') THEN
+    RAISE EXCEPTION 'Insufficient permissions: You need the "manage:users" permission to perform this action.';
+  END IF;
+
+  -- Perform the privileged action: Update the user's status in the auth schema.
+  UPDATE auth.users
+  SET email_confirmed_at = now()
+  WHERE id = user_id_to_confirm;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Secure RPC function `manually_confirm_user` created or updated.';
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

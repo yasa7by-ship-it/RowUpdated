@@ -1,0 +1,53 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Strengthen Advertisement Security Policies
+-- #
+-- # Purpose: This script provides a definitive fix for the issue where
+-- # advertisements were not saving. The previous general-purpose security
+-- # rule was failing silently on INSERT/UPDATE operations.
+-- #
+-- # This script replaces the single, ambiguous `FOR ALL` policy with four
+-- # explicit, robust policies for SELECT, INSERT, UPDATE, and DELETE actions.
+-- # This removes any ambiguity and ensures the database correctly enforces
+-- # permissions for users with the 'manage:advertisements' role.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- First, remove the old, general-purpose policy that was causing silent failures.
+DROP POLICY IF EXISTS "Allow managers full access" ON public.advertisements;
+RAISE NOTICE 'INFO: Dropped old general-purpose security policy on advertisements table.';
+
+-- Now, create four new, explicit policies that are not ambiguous.
+
+-- 1. SELECT Policy: Allows users with the permission to read all advertisements.
+DROP POLICY IF EXISTS "Allow managers to view advertisements" ON public.advertisements;
+CREATE POLICY "Allow managers to view advertisements"
+    ON public.advertisements FOR SELECT
+    USING (public.has_permission('manage:advertisements'));
+
+-- 2. INSERT Policy: Allows users with the permission to create new advertisements.
+DROP POLICY IF EXISTS "Allow managers to create advertisements" ON public.advertisements;
+CREATE POLICY "Allow managers to create advertisements"
+    ON public.advertisements FOR INSERT
+    WITH CHECK (public.has_permission('manage:advertisements'));
+
+-- 3. UPDATE Policy: Allows users with the permission to update existing advertisements.
+DROP POLICY IF EXISTS "Allow managers to update advertisements" ON public.advertisements;
+CREATE POLICY "Allow managers to update advertisements"
+    ON public.advertisements FOR UPDATE
+    USING (public.has_permission('manage:advertisements'))
+    WITH CHECK (public.has_permission('manage:advertisements'));
+
+-- 4. DELETE Policy: Allows users with the permission to delete advertisements.
+DROP POLICY IF EXISTS "Allow managers to delete advertisements" ON public.advertisements;
+CREATE POLICY "Allow managers to delete advertisements"
+    ON public.advertisements FOR DELETE
+    USING (public.has_permission('manage:advertisements'));
+
+RAISE NOTICE 'SUCCESS: Replaced old policy with four explicit, robust RLS policies for the advertisements table.';
+
+COMMIT;

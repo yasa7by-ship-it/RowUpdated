@@ -1,0 +1,32 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Background Process Start
+-- #
+-- # Purpose: This script adds the UI translation keys needed to inform the
+-- # user that a long-running manual process has started successfully in the
+-- # background, improving the user experience for these tasks.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'process_started_title', 'Process Started'),
+('ar', 'process_started_title', 'بدأت العملية'),
+('en', 'process_started_message', 'The process has started in the background and may take a few minutes to complete. You can safely close this window.'),
+('ar', 'process_started_message', 'بدأت العملية في الخلفية وقد تستغرق بضع دقائق حتى تكتمل. يمكنك إغلاق هذه النافذة بأمان.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for the background process start notification have been added.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

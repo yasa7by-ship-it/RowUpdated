@@ -1,0 +1,54 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Audit Forecast Metrics Table
+-- #
+-- # Purpose: This script adds the `audit_forecast_metrics` table to store
+-- # detailed metrics for each forecast during an audit run.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the audit_forecast_metrics table.
+CREATE TABLE IF NOT EXISTS public.audit_forecast_metrics (
+  run_id bigint NOT NULL,
+  stock_symbol text NOT NULL,
+  forecast_date date NOT NULL,
+  predicted_price double precision NULL,
+  predicted_lo double precision NULL,
+  predicted_hi double precision NULL,
+  confidence double precision NULL,
+  actual_close double precision NULL,
+  abs_error double precision NULL,
+  pct_error double precision NULL,
+  hit_range boolean NULL,
+  anomaly text NULL,
+  generated_at date NULL,
+  CONSTRAINT audit_forecast_metrics_pkey PRIMARY KEY (run_id, stock_symbol, forecast_date),
+  CONSTRAINT audit_forecast_metrics_run_id_fkey FOREIGN KEY (run_id) REFERENCES audit_runs (id) ON DELETE CASCADE,
+  CONSTRAINT audit_forecast_metrics_stock_symbol_fkey FOREIGN KEY (stock_symbol) REFERENCES stocks (symbol) ON DELETE CASCADE
+);
+COMMENT ON TABLE public.audit_forecast_metrics IS 'Stores detailed metrics for each forecast evaluated during an audit run.';
+
+
+-- Step 2: Create a B-tree index for efficient querying by symbol and date.
+CREATE INDEX IF NOT EXISTS idx_afm_symbol_date ON public.audit_forecast_metrics USING btree (stock_symbol, forecast_date);
+
+
+-- Step 3: Set up Row Level Security (RLS) on the new table.
+ALTER TABLE public.audit_forecast_metrics ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Allow users with 'manage:settings' permission full access to audit data.
+-- Audit data is sensitive and should not be public.
+DROP POLICY IF EXISTS "Allow settings managers full access on audit_forecast_metrics" ON public.audit_forecast_metrics;
+CREATE POLICY "Allow settings managers full access on audit_forecast_metrics" ON public.audit_forecast_metrics
+FOR ALL USING (public.has_permission('manage:settings'));
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

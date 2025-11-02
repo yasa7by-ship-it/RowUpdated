@@ -1,0 +1,70 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Grant Super Admin privileges to the First User
+-- #
+-- # Purpose: This script provides a robust, automatic fix for the initial setup
+-- # problem where no user can manage the dashboard. It grants the very first
+-- # user who signed up full administrative privileges, ensuring the dashboard
+-- # is always manageable.
+-- #
+-- # It performs three main actions:
+-- # 1. Creates a new helper function `is_first_user()` to identify the system's
+-- #    first registered user.
+-- # 2. Updates the security policies on all managed tables (`profiles`, `roles`,
+-- #    `permissions`, `settings`, etc.) to grant access if the current user
+-- #    EITHER has the required permission OR is the first user.
+-- #
+-- # This script makes the system self-configuring and is safe to run multiple times.
+-- #
+-- #############################################################################
+
+-- Step 1: Create the `is_first_user` helper function.
+-- This function checks if the currently logged-in user is the one with the
+-- oldest `created_at` timestamp in the `auth.users` table.
+CREATE OR REPLACE FUNCTION public.is_first_user()
+RETURNS boolean
+LANGUAGE sql
+SECURITY DEFINER
+-- IMPORTANT: The search_path is required for security definer functions
+-- to find tables in other schemas, like `auth.users`.
+SET search_path = auth, public
+AS $$
+    SELECT auth.uid() = (SELECT id FROM auth.users ORDER BY created_at ASC LIMIT 1);
+$$;
+-- RAISE NOTICE 'SUCCESS: Helper function `is_first_user` created or updated.';
+
+
+-- Step 2: Update RLS policy for the 'profiles' table.
+-- Allows access for users with 'manage:users' OR the first user.
+DROP POLICY IF EXISTS "Allow managers full access on profiles" ON "public"."profiles";
+CREATE POLICY "Allow managers full access on profiles" ON "public"."profiles"
+FOR ALL USING (public.has_permission('manage:users') OR public.is_first_user());
+-- RAISE NOTICE 'SUCCESS: Updated RLS policies for "profiles" table.';
+
+ش
+-- Step 3: Update RLS policies for roles & permissions management tables.
+-- Allows access for users with 'manage:roles' OR the first user.
+DROP POLICY IF EXISTS "Allow role managers full access on roles" ON "public"."roles";
+CREATE POLICY "Allow role managers full access on roles" ON "public"."roles"
+FOR ALL USING (public.has_permission('manage:roles') OR public.is_first_user());
+
+DROP POLICY IF EXISTS "Allow role managers full access on permissions" ON "public"."permissions";
+CREATE POLICY "Allow role managers full access on permissions" ON "public"."permissions"
+FOR ALL USING (public.has_permission('manage:roles') OR public.is_first_user());
+
+DROP POLICY IF EXISTS "Allow role managers full access on role_permissions" ON "public"."role_permissions";
+CREATE POLICY "Allow role managers full access on role_permissions" ON "public"."role_permissions"
+FOR ALL USING (public.has_permission('manage:roles') OR public.is_first_user());
+-- RAISE NOTICE 'SUCCESS: Updated RLS policies for roles and permissions tables.';
+
+
+-- Step 4: Update RLS policies for settings management tables.
+-- Allows access for users with 'manage:settings' OR the first user.
+DROP POLICY IF EXISTS "Allow settings managers full access on translations" ON "public"."translations";
+CREATE POLICY "Allow settings managers full access on translations" ON "public"."translations"
+FOR ALL USING (public.has_permission('manage:settings') OR public.is_first_user());
+
+DROP POLICY IF EXISTS "Allow settings managers full access on app_settings" ON "public"."app_settings";
+CREATE POLICY "Allow settings managers full access on app_settings" ON "public"."app_settings"
+FOR ALL USING (public.has_permission('manage:settings') OR public.is_first_user());
+-- RAISE NOTICE 'SUCCESS: Updated RLS policies for settings and translations tables.';

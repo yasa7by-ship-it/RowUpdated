@@ -1,0 +1,148 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Automated AI Summary Generation System
+-- #
+-- # Purpose: This script moves the AI summary generation from the client-side
+-- # to the backend. It creates a powerful PostgreSQL function that iterates
+-- # through all tracked stocks, calls the Gemini API via pg_net, and saves
+-- # the results. It also schedules this function to run daily via pg_cron.
+-- #
+-- # This completely eliminates the long waiting time for the first user who
+-- # views a stock each day.
+-- #
+-- # !!! IMPORTANT SETUP STEP !!!
+-- # Before this will work, you MUST add your Gemini API key as a secret in Supabase:
+-- # 1. Go to your Supabase Dashboard -> Project Settings -> Database.
+-- # 2. Under "Connection settings", enable the "pg_net" extension.
+-- # 3. Go to the SQL Editor and run:
+-- #    CREATE EXTENSION IF NOT EXISTS pg_net;
+-- # 4. Go to your Supabase Dashboard -> Project Settings -> Vault.
+-- # 5. Click "New Secret" and create a secret with the name `GEMINI_API_KEY`
+-- #    and paste your API key as the value.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the main function to generate and cache all summaries.
+CREATE OR REPLACE FUNCTION public.generate_and_cache_all_trader_summaries(p_date date DEFAULT (CURRENT_DATE - INTERVAL '1 day'))
+RETURNS text
+LANGUAGE plpgsql
+-- SECURITY DEFINER is required to access pg_net and secrets.
+SECURITY DEFINER
+AS $$
+DECLARE
+    stock_record RECORD;
+    indicators_record RECORD;
+    prompt TEXT;
+    gemini_api_key TEXT;
+    api_url TEXT;
+    response JSONB;
+    summary_json JSONB;
+    summary_en_text TEXT;
+    summary_ar_text TEXT;
+    processed_count INT := 0;
+    error_count INT := 0;
+    error_messages TEXT := '';
+BEGIN
+    -- Get the Gemini API key from Supabase Vault
+    SELECT decrypted_secret INTO gemini_api_key FROM vault.decrypted_secrets WHERE name = 'GEMINI_API_KEY';
+
+    IF gemini_api_key IS NULL OR gemini_api_key = '' THEN
+        RAISE EXCEPTION 'GEMINI_API_KEY secret not found in Vault. Please add it in your Supabase project settings.';
+    END IF;
+
+    api_url := 'https://aistudio.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=' || gemini_api_key;
+
+    -- Loop through each tracked stock
+    FOR stock_record IN
+        SELECT s.symbol, s.price FROM public.stocks s WHERE s.is_tracked = true
+    LOOP
+        BEGIN
+            -- Get the latest indicators for the specified date
+            SELECT * INTO indicators_record
+            FROM public.technical_indicators ti
+            WHERE ti.stock_symbol = stock_record.symbol AND ti.date = p_date
+            LIMIT 1;
+
+            -- Proceed only if we have the necessary data
+            IF FOUND AND indicators_record.rsi IS NOT NULL AND indicators_record.macd_cross IS NOT NULL AND stock_record.price IS NOT NULL THEN
+                -- Construct the exact same prompt as the client-side version
+                prompt := format(
+                    'You are an expert stock market analyst providing a concise summary for a trader. '
+                    'Your analysis is based *only* on the data provided. '
+                    'Generate a 3-point summary in both English and Arabic, formatted as a JSON object with "en" and "ar" keys. '
+                    'Each language summary must follow this structure, including its specific introductory phrase: '
+                    '- English Intro: "Based on this data, I understand the following:" '
+                    '- Arabic Intro: "بناءً على هذه البيانات، أفهم ما يلي:" '
+                    '- **Overall Situation:** Describe the trend by comparing the Current Price to the moving averages (SMA20, SMA50, SMA200). '
+                    '- **Momentum:** Describe the momentum based on the MACD Cross Signal (1=bullish, -1=bearish, 0=neutral). '
+                    '- **Point of Caution/Opportunity:** Describe the situation based on the RSI (>70=overbought, <30=oversold). '
+                    '**Data:** '
+                    '- Current Price: %s, - SMA20: %s, - SMA50: %s, - SMA200: %s, - MACD Cross Signal: %s, - RSI (14): %s. '
+                    'Your output must be ONLY the JSON object.',
+                    stock_record.price,
+                    indicators_record.sma20,
+                    indicators_record.sma50,
+                    indicators_record.sma200,
+                    indicators_record.macd_cross,
+                    indicators_record.rsi
+                );
+                
+                -- Make the HTTP request to Gemini API
+                SELECT content::jsonb INTO response
+                FROM pg_net.http_post(
+                    url := api_url,
+                    headers := '{"Content-Type": "application/json"}',
+                    body := jsonb_build_object(
+                        'contents', jsonb_build_array(jsonb_build_object('parts', jsonb_build_array(jsonb_build_object('text', prompt)))),
+                        'generationConfig', jsonb_build_object('response_mime_type', 'application/json')
+                    )
+                ) AS content;
+                
+                -- Extract the summaries from the response
+                summary_json := (response -> 'candidates' -> 0 -> 'content' -> 'parts' -> 0 ->> 'text')::jsonb;
+                summary_en_text := summary_json ->> 'en';
+                summary_ar_text := summary_json ->> 'ar';
+                
+                -- Save the summary to the database
+                IF summary_en_text IS NOT NULL AND summary_ar_text IS NOT NULL THEN
+                    PERFORM public.save_trader_summary(stock_record.symbol, p_date, summary_en_text, summary_ar_text);
+                    processed_count := processed_count + 1;
+                ELSE
+                    RAISE WARNING 'Gemini response for % was empty or malformed.', stock_record.symbol;
+                    error_count := error_count + 1;
+                    error_messages := error_messages || stock_record.symbol || ': Malformed response; ';
+                END IF;
+
+            ELSE
+                RAISE WARNING 'Skipping % for date % due to missing indicator or price data.', stock_record.symbol, p_date;
+                error_count := error_count + 1;
+                error_messages := error_messages || stock_record.symbol || ': Missing data; ';
+            END IF;
+        EXCEPTION
+            WHEN others THEN
+                RAISE WARNING 'Failed to process summary for %: %', stock_record.symbol, SQLERRM;
+                error_count := error_count + 1;
+                error_messages := error_messages || stock_record.symbol || ': ' || SQLERRM || '; ';
+        END;
+    END LOOP;
+
+    RETURN 'Summary generation complete. Processed: ' || processed_count || ', Errors: ' || error_count || '. Errors: ' || error_messages;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: Function "generate_and_cache_all_trader_summaries" created.';
+
+-- Step 2: Schedule the function to run daily.
+-- This job runs every day at 8:00 AM UTC.
+-- It processes the data for the PREVIOUS day to ensure all market data is available.
+SELECT cron.schedule(
+    'daily-trader-summary-generation',
+    '0 8 * * *', -- 8:00 AM UTC daily
+    $$ SELECT public.generate_and_cache_all_trader_summaries(CURRENT_DATE - INTERVAL '1 day'); $$
+);
+
+RAISE NOTICE 'SUCCESS: Scheduled "generate_and_cache_all_trader_summaries" to run daily.';
+
+COMMIT;

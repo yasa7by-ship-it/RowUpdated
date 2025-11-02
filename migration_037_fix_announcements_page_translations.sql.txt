@@ -1,0 +1,91 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Announcements Page Translations
+-- #
+-- # Purpose: This script ensures all necessary translations for the
+-- # Announcements Management page are present in the database. It specifically
+-- # fixes an issue where the "Add Announcement" button was not translated.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/update all translations for the announcements feature to ensure consistency.
+-- The ON CONFLICT clause makes this script safe to re-run.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'announcements', 'Announcements'),
+('ar', 'announcements', 'الإعلانات'),
+('en', 'announcement_management', 'Announcement Management'),
+('ar', 'announcement_management', 'إدارة الإعلانات'),
+('en', 'all_announcements', 'All Announcements'),
+('ar', 'all_announcements', 'كل الإعلانات'),
+('en', 'add_announcement', 'Add Announcement'),
+('ar', 'add_announcement', 'إضافة إعلان'),
+('en', 'edit_announcement', 'Edit Announcement'),
+('ar', 'edit_announcement', 'تعديل الإعلان'),
+('en', 'title', 'Title'),
+('ar', 'title', 'العنوان'),
+('en', 'message', 'Message'),
+('ar', 'message', 'الرسالة'),
+('en', 'announcement_type', 'Type'),
+('ar', 'announcement_type', 'النوع'),
+('en', 'start_date', 'Start Date'),
+('ar', 'start_date', 'تاريخ البدء'),
+('en', 'end_date', 'End Date'),
+('ar', 'end_date', 'تاريخ الانتهاء'),
+('en', 'is_enabled', 'Enabled'),
+('ar', 'is_enabled', 'مُفعّل'),
+('en', 'announcement_status', 'Status'),
+('ar', 'announcement_status', 'الحالة'),
+('en', 'active', 'Active'),
+('ar', 'active', 'نشط'),
+('en', 'inactive', 'Inactive'),
+('ar', 'inactive', 'غير نشط'),
+('en', 'scheduled', 'Scheduled'),
+('ar', 'scheduled', 'مجدول'),
+('en', 'expired', 'Expired'),
+('ar', 'expired', 'منتهي الصلاحية'),
+('en', 'title_en', 'Title (English)'),
+('ar', 'title_en', 'العنوان (انجليزي)'),
+('en', 'title_ar', 'Title (Arabic)'),
+('ar', 'title_ar', 'العنوان (عربي)'),
+('en', 'message_en', 'Message (English)'),
+('ar', 'message_en', 'الرسالة (انجليزي)'),
+('en', 'message_ar', 'Message (Arabic)'),
+('ar', 'message_ar', 'الرسالة (عربي)'),
+('en', 'announcement_saved_successfully', 'Announcement saved successfully!'),
+('ar', 'announcement_saved_successfully', 'تم حفظ الإعلان بنجاح!'),
+('en', 'announcement_deleted_successfully', 'Announcement deleted successfully.'),
+('ar', 'announcement_deleted_successfully', 'تم حذف الإعلان بنجاح.'),
+('en', 'announcement_delete_failed', 'Failed to delete announcement.'),
+('ar', 'announcement_delete_failed', 'فشل حذف الإعلان.'),
+('en', 'confirm_delete_announcement', 'Are you sure you want to delete this announcement?'),
+('ar', 'confirm_delete_announcement', 'هل أنت متأكد من رغبتك في حذف هذا الإعلان؟'),
+('en', 'delete', 'Delete'),
+('ar', 'delete', 'حذف'),
+('en', 'type_info', 'Info'),
+('ar', 'type_info', 'معلومات'),
+('en', 'type_warning', 'Warning'),
+('ar', 'type_warning', 'تحذير'),
+('en', 'type_success', 'Success'),
+('ar', 'type_success', 'نجاح'),
+('en', 'type_error', 'Error'),
+('ar', 'type_error', 'خطأ')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: All translations for the Announcements feature have been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

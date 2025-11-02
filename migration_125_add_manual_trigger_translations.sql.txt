@@ -1,0 +1,55 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Manual Trigger UI Translations
+-- #
+-- # Purpose: This script adds all the translation keys needed for the new
+-- # "Manual System Triggers" feature on the Dashboard page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'manual_system_triggers', 'Manual System Triggers'),
+('ar', 'manual_system_triggers', 'مشغلات النظام اليدوية'),
+('en', 'generate_daily_summaries', 'Generate Daily Analysis Summaries'),
+('ar', 'generate_daily_summaries', 'إنشاء ملخصات التحليل اليومية'),
+('en', 'generate_daily_summaries_desc', 'Manually runs the process that generates the rule-based "Quick Look" summary for all tracked stocks. This is normally automated to run once daily.'),
+('ar', 'generate_daily_summaries_desc', 'يشغل يدويًا العملية التي تنشئ ملخص "نظرة سريعة" المستند إلى القواعد لجميع الأسهم المتعقبة. تعمل هذه العملية عادةً تلقائيًا مرة واحدة يوميًا.'),
+('en', 'run_forecast_evaluation', 'Run Forecast Evaluation'),
+('ar', 'run_forecast_evaluation', 'تشغيل تقييم التوقعات'),
+('en', 'run_forecast_evaluation_desc', 'Manually runs the process that checks the latest forecasts against actual market data and saves the results. This is normally automated.'),
+('ar', 'run_forecast_evaluation_desc', 'يشغل يدويًا العملية التي تتحقق من أحدث التوقعات مقابل بيانات السوق الفعلية وتحفظ النتائج. تعمل هذه العملية عادةً تلقائيًا.'),
+('en', 'run_now', 'Run Now'),
+('ar', 'run_now', 'تشغيل الآن'),
+('en', 'running_process', 'Running process'),
+('ar', 'running_process', 'جاري تشغيل العملية'),
+('en', 'process_complete', 'Process Complete'),
+('ar', 'process_complete', 'اكتملت العملية'),
+('en', 'process_summary', 'Process Summary'),
+('ar', 'process_summary', 'ملخص العملية'),
+('en', 'processed_count', 'Processed'),
+('ar', 'processed_count', 'تمت المعالجة'),
+('en', 'errors_skipped', 'Errors / Skipped'),
+('ar', 'errors_skipped', 'أخطاء / تم تخطيها'),
+('en', 'evaluation_complete_message', 'Successfully evaluated {count} forecasts.'),
+('ar', 'evaluation_complete_message', 'تم تقييم {count} توقع بنجاح.'),
+('en', 'generation_complete_message', 'Summary generation complete.'),
+('ar', 'generation_complete_message', 'اكتمل إنشاء الملخصات.'),
+('en', 'close', 'Close'),
+('ar', 'close', 'إغلاق'),
+('en', 'process_failed', 'Process Failed'),
+('ar', 'process_failed', 'فشلت العملية')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

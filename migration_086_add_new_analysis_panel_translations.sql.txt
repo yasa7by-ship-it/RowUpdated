@@ -1,0 +1,75 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for New Technical Analysis Panel
+-- #
+-- # Purpose: This script adds all the new UI translation keys required for the
+-- # completely redesigned, modern technical analysis panel.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Main Panel Title
+('en', 'technical_analysis_for', 'Technical Analysis for {stock}'),
+('ar', 'technical_analysis_for', 'التحليل الفني لسهم {stock}'),
+
+-- Summary Card
+('en', 'technical_summary', 'Technical Summary'),
+('ar', 'technical_summary', 'الملخص الفني'),
+('en', 'summary_signal', 'Summary Signal'),
+('ar', 'summary_signal', 'الإشارة النهائية'),
+('en', 'strong_buy', 'Strong Buy'),
+('ar', 'strong_buy', 'شراء قوي'),
+('en', 'buy', 'Buy'),
+('ar', 'buy', 'شراء'),
+('en', 'neutral', 'Neutral'),
+('ar', 'neutral', 'محايد'),
+('en', 'sell', 'Sell'),
+('ar', 'sell', 'بيع'),
+('en', 'strong_sell', 'Strong Sell'),
+('ar', 'strong_sell', 'بيع قوي'),
+
+-- Oscillators Panel
+('en', 'oscillators', 'Oscillators'),
+('ar', 'oscillators', 'مؤشرات التذبذب'),
+('en', 'oversold_zone', 'Oversold'),
+('ar', 'oversold_zone', 'تشبع بيعي'),
+('en', 'overbought_zone', 'Overbought'),
+('ar', 'overbought_zone', 'تشبع شرائي'),
+
+-- Trend & Momentum Panel
+('en', 'trend_momentum_indicators', 'Trend & Momentum'),
+('ar', 'trend_momentum_indicators', 'مؤشرات الاتجاه والزخم'),
+('en', 'moving_averages', 'Moving Averages'),
+('ar', 'moving_averages', 'المتوسطات المتحركة'),
+('en', 'macd_indicator', 'MACD'),
+('ar', 'macd_indicator', 'مؤشر الماكد'),
+('en', 'histogram', 'Histogram'),
+('ar', 'histogram', 'الرسم البياني'),
+('en', 'macd_line', 'MACD'),
+('ar', 'macd_line', 'الماكد'),
+('en', 'signal_line', 'Signal'),
+('ar', 'signal_line', 'الإشارة'),
+
+-- General
+('en', 'above', 'Above'),
+('ar', 'above', 'أعلى'),
+('en', 'below', 'Below'),
+('ar', 'below', 'أسفل'),
+('en', 'no_indicator_data', 'No technical indicator data available for this date.'),
+('ar', 'no_indicator_data', 'لا توجد بيانات مؤشرات فنية متاحة لهذا التاريخ.')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

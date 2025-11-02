@@ -1,0 +1,33 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add "Forecast Date" Title Translation
+-- #
+-- # Purpose: This script adds the UI translation key required for the new
+-- # dynamic title on "The Coming Trend" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'forecast_for_date', 'Forecast for'),
+('ar', 'forecast_for_date', 'توقعات ليوم')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: The "forecast_for_date" translation has been added or updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

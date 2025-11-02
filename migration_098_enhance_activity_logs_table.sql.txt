@@ -1,0 +1,77 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Enhance Activity Logs Table
+-- #
+-- # Purpose: This script enhances the `activity_logs` table with an IP address
+-- # column, sets up robust security, and adds the necessary permission for
+-- # viewing logs.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the ip_address column to store the user's IP address.
+DO $$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='activity_logs' AND column_name='ip_address') THEN
+       ALTER TABLE public.activity_logs ADD COLUMN ip_address inet NULL;
+       RAISE NOTICE 'SUCCESS: Column "ip_address" added to "activity_logs" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "ip_address" already exists. No action taken.';
+    END IF;
+END $$;
+COMMENT ON COLUMN public.activity_logs.ip_address IS 'The IP address of the user who performed the action.';
+
+-- Step 2: Update the foreign key to SET NULL on user deletion.
+-- This preserves log history even if a user account is removed.
+ALTER TABLE public.activity_logs DROP CONSTRAINT IF EXISTS activity_logs_user_id_fkey;
+ALTER TABLE public.activity_logs ADD CONSTRAINT activity_logs_user_id_fkey
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
+RAISE NOTICE 'SUCCESS: Foreign key on "activity_logs" updated to ON DELETE SET NULL.';
+
+
+-- Step 3: Add the new permission for viewing activity logs.
+INSERT INTO public.permissions (action, description)
+VALUES ('view:activity_log', 'Can view the system activity log.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+RAISE NOTICE 'SUCCESS: Permission "view:activity_log" added or updated.';
+
+
+-- Step 4: Assign the new permission to the Admin role.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    view_log_perm_id UUID;
+BEGIN
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO view_log_perm_id FROM public.permissions WHERE action = 'view:activity_log';
+
+    IF admin_role_id IS NOT NULL AND view_log_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, view_log_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+        
+        IF FOUND THEN
+             RAISE NOTICE 'SUCCESS: Assigned "view:activity_log" permission to Admin role.';
+        ELSE
+             RAISE NOTICE 'INFO: Admin role already has "view:activity_log" permission.';
+        END IF;
+    END IF;
+END $$;
+
+
+-- Step 5: Set up Row Level Security (RLS) on the activity_logs table.
+ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Only allow users with the 'view:activity_log' permission to read the logs.
+-- No public access is allowed. No one can write directly to this table; it's append-only via triggers.
+DROP POLICY IF EXISTS "Allow log viewers to read activity logs" ON public.activity_logs;
+CREATE POLICY "Allow log viewers to read activity logs"
+ON public.activity_logs FOR SELECT
+USING (public.has_permission('view:activity_log'));
+RAISE NOTICE 'SUCCESS: RLS policies for "activity_logs" created or updated.';
+
+
+COMMIT;

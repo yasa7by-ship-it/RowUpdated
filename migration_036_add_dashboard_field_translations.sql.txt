@@ -1,0 +1,40 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Dashboard Field Translations
+-- #
+-- # Purpose: This script adds the missing Arabic translations for the field
+-- # labels on the Dashboard's "Site Settings" section. This resolves an issue
+-- # where translation keys were displayed instead of the translated text.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add translations for the dashboard's site settings fields.
+-- The ON CONFLICT clause ensures this is safe to run multiple times and
+-- will update existing keys if necessary.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'site_title_en', 'Site Title (English)'),
+('ar', 'site_title_en', 'عنوان الموقع (انجليزي)'),
+('en', 'site_title_ar', 'Site Title (Arabic)'),
+('ar', 'site_title_ar', 'عنوان الموقع (عربي)'),
+('en', 'site_logo', 'Site Logo (SVG Code)'),
+('ar', 'site_logo', 'شعار الموقع (كود SVG)')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Added missing Arabic translations for dashboard settings fields.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

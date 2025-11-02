@@ -1,0 +1,63 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Daily Checklist Data Source (Definitive Fix)
+-- #
+-- # Purpose: This script provides a definitive fix for a data inconsistency on
+-- # the "Last Work Day" page. It updates the underlying view and RPC function
+-- # to use the correct data source: the `forecast_check_latest` table.
+-- #
+-- # This version uses DROP ... CASCADE to correctly handle dependencies where
+-- # the get_daily_checklist function depends on the view, allowing the view
+-- # to be replaced even if its column types have changed.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Drop the existing view and any objects that depend on it (like functions).
+-- Using CASCADE is necessary because get_daily_checklist() depends on the view's type.
+-- The dependent function will be recreated in Step 3, making this a safe operation.
+DROP VIEW IF EXISTS public.vw_Last_dayCheckList CASCADE;
+RAISE NOTICE 'INFO: Dropped "vw_Last_dayCheckList" view and its dependent objects.';
+
+-- Step 2: Create the view to select from `forecast_check_latest` instead of the legacy table.
+-- This new definition uses `double precision` columns from the source table.
+CREATE VIEW public.vw_Last_dayCheckList AS
+SELECT
+  fcl.stock_symbol,
+  s.name AS stock_name,
+  s.last_updated,
+  s.price,
+  fcl.actual_low,
+  fcl.actual_high,
+  fcl.predicted_lo,
+  fcl.predicted_hi,
+  fcl.hit_range AS is_hit,
+  fcl.forecast_date
+FROM public.forecast_check_latest AS fcl
+JOIN public.stocks AS s
+  ON s.symbol = fcl.stock_symbol
+ORDER BY fcl.stock_symbol;
+
+RAISE NOTICE 'SUCCESS: View "vw_Last_dayCheckList" re-created to use the correct data source.';
+
+
+-- Step 3: Re-create the RPC function that was dropped by CASCADE.
+-- This function now correctly queries the new view and filters for the latest date.
+CREATE OR REPLACE FUNCTION public.get_daily_checklist()
+RETURNS SETOF public.vw_Last_dayCheckList
+LANGUAGE sql STABLE
+AS $$
+  WITH latest_date AS (
+    SELECT max(forecast_date) AS value FROM public.forecast_check_latest
+  )
+  SELECT * 
+  FROM public.vw_Last_dayCheckList
+  WHERE forecast_date = (SELECT value FROM latest_date);
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_daily_checklist" was re-created successfully.';
+
+COMMIT;

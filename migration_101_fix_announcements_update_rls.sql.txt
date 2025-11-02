@@ -1,0 +1,32 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Announcements Update RLS Policy
+-- #
+-- # Purpose: This script provides a definitive fix for the issue where the
+-- # "Save" button on the "Edit Announcement" modal was failing silently. The
+-- # previous RLS policy for UPDATE operations was missing a `WITH CHECK`
+-- # clause, causing ambiguity and silent failures.
+-- #
+-- # This script replaces the faulty policy with a robust one that explicitly
+-- # checks permissions for the updated row data.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- First, drop the old, incomplete UPDATE policy.
+DROP POLICY IF EXISTS "Allow managers to UPDATE announcements" ON public.global_announcements;
+RAISE NOTICE 'INFO: Dropped old UPDATE policy on global_announcements table.';
+
+-- Now, create the new, robust UPDATE policy with both USING and WITH CHECK.
+-- This ensures the permission check is applied correctly during update operations.
+CREATE POLICY "Allow managers to UPDATE announcements"
+    ON public.global_announcements FOR UPDATE
+    USING (public.has_permission('manage:announcements'))
+    WITH CHECK (public.has_permission('manage:announcements'));
+
+RAISE NOTICE 'SUCCESS: Replaced the announcements UPDATE policy with a robust version, fixing the save button issue.';
+
+COMMIT;

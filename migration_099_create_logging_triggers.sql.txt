@@ -1,0 +1,306 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Automated Logging Triggers and Functions
+-- #
+-- # Purpose: This script creates the core database functions and triggers for
+-- # automatically logging important activities to the `activity_logs` table.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the main logging function.
+-- V3 UPDATE: Updated the core logger to correctly read the user's IP address from
+-- the 'x-forwarded-for' header provided by Supabase, instead of the server's internal IP.
+
+-- This is the core logger, accepting a user_id directly.
+CREATE OR REPLACE FUNCTION public.log_activity(p_user_id UUID, p_action_type TEXT, p_details_json JSONB)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER -- Required to access request headers.
+SET search_path = public, auth
+AS $$
+DECLARE
+    v_ip_address inet;
+BEGIN
+    -- Try to get the real IP from the X-Forwarded-For header, which Supabase/PostgREST sets.
+    -- The header might contain a comma-separated list of IPs; we take the first one.
+    -- A `true` second argument to current_setting makes it not throw an error if the setting is missing.
+    BEGIN
+        v_ip_address := split_part(current_setting('request.headers', true)::json->>'x-forwarded-for', ',', 1)::inet;
+    EXCEPTION
+        -- If the header is missing or malformed, it can throw an error.
+        -- In that case, we fall back to inet_client_addr().
+        WHEN others THEN
+            v_ip_address := inet_client_addr();
+    END;
+    
+    INSERT INTO public.activity_logs (user_id, action, details, ip_address)
+    VALUES (
+        p_user_id,
+        p_action_type,
+        p_details_json,
+        v_ip_address
+    );
+END;
+$$;
+
+-- This is the original function signature, maintained for backward compatibility for other triggers.
+-- It now acts as a wrapper, calling the core logger with the current user's ID from the active session.
+CREATE OR REPLACE FUNCTION public.log_activity(action_type TEXT, details_json JSONB)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER -- To access auth.uid() and client IP
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- Call the overloaded function, passing the current user's ID from the session.
+  PERFORM public.log_activity(auth.uid(), action_type, details_json);
+END;
+$$;
+-- RAISE NOTICE 'SUCCESS: Central logging function "log_activity" created or updated.';
+
+
+-- Step 2: Trigger for Profile Changes (User Role Update)
+CREATE OR REPLACE FUNCTION public.fn_log_profile_update()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  old_role_name TEXT;
+  new_role_name TEXT;
+BEGIN
+  IF OLD.role_id IS DISTINCT FROM NEW.role_id THEN
+    SELECT name INTO old_role_name FROM public.roles WHERE id = OLD.role_id;
+    SELECT name INTO new_role_name FROM public.roles WHERE id = NEW.role_id;
+    PERFORM public.log_activity(
+      'USER_ROLE_CHANGED',
+      jsonb_build_object(
+        'target_user_email', NEW.email,
+        'old_role_name', old_role_name,
+        'new_role_name', new_role_name
+      )
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_log_profile_update ON public.profiles;
+CREATE TRIGGER tr_log_profile_update
+  AFTER UPDATE ON public.profiles
+  FOR EACH ROW EXECUTE PROCEDURE public.fn_log_profile_update();
+-- RAISE NOTICE 'SUCCESS: Trigger for profile updates created.';
+
+
+-- Step 3: Trigger for Role Permission Changes
+CREATE OR REPLACE FUNCTION public.fn_log_role_permission_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  action_type TEXT;
+  details JSONB;
+  role_name_text TEXT;
+  permission_action_text TEXT;
+BEGIN
+  IF (TG_OP = 'INSERT') THEN
+    action_type := 'ROLE_PERMISSION_ADDED';
+    SELECT r.name, p.action INTO role_name_text, permission_action_text FROM public.roles r, public.permissions p WHERE r.id = NEW.role_id AND p.id = NEW.permission_id;
+    details := jsonb_build_object('role_name', role_name_text, 'permission_action', permission_action_text);
+    PERFORM public.log_activity(action_type, details);
+    RETURN NEW;
+  ELSIF (TG_OP = 'DELETE') THEN
+    action_type := 'ROLE_PERMISSION_REMOVED';
+    SELECT r.name, p.action INTO role_name_text, permission_action_text FROM public.roles r, public.permissions p WHERE r.id = OLD.role_id AND p.id = OLD.permission_id;
+    details := jsonb_build_object('role_name', role_name_text, 'permission_action', permission_action_text);
+    PERFORM public.log_activity(action_type, details);
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_log_role_permission_change ON public.role_permissions;
+CREATE TRIGGER tr_log_role_permission_change
+  AFTER INSERT OR DELETE ON public.role_permissions
+  FOR EACH ROW EXECUTE PROCEDURE public.fn_log_role_permission_change();
+-- RAISE NOTICE 'SUCCESS: Trigger for role permission changes created.';
+
+
+-- Step 4: Trigger for App Settings Changes
+CREATE OR REPLACE FUNCTION public.fn_log_app_settings_change()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    PERFORM public.log_activity(
+      'APP_SETTING_CHANGED',
+      jsonb_build_object(
+        'setting_key', NEW.key,
+        'old_value', OLD.value,
+        'new_value', NEW.value
+      )
+    );
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_log_app_settings_change ON public.app_settings;
+CREATE TRIGGER tr_log_app_settings_change
+  AFTER UPDATE ON public.app_settings
+  FOR EACH ROW EXECUTE PROCEDURE public.fn_log_app_settings_change();
+-- RAISE NOTICE 'SUCCESS: Trigger for app settings changes created.';
+
+
+-- Step 5: Update handle_new_user to log user creation.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, public
+AS $$
+DECLARE
+  user_count integer;
+  target_role_id uuid;
+BEGIN
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.email);
+
+  SELECT count(*) INTO user_count FROM auth.users;
+
+  IF user_count = 1 THEN
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'Admin';
+  ELSE
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'User';
+  END IF;
+
+  IF target_role_id IS NOT NULL THEN
+    UPDATE public.profiles SET role_id = target_role_id WHERE id = new.id;
+  END IF;
+  
+  UPDATE auth.users SET email_confirmed_at = now() WHERE id = new.id;
+
+  -- Log this event, passing the user_id directly to the new logger function
+  PERFORM public.log_activity(new.id, 'USER_CREATED', jsonb_build_object('user_id', new.id, 'email', new.email));
+
+  RETURN new;
+END;
+$$;
+-- RAISE NOTICE 'SUCCESS: Trigger "handle_new_user" updated to log user creation.';
+
+
+-- Step 6: Trigger for Successful User Login
+CREATE OR REPLACE FUNCTION public.fn_log_user_login()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  -- last_sign_in_at is updated on every successful login
+  IF OLD.last_sign_in_at IS DISTINCT FROM NEW.last_sign_in_at THEN
+    -- Call the overloaded logger with the explicit user ID from the trigger's context
+    PERFORM public.log_activity(NEW.id, 'USER_LOGIN_SUCCESS', jsonb_build_object('user_id', NEW.id, 'email', NEW.email));
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_log_user_login ON auth.users;
+CREATE TRIGGER tr_log_user_login
+  AFTER UPDATE OF last_sign_in_at ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.fn_log_user_login();
+-- RAISE NOTICE 'SUCCESS: Trigger for successful user logins created.';
+
+
+-- Step 7: Create RPC function for the UI to fetch logs with pagination and filtering.
+CREATE OR REPLACE FUNCTION public.get_activity_logs(
+    page_num INT, 
+    page_size INT, 
+    search_query TEXT DEFAULT '', 
+    filter_action TEXT DEFAULT '',
+    start_date_filter DATE DEFAULT NULL,
+    end_date_filter DATE DEFAULT NULL
+)
+RETURNS TABLE (
+    id bigint,
+    created_at timestamptz,
+    user_full_name text,
+    user_email text,
+    action text,
+    ip_address inet,
+    details jsonb,
+    total_count bigint
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  query_offset INT;
+BEGIN
+  IF NOT public.has_permission('view:activity_log') THEN
+    RETURN;
+  END IF;
+
+  query_offset := (page_num - 1) * page_size;
+
+  RETURN QUERY
+  WITH filtered_logs AS (
+    SELECT
+      al.id,
+      al.created_at,
+      p.full_name AS user_full_name,
+      p.email AS user_email,
+      al.action,
+      al.ip_address,
+      al.details
+    FROM public.activity_logs al
+    LEFT JOIN public.profiles p ON al.user_id = p.id
+    WHERE
+      (search_query = '' OR search_query IS NULL OR p.email ILIKE '%' || search_query || '%' OR p.full_name ILIKE '%' || search_query || '%') AND
+      (filter_action = '' OR filter_action IS NULL OR al.action = filter_action) AND
+      (start_date_filter IS NULL OR al.created_at::date >= start_date_filter) AND
+      (end_date_filter IS NULL OR al.created_at::date <= end_date_filter)
+  )
+  SELECT
+    fl.id,
+    fl.created_at,
+    fl.user_full_name,
+    fl.user_email,
+    fl.action,
+    fl.ip_address,
+    fl.details,
+    count(*) OVER() AS total_count
+  FROM filtered_logs fl
+  ORDER BY fl.created_at DESC
+  OFFSET query_offset
+  LIMIT page_size;
+END;
+$$;
+-- RAISE NOTICE 'SUCCESS: RPC function "get_activity_logs" for UI created.';
+
+
+-- Step 8: Create RPC function to get distinct action types for filtering.
+CREATE OR REPLACE FUNCTION public.get_distinct_log_actions()
+RETURNS TABLE (action TEXT)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+BEGIN
+  IF NOT public.has_permission('view:activity_log') THEN
+    RETURN;
+  END IF;
+
+  RETURN QUERY
+    SELECT DISTINCT al.action FROM public.activity_logs al ORDER BY al.action;
+END;
+$$;
+-- RAISE NOTICE 'SUCCESS: RPC function "get_distinct_log_actions" for UI created.';
+
+
+COMMIT;

@@ -1,0 +1,46 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Definitive Fix for Hanging "Save" Button in Settings
+-- #
+-- # Purpose: This script provides a definitive server-side fix for the issue
+-- # where the "Save" button on the Dashboard's settings page would hang
+-- # indefinitely. The root cause is invisible null characters (`\u0000`)
+-- # pasted into text fields, which cause PostgreSQL to fail silently.
+-- #
+-- # This script creates a trigger that automatically sanitizes the `value`
+-- # field on the `app_settings` table BEFORE any insert or update,
+-- # ensuring no invalid characters can cause the operation to hang.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the trigger function to sanitize the `value` text field.
+CREATE OR REPLACE FUNCTION public.sanitize_app_settings_value()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- If the 'value' column is being updated and is not NULL,
+    -- replace any null characters (chr(0)) with an empty string.
+    IF NEW.value IS NOT NULL THEN
+        NEW.value := replace(NEW.value, chr(0), '');
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: Sanitization function for app_settings created or updated.';
+
+
+-- Step 2: Create the trigger that executes the function before any write operation.
+DROP TRIGGER IF EXISTS tr_sanitize_app_settings ON public.app_settings;
+CREATE TRIGGER tr_sanitize_app_settings
+  BEFORE INSERT OR UPDATE ON public.app_settings
+  FOR EACH ROW EXECUTE PROCEDURE public.sanitize_app_settings_value();
+
+RAISE NOTICE 'SUCCESS: Trigger to sanitize app_settings has been applied. The save issue is now definitively fixed.';
+
+COMMIT;

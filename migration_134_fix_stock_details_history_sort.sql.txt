@@ -1,0 +1,59 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Stock Details Forecast History Sort Order
+-- #
+-- # Purpose: This script updates the `get_stock_details_page_data` function
+-- # to sort the forecast history results from newest to oldest, as requested
+-- # by the user. This ensures the latest records appear at the top of the table.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_stock_details_page_data(p_symbol TEXT)
+RETURNS json
+LANGUAGE sql STABLE AS $$
+-- This pure SQL function is simpler and more efficient.
+SELECT json_build_object(
+    'details', (
+        -- Fetches details from the stocks table (satisfies "last closing date from stocks table")
+        SELECT row_to_json(s) FROM public.stocks s WHERE s.symbol = p_symbol
+    ),
+    'next_forecast', (
+        -- Fetches the absolute latest forecast for the stock from the forecasts table.
+        SELECT row_to_json(f)
+        FROM public.forecasts f
+        WHERE f.stock_symbol = p_symbol
+        ORDER BY f.forecast_date DESC
+        LIMIT 1
+    ),
+    'historical_data', (
+        -- No change here, fetches historical data for the chart.
+        SELECT COALESCE(json_agg(h ORDER BY h.date ASC), '[]'::json) FROM (SELECT * FROM public.historical_data WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 90) h
+    ),
+    'latest_indicators', (
+        -- No change here, fetches the most recent indicators.
+        SELECT row_to_json(ti) FROM public.technical_indicators ti WHERE ti.stock_symbol = p_symbol ORDER BY ti.date DESC LIMIT 1
+    ),
+    'forecast_history', (
+        -- Fetches results from the forecast check history table, sorted DESCENDING.
+        SELECT COALESCE(json_agg(fch ORDER BY fch.forecast_date DESC), '[]'::json)
+        FROM (
+            SELECT * FROM public.forecast_check_history
+            WHERE stock_symbol = p_symbol
+            ORDER BY forecast_date DESC
+            LIMIT 15
+        ) fch
+    ),
+    'recent_patterns', (
+        -- No change here, fetches recent candle patterns.
+        SELECT COALESCE(json_agg(cp ORDER BY cp.date DESC), '[]'::json) FROM (SELECT * FROM public.candle_patterns WHERE stock_symbol = p_symbol ORDER BY date DESC LIMIT 5) cp
+    )
+);
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_stock_details_page_data" updated to sort forecast history from newest to oldest.';
+
+COMMIT;

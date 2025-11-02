@@ -1,0 +1,96 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Stock Analysis UI Translations
+-- #
+-- # Purpose: This script adds all the translation keys needed for the new
+-- # Stock Analysis dashboard page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Page Title & Permission
+('en', 'stock_analysis', 'Stock Analysis'),
+('ar', 'stock_analysis', 'تحليل الأسهم'),
+('en', 'perm_view_stock_analysis', 'View Stock Analysis'),
+('ar', 'perm_view_stock_analysis', 'عرض تحليل الأسهم'),
+('en', 'perm_view_stock_analysis_desc', 'Can view the stock analysis and forecast performance dashboard.'),
+('ar', 'perm_view_stock_analysis_desc', 'يمكنه عرض لوحة معلومات تحليل الأسهم وأداء التوقعات.'),
+
+-- Summary Cards
+('en', 'analysis_overview', 'Analysis Overview'),
+('ar', 'analysis_overview', 'نظرة عامة على التحليل'),
+('en', 'tracked_stocks', 'Tracked Stocks'),
+('ar', 'tracked_stocks', 'الأسهم المتعقبة'),
+('en', 'latest_forecast', 'Latest Forecast Date'),
+('ar', 'latest_forecast', 'تاريخ آخر توقع'),
+('en', 'overall_accuracy', 'Overall Hit Rate'),
+('ar', 'overall_accuracy', 'معدل الدقة الإجمالي'),
+('en', 'avg_error_mape', 'Avg. Error (MAPE)'),
+('ar', 'avg_error_mape', 'متوسط الخطأ (MAPE)'),
+
+-- Stock Deep Dive Section
+('en', 'stock_deep_dive', 'Stock Deep Dive'),
+('ar', 'stock_deep_dive', 'تحليل معمق للسهم'),
+('en', 'search_stock_symbol', 'Search for a stock symbol...'),
+('ar', 'search_stock_symbol', 'ابحث عن رمز سهم...'),
+('en', 'select_a_stock', 'Select a stock to view its detailed analysis.'),
+('ar', 'select_a_stock', 'اختر سهماً لعرض تحليله التفصيلي.'),
+('en', 'last_price', 'Last Price'),
+('ar', 'last_price', 'آخر سعر'),
+('en', 'change', 'Change'),
+('ar', 'change', 'التغيير'),
+('en', 'volume', 'Volume'),
+('ar', 'volume', 'الحجم'),
+('en', 'market_cap', 'Market Cap'),
+('ar', 'market_cap', 'القيمة السوقية'),
+
+-- Forecast History Table
+('en', 'forecast_vs_actual', 'Forecast vs. Actual History'),
+('ar', 'forecast_vs_actual', 'سجل التوقعات مقابل الأداء الفعلي'),
+('en', 'forecast_date', 'Forecast Date'),
+('ar', 'forecast_date', 'تاريخ التوقع'),
+('en', 'predicted_price', 'Predicted'),
+('ar', 'predicted_price', 'المتوقع'),
+('en', 'actual_price', 'Actual'),
+('ar', 'actual_price', 'الفعلي'),
+('en', 'outcome', 'Outcome'),
+('ar', 'outcome', 'النتيجة'),
+('en', 'hit', 'Hit'),
+('ar', 'hit', 'أصاب'),
+('en', 'miss', 'Miss'),
+('ar', 'miss', 'أخطأ'),
+
+-- Recent Patterns
+('en', 'recent_candle_patterns', 'Recent Candle Patterns'),
+('ar', 'recent_candle_patterns', 'أنماط الشموع الأخيرة'),
+('en', 'pattern', 'Pattern'),
+('ar', 'pattern', 'النمط'),
+('en', 'date', 'Date'),
+('ar', 'date', 'التاريخ'),
+('en', 'sentiment', 'Sentiment'),
+('ar', 'sentiment', 'المؤشر'),
+('en', 'bullish', 'Bullish'),
+('ar', 'bullish', 'صاعد'),
+('en', 'bearish', 'Bearish'),
+('ar', 'bearish', 'هابط')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

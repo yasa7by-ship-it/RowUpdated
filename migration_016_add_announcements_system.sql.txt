@@ -1,0 +1,93 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Global Announcements System
+-- #
+-- # Purpose: This script introduces a complete system for creating and
+-- # displaying global announcements to all users.
+-- #
+-- # It performs four key actions:
+-- # 1. Creates a new `global_announcements` table to store announcements.
+-- # 2. Sets up Row Level Security (RLS) to allow public read access for
+-- #    active announcements and restricted write access for managers.
+-- # 3. Creates a new permission `manage:announcements` in the database.
+-- # 4. Assigns the new permission to the 'Admin' role by default.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create the global_announcements table.
+CREATE TABLE IF NOT EXISTS public.global_announcements (
+  id BIGSERIAL PRIMARY KEY,
+  title JSONB NOT NULL,
+  message JSONB NOT NULL,
+  type TEXT NOT NULL DEFAULT 'info' CHECK (type IN ('info', 'warning', 'success', 'error')),
+  start_date TIMESTAMPTZ NOT NULL,
+  end_date TIMESTAMPTZ NOT NULL,
+  is_enabled BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+COMMENT ON TABLE public.global_announcements IS 'Stores system-wide announcements for all users.';
+RAISE NOTICE 'SUCCESS: Table "global_announcements" created or already exists.';
+
+
+-- Step 2: Set up Row Level Security (RLS) on the new table.
+ALTER TABLE public.global_announcements ENABLE ROW LEVEL SECURITY;
+
+-- Policy 1: Allow anyone to read announcements that are currently active.
+DROP POLICY IF EXISTS "Allow public read access for active announcements" ON public.global_announcements;
+CREATE POLICY "Allow public read access for active announcements" ON public.global_announcements
+FOR SELECT USING (
+  is_enabled = true AND
+  now() >= start_date AND
+  now() <= end_date
+);
+
+-- Policy 2: Allow users with the 'manage:announcements' permission to do anything.
+DROP POLICY IF EXISTS "Allow managers full access" ON public.global_announcements;
+CREATE POLICY "Allow managers full access" ON public.global_announcements
+FOR ALL USING (public.has_permission('manage:announcements'));
+RAISE NOTICE 'SUCCESS: RLS policies for "global_announcements" created or updated.';
+
+
+-- Step 3: Add the new permission to the permissions table.
+INSERT INTO public.permissions (action, description)
+VALUES ('manage:announcements', 'Can create, edit, and delete global announcements.')
+ON CONFLICT (action) DO NOTHING;
+
+
+-- Step 4: Assign the new permission to the Admin role.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    manage_announcements_perm_id UUID;
+BEGIN
+    RAISE NOTICE 'SUCCESS: Permission "manage:announcements" added or already exists.';
+    -- Get IDs
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin';
+    SELECT id INTO manage_announcements_perm_id FROM public.permissions WHERE action = 'manage:announcements';
+
+    -- Assign the permission to Admin if both exist
+    IF admin_role_id IS NOT NULL AND manage_announcements_perm_id IS NOT NULL THEN
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, manage_announcements_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+        
+        IF FOUND THEN
+             RAISE NOTICE 'SUCCESS: Assigned "manage:announcements" permission to Admin role.';
+        ELSE
+             RAISE NOTICE 'INFO: Admin role already has "manage:announcements" permission.';
+        END IF;
+    ELSE
+        RAISE WARNING 'Could not assign "manage:announcements" permission. Admin role or permission not found.';
+    END IF;
+END $$;
+
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

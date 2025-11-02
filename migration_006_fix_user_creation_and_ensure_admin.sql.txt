@@ -1,0 +1,103 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT (V6): Definitive User & Admin Fix
+-- #
+-- # Purpose: This is the primary script to fix all common permission and user
+-- # creation issues. It is safe to run multiple times on an existing database.
+-- #
+-- # It performs two critical actions:
+-- # 1. ENSURE ADMIN: It checks if an 'Admin' user exists. If not, it
+-- #    promotes the very first user who signed up to be an Admin. This
+-- #    guarantees the dashboard is always manageable.
+-- #
+-- # 2. FIX USER CREATION: It updates the `handle_new_user` trigger to be
+-- #    smarter. It will still make the first user ever an Admin, but it will
+-- #    also assign a default 'User' role to all subsequent new users,
+-- #    preventing them from being created without any role.
+-- #
+-- #############################################################################
+
+-- Step 1: Ensure at least one admin user exists.
+DO $$
+DECLARE
+    admin_role_id UUID;
+    first_user_id UUID;
+    admin_count INTEGER;
+BEGIN
+    -- Find the ID for the 'Admin' role.
+    SELECT id INTO admin_role_id FROM public.roles WHERE name = 'Admin' LIMIT 1;
+    IF NOT FOUND THEN
+        RAISE WARNING 'CRITICAL: The "Admin" role does not exist. Cannot proceed.';
+        RETURN;
+    END IF;
+
+    -- Check if any user already has the Admin role.
+    SELECT count(*) INTO admin_count FROM public.profiles WHERE role_id = admin_role_id;
+    IF admin_count > 0 THEN
+        RAISE NOTICE 'INFO: An Admin user already exists. No changes needed for admin promotion.';
+    ELSE
+        -- If no admin exists, find the first user who ever signed up.
+        RAISE NOTICE 'WARNING: No admin user found. Attempting to promote the first user.';
+        SELECT u.id INTO first_user_id FROM auth.users u ORDER BY u.created_at ASC LIMIT 1;
+
+        IF NOT FOUND THEN
+            RAISE WARNING 'CRITICAL: No users found in the system. Cannot promote an admin.';
+            RETURN;
+        END IF;
+
+        -- Assign the 'Admin' role to that first user's profile.
+        UPDATE public.profiles
+        SET role_id = admin_role_id
+        WHERE id = first_user_id;
+        RAISE NOTICE 'SUCCESS: Assigned the "Admin" role to user ID %. The dashboard is now manageable.', first_user_id;
+    END IF;
+END $$;
+
+
+-- Step 2: Update the user creation trigger for robust role assignment.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, public
+AS $$
+DECLARE
+  user_count integer;
+  admin_role_id uuid;
+  default_user_role_id uuid;
+  target_role_id uuid;
+BEGIN
+  -- Always create the profile entry first
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.email);
+
+  -- Check the total number of users in the system
+  SELECT count(*) INTO user_count FROM auth.users;
+
+  -- Determine which role to assign
+  IF user_count = 1 THEN
+    -- This is the very first user. They become Admin.
+    RAISE NOTICE 'First user detected. Assigning Admin role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'Admin';
+  ELSE
+    -- This is a subsequent user. They get the default 'User' role.
+    RAISE NOTICE 'New user detected. Assigning default User role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'User';
+  END IF;
+
+  -- Assign the determined role
+  IF target_role_id IS NOT NULL THEN
+    UPDATE public.profiles
+    SET role_id = target_role_id
+    WHERE id = new.id;
+  ELSE
+     RAISE WARNING 'Could not find a suitable role (Admin or User) to assign to the new user %.', new.id;
+  END IF;
+
+  RETURN new;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: The `handle_new_user` trigger has been updated to robustly assign roles.';
+
+-- The trigger is already associated with the auth.users table via the setup script.
+-- Using `CREATE OR REPLACE` here ensures it is updated safely.

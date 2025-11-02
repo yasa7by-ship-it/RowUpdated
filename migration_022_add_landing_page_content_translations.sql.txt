@@ -1,0 +1,70 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Landing Page & Ad Management Translations
+-- #
+-- # Purpose: This is a safe, data-only script. It adds all the translation
+-- # keys needed for the new landing page content and ad management features.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Settings on Dashboard
+('en', 'general_settings', 'General Settings'),
+('ar', 'general_settings', 'الإعدادات العامة'),
+('en', 'landing_page_content', 'Landing Page Content'),
+('ar', 'landing_page_content', 'محتوى الصفحة الرئيسية'),
+('en', 'article_title_en', 'Article Title (English)'),
+('ar', 'article_title_en', 'عنوان المقال (انجليزي)'),
+('en', 'article_title_ar', 'Article Title (Arabic)'),
+('ar', 'article_title_ar', 'عنوان المقال (عربي)'),
+('en', 'article_body_en', 'Article Body (English)'),
+('ar', 'article_body_en', 'نص المقال (انجليزي)'),
+('en', 'article_body_ar', 'Article Body (Arabic)'),
+('ar', 'article_body_ar', 'نص المقال (عربي)'),
+
+-- Ad Management Page
+('en', 'ad_management', 'Ad Management'),
+('ar', 'ad_management', 'إدارة الإعلانات'),
+('en', 'add_advertisement', 'Add Advertisement'),
+('ar', 'add_advertisement', 'إضافة إعلان'),
+('en', 'edit_advertisement', 'Edit Advertisement'),
+('ar', 'edit_advertisement', 'تعديل الإعلان'),
+('en', 'image_url', 'Image URL'),
+('ar', 'image_url', 'رابط الصورة'),
+('en', 'target_url', 'Target URL (Link)'),
+('ar', 'target_url', 'الرابط الهدف'),
+('en', 'placement', 'Placement'),
+('ar', 'placement', 'الموضع'),
+('en', 'ad_status', 'Status'),
+('ar', 'ad_status', 'الحالة'),
+('en', 'ad_saved_successfully', 'Advertisement saved successfully!'),
+('ar', 'ad_saved_successfully', 'تم حفظ الإعلان بنجاح!'),
+('en', 'ad_deleted_successfully', 'Advertisement deleted successfully.'),
+('ar', 'ad_deleted_successfully', 'تم حذف الإعلان بنجاح.'),
+('en', 'ad_delete_failed', 'Failed to delete advertisement.'),
+('ar', 'ad_delete_failed', 'فشل حذف الإعلان.'),
+('en', 'confirm_delete_ad', 'Are you sure you want to delete this advertisement?'),
+('ar', 'confirm_delete_ad', 'هل أنت متأكد من رغبتك في حذف هذا الإعلان؟'),
+('en', 'perm_manage_advertisements', 'Manage Advertisements'),
+('ar', 'perm_manage_advertisements', 'إدارة الإعلانات'),
+('en', 'perm_manage_advertisements_desc', 'Can create, edit, and delete commercial advertisements.'),
+('ar', 'perm_manage_advertisements_desc', 'يمكنه إنشاء وتعديل وحذف الإعلانات التجارية.')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

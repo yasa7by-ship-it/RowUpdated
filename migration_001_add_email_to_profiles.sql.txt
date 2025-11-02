@@ -1,0 +1,43 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Email to Profiles Table
+-- #
+-- # Purpose: This script safely updates an existing database to fix the
+-- # "column profiles.email does not exist" error.
+-- #
+-- # It performs two actions:
+-- # 1. Adds the `email` column to the `profiles` table if it does not exist.
+-- # 2. Populates the new `email` column with data from `auth.users`.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+-- Step 1: Add the 'email' column to the 'profiles' table if it's missing.
+-- This uses a DO block to conditionally add the column, preventing errors if run again.
+DO $$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='profiles' AND column_name='email') THEN
+       ALTER TABLE public.profiles ADD COLUMN email text UNIQUE;
+       RAISE NOTICE 'SUCCESS: Column "email" added to "profiles" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "email" already exists in "profiles" table. No action taken.';
+    END IF;
+END $$;
+
+
+-- Step 2: Populate the 'email' column for any existing users.
+-- This updates profiles where the email is currently NULL, fetching the correct
+-- email from the corresponding user in `auth.users`.
+DO $$
+DECLARE
+    rows_updated integer;
+BEGIN
+    UPDATE public.profiles p
+    SET email = u.email
+    FROM auth.users u
+    WHERE p.id = u.id AND p.email IS NULL;
+
+    GET DIAGNOSTICS rows_updated = ROW_COUNT;
+    RAISE NOTICE 'SUCCESS: Populated email for % existing user(s).', rows_updated;
+END $$;

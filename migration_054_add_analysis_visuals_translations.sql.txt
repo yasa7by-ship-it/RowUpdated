@@ -1,0 +1,43 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Stock Analysis Visuals
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the
+-- # redesigned Stock Analysis page with its new visual components.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'forecast_distribution', 'Forecast Distribution'),
+('ar', 'forecast_distribution', 'توزيع التوقعات'),
+('en', 'last_price_close', 'Last Price (Close)'),
+('ar', 'last_price_close', 'آخر سعر (إغلاق)'),
+('en', 'closing_date', 'Closing Date'),
+('ar', 'closing_date', 'تاريخ الإغلاق'),
+('en', 'actual_low', 'Actual Low'),
+('ar', 'actual_low', 'أدنى سعر فعلي'),
+('en', 'actual_high', 'Actual High'),
+('ar', 'actual_high', 'أعلى سعر فعلي'),
+('en', 'predicted_low', 'Predicted Low'),
+('ar', 'predicted_low', 'أدنى سعر متوقع'),
+('en', 'predicted_high', 'Predicted High'),
+('ar', 'predicted_high', 'أعلى سعر متوقع'),
+('en', 'forecast_result', 'Result'),
+('ar', 'forecast_result', 'النتيجة')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

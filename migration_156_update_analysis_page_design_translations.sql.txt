@@ -1,0 +1,53 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Translations for Redesigned Analysis Page
+-- #
+-- # Purpose: This script adds all the new and updated translation keys needed for
+-- # the redesigned "Last Work Day" page to match the user's screenshot.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Update page title for nav button and page header
+('en', 'stock_analysis', 'Last Day'),
+('ar', 'stock_analysis', 'آخر يوم'),
+('en', 'stock_analysis_title_last_day', 'Last Day'),
+('ar', 'stock_analysis_title_last_day', 'آخر يوم'),
+
+-- New disclaimer banner
+('en', 'disclaimer_title', 'Disclaimer'),
+('ar', 'disclaimer_title', 'تنبيه'),
+('en', 'disclaimer_educational', 'Information is for educational purposes and is not investment advice.'),
+('ar', 'disclaimer_educational', 'المعلومات لأغراض تعليمية وليست نصيحة استثمارية.'),
+
+-- New date display
+('en', 'check_forecasts_for_date', 'Checking forecasts for:'),
+('ar', 'check_forecasts_for_date', 'فحص التوقعات ليوم:'),
+
+-- New stat cards
+('en', 'total_forecasts', 'Total Forecasts'),
+('ar', 'total_forecasts', 'إجمالي التوقعات'),
+('en', 'correct_forecasts', 'Correct Forecasts'),
+('ar', 'correct_forecasts', 'توقعات صحيحة'),
+('en', 'incorrect_forecasts', 'Incorrect Forecasts'),
+('ar', 'incorrect_forecasts', 'توقعات خاطئة'),
+('en', 'success_rate', 'Success Rate'),
+('ar', 'success_rate', 'نسبة النجاح')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for the redesigned Stock Analysis page have been added/updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

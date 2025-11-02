@@ -1,0 +1,44 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Completely Remove Advertisement Feature
+-- #
+-- # Purpose: This script removes all database objects related to the
+-- # advertisement feature, including the table, permissions, and translations.
+-- # This is part of a complete removal of the feature from the application.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Drop the advertisements table.
+-- Using CASCADE will automatically remove any dependent objects like constraints.
+DROP TABLE IF EXISTS public.advertisements CASCADE;
+RAISE NOTICE 'SUCCESS: Table "advertisements" has been dropped.';
+
+-- Step 2: Remove the 'manage:advertisements' permission from any roles that have it.
+DO $$
+DECLARE
+    perm_id UUID;
+BEGIN
+    SELECT id INTO perm_id FROM public.permissions WHERE action = 'manage:advertisements';
+    IF perm_id IS NOT NULL THEN
+        DELETE FROM public.role_permissions WHERE permission_id = perm_id;
+        RAISE NOTICE 'SUCCESS: Removed "manage:advertisements" from all roles.';
+    ELSE
+        RAISE NOTICE 'INFO: "manage:advertisements" permission not found in role_permissions. No action taken.';
+    END IF;
+END $$;
+
+-- Step 3: Delete the 'manage:advertisements' permission itself.
+DELETE FROM public.permissions WHERE action = 'manage:advertisements';
+RAISE NOTICE 'SUCCESS: Deleted "manage:advertisements" from the permissions table.';
+
+-- Step 4: Delete all advertisement-related translations.
+DELETE FROM public.translations WHERE key LIKE 'ad_%';
+DELETE FROM public.translations WHERE key LIKE 'perm_manage_advertisements%';
+RAISE NOTICE 'SUCCESS: Deleted all advertisement-related translations.';
+
+
+COMMIT;

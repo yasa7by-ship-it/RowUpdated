@@ -1,0 +1,58 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Permission Translations
+-- #
+-- # Purpose: This script adds the necessary translations to display permission
+-- # names and descriptions in multiple languages on the Role Management page.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add the new translations for English and Arabic for all permissions.
+-- The ON CONFLICT clause ensures this is safe to run multiple times.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- manage:users
+('en', 'perm_manage_users', 'Manage Users'),
+('ar', 'perm_manage_users', 'إدارة المستخدمين'),
+('en', 'perm_manage_users_desc', 'Can view the user list and change user roles.'),
+('ar', 'perm_manage_users_desc', 'يمكنه عرض قائمة المستخدمين وتغيير صلاحياتهم.'),
+
+-- manage:roles
+('en', 'perm_manage_roles', 'Manage Roles & Permissions'),
+('ar', 'perm_manage_roles', 'إدارة الصلاحيات والأذونات'),
+('en', 'perm_manage_roles_desc', 'Can view the role list and change role permissions.'),
+('ar', 'perm_manage_roles_desc', 'يمكنه عرض قائمة الصلاحيات وتغيير أذوناتها.'),
+
+-- view:dashboard
+('en', 'perm_view_dashboard', 'View Dashboard'),
+('ar', 'perm_view_dashboard', 'عرض لوحة التحكم'),
+('en', 'perm_view_dashboard_desc', 'Can view the main dashboard and statistics.'),
+('ar', 'perm_view_dashboard_desc', 'يمكنه عرض لوحة التحكم الرئيسية والإحصائيات.'),
+
+-- manage:settings
+('en', 'perm_manage_settings', 'Manage Site Settings'),
+('ar', 'perm_manage_settings', 'إدارة إعدادات الموقع'),
+('en', 'perm_manage_settings_desc', 'Can update site-wide application settings.'),
+('ar', 'perm_manage_settings_desc', 'يمكنه تحديث إعدادات التطبيق على مستوى الموقع.'),
+
+-- manage:announcements
+('en', 'perm_manage_announcements', 'Manage Announcements'),
+('ar', 'perm_manage_announcements', 'إدارة الإعلانات'),
+('en', 'perm_manage_announcements_desc', 'Can create, edit, and delete global announcements.'),
+('ar', 'perm_manage_announcements_desc', 'يمكنه إنشاء وتعديل وحذف الإعلانات العامة.')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

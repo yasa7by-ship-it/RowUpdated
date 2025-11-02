@@ -1,0 +1,42 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Editable Description for Stock Analysis Page
+-- #
+-- # Purpose: This script adds the backend infrastructure to allow an admin
+-- # to set a custom description for the "Last Work Day" page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.app_settings DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- 1. Add new keys to app_settings for the description content.
+INSERT INTO public.app_settings (key, value) VALUES
+('stock_analysis_page_description_en', 'This table shows the daily forecast results for tracked stocks. Click on any row to view a detailed technical analysis.'),
+('stock_analysis_page_description_ar', 'يعرض هذا الجدول نتائج التوقعات اليومية للأسهم المتعقبة. انقر على أي صف لعرض تحليل فني مفصل.')
+ON CONFLICT (key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- 2. Add new translation keys for the UI labels in the dashboard settings.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'stock_analysis_page_settings', 'Stock Analysis Page Settings'),
+('ar', 'stock_analysis_page_settings', 'إعدادات صفحة تحليل الأسهم'),
+('en', 'stock_analysis_page_desc_en', 'Page Description (English)'),
+('ar', 'stock_analysis_page_desc_en', 'وصف الصفحة (انجليزي)'),
+('en', 'stock_analysis_page_desc_ar', 'Page Description (Arabic)'),
+('ar', 'stock_analysis_page_desc_ar', 'وصف الصفحة (عربي)')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Added settings and translations for stock analysis page description.';
+
+-- Re-enable RLS
+ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

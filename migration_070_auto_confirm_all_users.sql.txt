@@ -1,0 +1,98 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Auto-Confirm All Users & Add Signup Translations
+-- #
+-- # Purpose: This script implements the user's request to make registration
+-- # faster and easier by removing the email confirmation step.
+-- #
+-- # It performs three key actions:
+-- # 1. AUTO-CONFIRMATION: It updates the `handle_new_user` trigger to
+-- #    automatically confirm the email of *every* new user upon signup.
+-- # 2. UPDATE NOTIFICATION: It changes the 'signup_success' translation to
+-- #    inform users they can log in immediately.
+-- # 3. ADD UI TRANSLATIONS: It adds new keys for the "Confirm Password" field.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Part 1: Update the user creation trigger to auto-confirm all new users.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = auth, public
+AS $$
+DECLARE
+  user_count integer;
+  target_role_id uuid;
+BEGIN
+  -- Create the profile entry for the new user, including their full name.
+  INSERT INTO public.profiles (id, full_name, email)
+  VALUES (new.id, new.raw_user_meta_data->>'full_name', new.email);
+
+  -- Check the total number of users to determine if this is the first one.
+  SELECT count(*) INTO user_count FROM auth.users;
+
+  -- Logic for the first user vs. subsequent users for role assignment
+  IF user_count = 1 THEN
+    -- FIRST USER EVER: Make them an Admin.
+    RAISE NOTICE 'First user signing up. Assigning Admin role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'Admin';
+  ELSE
+    -- SUBSEQUENT USERS: Assign the default 'User' role.
+    RAISE NOTICE 'New user signing up. Assigning default User role.';
+    SELECT id INTO target_role_id FROM public.roles WHERE name = 'User';
+  END IF;
+
+  -- Assign the determined role to the user's profile
+  IF target_role_id IS NOT NULL THEN
+    UPDATE public.profiles
+    SET role_id = target_role_id
+    WHERE id = new.id;
+  ELSE
+     RAISE WARNING 'Could not find a suitable role (Admin or User) to assign to new user %.', new.id;
+  END IF;
+  
+  -- ALWAYS auto-confirm the user's email so they can log in immediately.
+  -- This is a privileged operation, allowed because the function is SECURITY DEFINER.
+  UPDATE auth.users
+  SET email_confirmed_at = now()
+  WHERE id = new.id;
+  RAISE NOTICE 'Auto-confirmed email for new user %.', new.id;
+
+  RETURN new;
+END;
+$$;
+RAISE NOTICE 'SUCCESS: The `handle_new_user` trigger has been updated to auto-confirm ALL new users.';
+
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Part 2: Update the signup success message.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'signup_success', 'Account created successfully! You can now log in.'),
+('ar', 'signup_success', 'تم إنشاء الحساب بنجاح! يمكنك الآن تسجيل الدخول.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+RAISE NOTICE 'SUCCESS: The "signup_success" translation has been updated for auto-confirmation.';
+
+-- Part 3: Add new translations for the updated sign-up modal.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'passwords_do_not_match', 'Passwords do not match. Please try again.'),
+('ar', 'passwords_do_not_match', 'كلمتا المرور غير متطابقتين. يرجى المحاولة مرة أخرى.'),
+('en', 'confirm_password', 'Confirm Password'),
+('ar', 'confirm_password', 'تأكيد كلمة المرور'),
+('en', 'signup_failed', 'Sign up failed. Please check your information and try again.'),
+('ar', 'signup_failed', 'فشل التسجيل. يرجى التحقق من معلوماتك والمحاولة مرة أخرى.')
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+RAISE NOTICE 'SUCCESS: Added translations for sign-up modal confirmation.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

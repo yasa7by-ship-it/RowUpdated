@@ -1,0 +1,84 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix Watchlist Last Close Date
+-- #
+-- # Purpose: This script provides a definitive fix for the issue where the
+-- # "Daily Watchlist" page displayed an incorrect date for the "Last Close".
+-- # It updates the RPC function to select the actual `last_updated` timestamp
+-- # from the stocks table, which is the reliable source of truth, instead of
+-- # trying to calculate it.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Drop the existing function to allow for changing its return signature.
+-- The empty parentheses are important to target the function without arguments.
+DROP FUNCTION IF EXISTS public.get_daily_watchlist_data();
+
+-- Recreate the function with the new `last_updated` column in its return table.
+CREATE FUNCTION public.get_daily_watchlist_data()
+RETURNS TABLE (
+    symbol text,
+    stock_name text,
+    last_close real,
+    last_updated timestamptz, -- ADD THIS COLUMN
+    predicted_lo real,
+    predicted_hi real,
+    sma20 real,
+    sma50 real,
+    pattern_name text,
+    bullish boolean,
+    forecast_date date
+)
+LANGUAGE plpgsql STABLE
+AS $$
+DECLARE
+    latest_forecast_date date;
+    latest_indicator_date date;
+BEGIN
+    -- Find the latest date for which we have a forecast. This is for "tomorrow".
+    SELECT max(f.forecast_date) INTO latest_forecast_date FROM public.forecasts f;
+
+    -- Find the latest date for which we have indicators, which is "today" (the last closing day).
+    SELECT max(ti.date) INTO latest_indicator_date FROM public.technical_indicators ti WHERE ti.date < latest_forecast_date;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,
+        s.name AS stock_name,
+        s.price AS last_close,
+        s.last_updated, -- SELECT THE CORRECT DATE
+        f.predicted_lo,
+        f.predicted_hi,
+        ti.sma20,
+        ti.sma50,
+        cp.pattern_name,
+        cp.bullish,
+        f.forecast_date
+    FROM
+        public.forecasts f
+    JOIN
+        public.stocks s ON f.stock_symbol = s.symbol
+    LEFT JOIN
+        public.technical_indicators ti ON f.stock_symbol = ti.stock_symbol AND ti.date = latest_indicator_date
+    LEFT JOIN
+        (
+            -- Get only the first/most relevant pattern for the indicator date to avoid duplicate rows
+            SELECT DISTINCT ON (cp_inner.stock_symbol) *
+            FROM public.candle_patterns cp_inner
+            WHERE cp_inner.date = latest_indicator_date
+        ) cp ON f.stock_symbol = cp.stock_symbol
+    WHERE
+        f.forecast_date = latest_forecast_date
+        AND s.is_tracked = true
+    ORDER BY
+        s.symbol;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_daily_watchlist_data" updated to include the correct last_updated date.';
+
+COMMIT;

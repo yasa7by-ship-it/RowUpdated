@@ -1,0 +1,89 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update RLS Policies for Permission-Based Access
+-- #
+-- # Purpose: This script replaces the old role-name-based security rules
+-- # with a more flexible and secure permission-based system. This will fix
+-- # issues where users (like Supervisors) couldn't see the user list.
+-- #
+-- # It performs three main actions:
+-- # 1. Creates a new helper function `has_permission(permission_action text)`.
+-- # 2. Drops the old, restrictive policies on several tables.
+-- # 3. Creates new, permission-based policies.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+-- Step 1: Create the permission-checking helper function.
+-- This function checks if the currently logged-in user has a specific permission
+-- through their assigned role.
+CREATE OR REPLACE FUNCTION public.has_permission(permission_action text)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    user_role_id UUID;
+    permission_id_to_check UUID;
+BEGIN
+    -- Get the current user's role_id from their profile
+    SELECT role_id INTO user_role_id FROM public.profiles WHERE id = auth.uid();
+    
+    IF user_role_id IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Get the permission's id from its action name
+    SELECT id INTO permission_id_to_check FROM public.permissions WHERE action = permission_action;
+
+    IF permission_id_to_check IS NULL THEN
+        RETURN FALSE;
+    END IF;
+
+    -- Check if a mapping exists in role_permissions
+    RETURN EXISTS (
+        SELECT 1
+        FROM public.role_permissions
+        WHERE role_id = user_role_id AND permission_id = permission_id_to_check
+    );
+END;
+$$;
+-- RAISE NOTICE 'SUCCESS: Helper function `has_permission` created or updated.';
+
+-- Step 2: Update RLS policies for the 'profiles' table.
+-- This allows users with 'manage:users' permission to manage all profiles.
+DROP POLICY IF EXISTS "Allow admin read access on profiles" ON "public"."profiles";
+DROP POLICY IF EXISTS "Allow admin full access on profiles" ON "public"."profiles";
+
+CREATE POLICY "Allow managers full access on profiles" ON "public"."profiles"
+FOR ALL USING (public.has_permission('manage:users'));
+-- RAISE NOTICE 'SUCCESS: Updated RLS policies for "profiles" table.';
+
+-- Step 3: Update RLS policies for roles & permissions management tables.
+-- This allows users with 'manage:roles' permission to manage them.
+DROP POLICY IF EXISTS "Allow admin full access on roles" ON "public"."roles";
+CREATE POLICY "Allow role managers full access on roles" ON "public"."roles"
+FOR ALL USING (public.has_permission('manage:roles'));
+
+DROP POLICY IF EXISTS "Allow admin full access on permissions" ON "public"."permissions";
+CREATE POLICY "Allow role managers full access on permissions" ON "public"."permissions"
+FOR ALL USING (public.has_permission('manage:roles'));
+
+DROP POLICY IF EXISTS "Allow admin full access on role_permissions" ON "public"."role_permissions";
+CREATE POLICY "Allow role managers full access on role_permissions" ON "public"."role_permissions"
+FOR ALL USING (public.has_permission('manage:roles'));
+-- RAISE NOTICE 'SUCCESS: Updated RLS policies for roles and permissions tables.';
+
+
+-- Step 4: Update RLS policies for settings management tables.
+-- This allows users with 'manage:settings' permission to manage them.
+DROP POLICY IF EXISTS "Allow admin write access on translations" ON "public"."translations";
+CREATE POLICY "Allow settings managers full access on translations" ON "public"."translations"
+FOR ALL USING (public.has_permission('manage:settings'));
+
+DROP POLICY IF EXISTS "Allow admin write access on app_settings" ON "public"."app_settings";
+CREATE POLICY "Allow settings managers full access on app_settings" ON "public"."app_settings"
+FOR ALL USING (public.has_permission('manage:settings'));
+-- RAISE NOTICE 'SUCCESS: Updated RLS policies for settings and translations tables.';

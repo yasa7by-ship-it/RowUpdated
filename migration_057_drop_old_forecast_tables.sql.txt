@@ -1,0 +1,24 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Drop Old Audit Tables
+-- #
+-- # Purpose: This script removes the old, now-deprecated tables related to
+-- # forecast auditing (`audit_runs`, `audit_forecast_metrics`). These have been
+-- # replaced by the new `forecast_check_*` tables. The `Forcast_Result` table
+-- # will be kept as requested.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Drop the old audit tables. Using CASCADE ensures that any dependent objects
+-- (like indexes or foreign key constraints) are also removed.
+DROP TABLE IF EXISTS public.audit_forecast_metrics CASCADE;
+RAISE NOTICE 'SUCCESS: Table "audit_forecast_metrics" dropped.';
+
+DROP TABLE IF EXISTS public.audit_runs CASCADE;
+RAISE NOTICE 'SUCCESS: Table "audit_runs" dropped.';
+
+COMMIT;

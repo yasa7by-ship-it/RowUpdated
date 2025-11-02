@@ -1,0 +1,31 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Remove Gemini AI Analysis Translations
+-- #
+-- # Purpose: This script removes the UI translation keys related to the
+-- # AI-powered analysis feature on "The Coming Trend" page, as the feature
+-- # has been requested to be removed.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Delete the translation keys related to the removed feature.
+DELETE FROM public.translations
+WHERE key IN (
+  'analyze_with_ai',
+  'generating_analysis',
+  'analysis_results',
+  'no_data_to_analyze',
+  'gemini_api_error'
+);
+
+RAISE NOTICE 'SUCCESS: Removed obsolete translations for the AI analysis feature.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

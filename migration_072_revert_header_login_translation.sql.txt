@@ -1,0 +1,34 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Revert Header Login Translation to be more accurate
+-- #
+-- # Purpose: This script corrects the Arabic translation for the 'email_or_phone'
+-- # key to its more accurate, longer form "البريد الإلكتروني أو الهاتف". This
+-- # resolves a quality issue where the key and its value were inconsistent.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- This script updates the Arabic translation for 'email_or_phone' to be more
+-- accurate and descriptive, resolving an inconsistency.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('ar', 'email_or_phone', 'البريد الإلكتروني أو الهاتف')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: The translation for "email_or_phone" has been corrected.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- #############################################################################
+-- # END OF SCRIPT
+-- #############################################################################

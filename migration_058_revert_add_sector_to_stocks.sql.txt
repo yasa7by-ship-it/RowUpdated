@@ -1,0 +1,25 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Revert Add Sector to Stocks Table
+-- #
+-- # Purpose: This script removes the `sector` column from the `stocks` table,
+-- # reverting a previous change as requested.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Drop the 'sector' column if it exists.
+DO $$
+BEGIN
+    IF EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='stocks' AND column_name='sector') THEN
+       ALTER TABLE public.stocks DROP COLUMN sector;
+       RAISE NOTICE 'SUCCESS: Column "sector" dropped from "stocks" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "sector" does not exist in "stocks" table. No action taken.';
+    END IF;
+END $$;
+
+COMMIT;

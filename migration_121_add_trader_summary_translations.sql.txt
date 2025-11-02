@@ -1,0 +1,36 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for AI Trader's Summary
+-- #
+-- # Purpose: This script adds all the new translation keys needed for the new
+-- # AI-powered "Trader's Summary" component on the Stock Details page.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- Add/Update the translations for English and Arabic.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'traders_summary', 'Trader''s Summary'),
+('ar', 'traders_summary', 'الخلاصة من وجهة نظر متداول'),
+('en', 'generating_summary', 'Generating summary'),
+('ar', 'generating_summary', 'جاري إنشاء الخلاصة'),
+('en', 'summary_generation_error', 'Could not generate summary at this time.'),
+('ar', 'summary_generation_error', 'تعذر إنشاء الخلاصة في الوقت الحالي.'),
+('en', 'not_enough_data_for_summary', 'Not enough indicator data to generate a summary.'),
+('ar', 'not_enough_data_for_summary', 'لا توجد بيانات مؤشرات كافية لإنشاء خلاصة.')
+
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Translations for the Trader''s Summary have been added.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

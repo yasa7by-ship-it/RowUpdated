@@ -1,0 +1,134 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Overhaul Daily Watchlist to "The Coming Trend"
+-- #
+-- # Purpose: This script replaces the backend for the "Daily Watchlist" page
+-- # to support a complete redesign into "The Coming Trend", fetching detailed
+-- # forecast and indicator data as requested.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Drop the old, now-obsolete function.
+DROP FUNCTION IF EXISTS public.get_daily_watchlist_data();
+
+-- Step 2: Create the new, powerful RPC function to gather all data in one call.
+CREATE OR REPLACE FUNCTION public.get_the_coming_trend_data()
+RETURNS TABLE (
+    -- Stock info
+    symbol TEXT,
+    stock_name TEXT,
+    last_price REAL,
+    daily_change REAL,
+    daily_change_percent REAL,
+    
+    -- Last evaluated forecast
+    last_forecast_date DATE,
+    last_predicted_lo REAL,
+    last_predicted_hi REAL,
+    last_actual_low REAL,
+    last_actual_high REAL,
+    last_is_hit BOOLEAN,
+    
+    -- Next upcoming forecast
+    next_forecast_date DATE,
+    next_predicted_lo REAL,
+    next_predicted_hi REAL,
+    
+    -- Latest technical indicators
+    indicator_date DATE,
+    rsi REAL,
+    macd REAL,
+    macd_signal REAL,
+    sma20 REAL,
+    sma50 REAL
+)
+LANGUAGE plpgsql STABLE AS $$
+DECLARE
+    latest_historical_date DATE;
+BEGIN
+    -- Find the date of the latest available historical data. This represents "today" or the last trading day.
+    SELECT MAX(date) INTO latest_historical_date FROM public.historical_data;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,
+        s.name AS stock_name,
+        s.price AS last_price,
+        s.change AS daily_change,
+        s.change_percent AS daily_change_percent,
+        
+        -- Last evaluated forecast (data for the latest historical day)
+        fcl.forecast_date AS last_forecast_date,
+        fcl.predicted_lo::real AS last_predicted_lo,
+        fcl.predicted_hi::real AS last_predicted_hi,
+        fcl.actual_low::real AS last_actual_low,
+        fcl.actual_high::real AS last_actual_high,
+        fcl.hit_range AS last_is_hit,
+        
+        -- Next upcoming forecast (the one with the date after the latest historical date)
+        nf.forecast_date AS next_forecast_date,
+        nf.predicted_lo AS next_predicted_lo,
+        nf.predicted_hi AS next_predicted_hi,
+        
+        -- Latest technical indicators (for the latest historical day)
+        ti.date AS indicator_date,
+        ti.rsi::real,
+        ti.macd::real,
+        ti.macd_signal::real,
+        ti.sma20::real,
+        ti.sma50::real
+        
+    FROM public.stocks s
+    
+    -- Join for Last Forecast
+    LEFT JOIN public.forecast_check_latest fcl ON s.symbol = fcl.stock_symbol AND fcl.forecast_date = latest_historical_date
+    
+    -- Join for Next Forecast
+    LEFT JOIN LATERAL (
+        SELECT *
+        FROM public.forecasts
+        WHERE stock_symbol = s.symbol AND forecast_date > latest_historical_date
+        ORDER BY forecast_date ASC
+        LIMIT 1
+    ) nf ON true
+    
+    -- Join for Latest Indicators
+    LEFT JOIN public.technical_indicators ti ON s.symbol = ti.stock_symbol AND ti.date = latest_historical_date
+    
+    WHERE s.is_tracked = true
+    ORDER BY s.symbol;
+END;
+$$;
+
+RAISE NOTICE 'SUCCESS: RPC function "get_the_coming_trend_data" created.';
+
+
+-- Step 3: Add all new and updated UI translations.
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- Page title update
+('en', 'daily_watchlist', 'The Coming Trend'),
+('ar', 'daily_watchlist', 'الاتجاه القادم'),
+
+-- New section titles and labels
+('en', 'last_forecast', 'Last Forecast'),
+('ar', 'last_forecast', 'آخر توقع'),
+('en', 'next_forecast', 'Next Forecast'),
+('ar', 'next_forecast', 'التوقع القادم'),
+('en', 'technical_indicators', 'Technical Indicators'),
+('ar', 'technical_indicators', 'مؤشرات فنية'),
+('en', 'outcome', 'Outcome'),
+('ar', 'outcome', 'النتيجة'),
+('en', 'no_data_available', 'No data available.'),
+('ar', 'no_data_available', 'لا توجد بيانات متاحة.')
+
+ON CONFLICT (lang_id, key)
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+RAISE NOTICE 'SUCCESS: Added translations for "The Coming Trend" page.';
+
+COMMIT;

@@ -1,0 +1,32 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix App Settings Loading Error
+-- #
+-- # Purpose: This script provides a definitive fix for an issue where the
+-- # application would fail to load with an "Error fetching app settings"
+-- # message. This was likely caused by an RLS-related issue preventing the
+-- # `get_all_app_settings` function from reading the settings table.
+-- #
+-- # This script modifies the function to run with `SECURITY DEFINER`, allowing
+-- # it to bypass RLS and reliably fetch the public application settings.
+-- # This is safe as the settings are intended for public read access.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.get_all_app_settings()
+RETURNS SETOF public.app_settings
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT key, value FROM public.app_settings;
+$$;
+
+RAISE NOTICE 'SUCCESS: The "get_all_app_settings" function has been updated with SECURITY DEFINER to fix loading errors.';
+
+COMMIT;

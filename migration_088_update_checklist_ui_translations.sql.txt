@@ -1,0 +1,42 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Update Checklist UI Translations
+-- #
+-- # Purpose: This script updates several translation keys to match the new UI
+-- # design for the "Last Work Day" table, including the merged "Last Close"
+-- # column header and the "Correct/Incorrect" status badges.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+-- 1. Add/update the new key for the merged column header.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'last_close_info', 'Last Close'),
+('ar', 'last_close_info', 'آخر إغلاق')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+-- 2. Delete the old, now-redundant 'price_of_last_close' key.
+DELETE FROM public.translations WHERE key = 'price_of_last_close';
+
+-- 3. Update the translations for 'hit' and 'miss' for better clarity.
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'hit', 'Correct'),
+('ar', 'hit', 'صحيح'),
+('en', 'miss', 'Incorrect'),
+('ar', 'miss', 'خطأ')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+RAISE NOTICE 'SUCCESS: Checklist UI translations have been updated.';
+
+-- Re-enable RLS
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;

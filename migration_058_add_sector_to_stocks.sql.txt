@@ -1,0 +1,41 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Sector to Stocks Table
+-- #
+-- # Purpose: This script adds a `sector` column to the `stocks` table to
+-- # enable performance analysis by market sector.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add the 'sector' column if it doesn't exist.
+DO $$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name='stocks' AND column_name='sector') THEN
+       ALTER TABLE public.stocks ADD COLUMN sector TEXT;
+       RAISE NOTICE 'SUCCESS: Column "sector" added to "stocks" table.';
+    ELSE
+       RAISE NOTICE 'INFO: Column "sector" already exists in "stocks" table.';
+    END IF;
+END $$;
+COMMENT ON COLUMN public.stocks.sector IS 'The market sector the stock belongs to (e.g., Technology, Healthcare).';
+
+
+-- Step 2: Populate with some sample data for visualization purposes.
+-- This part of the script is safe to re-run.
+UPDATE public.stocks SET sector = 'Technology' WHERE symbol IN ('AAPL', 'MSFT', 'GOOGL', 'NVDA', 'META', 'AMD', 'INTC', 'CRM');
+UPDATE public.stocks SET sector = 'Consumer Cyclical' WHERE symbol IN ('AMZN', 'TSLA', 'NKE', 'MCD');
+UPDATE public.stocks SET sector = 'Healthcare' WHERE symbol IN ('JNJ', 'PFE', 'LLY', 'UNH');
+UPDATE public.stocks SET sector = 'Financial Services' WHERE symbol IN ('JPM', 'BAC', 'WFC', 'V', 'MA');
+UPDATE public.stocks SET sector = 'Energy' WHERE symbol IN ('XOM', 'CVX');
+UPDATE public.stocks SET sector = 'Communication Services' WHERE symbol IN ('GOOG', 'T', 'VZ');
+
+
+-- Step 3: Set a default for any other stocks to avoid null values in charts.
+UPDATE public.stocks SET sector = 'Miscellaneous' WHERE sector IS NULL;
+RAISE NOTICE 'SUCCESS: Populated sample sector data for stocks.';
+
+COMMIT;
