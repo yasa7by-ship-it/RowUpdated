@@ -43,52 +43,119 @@ const PaginationControls: React.FC<{ currentPage: number; totalPages: number; on
     );
 });
 
-const SimpleStatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; iconBgClass: string }> = memo(({ title, value, icon, iconBgClass }) => (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex items-start justify-between h-full">
-        <div>
-            <p className="text-lg font-medium text-gray-500 dark:text-gray-400">{title}</p>
-            <p className="text-5xl font-bold text-gray-900 dark:text-white mt-2">{value}</p>
+// Enhanced stat card with visual indicator
+const SimpleStatCard: React.FC<{ 
+    title: string; 
+    value: string; 
+    icon: React.ReactNode; 
+    iconBgClass: string;
+    total?: number; // For calculating percentage for visual indicator
+}> = memo(({ title, value, icon, iconBgClass, total }) => {
+    const numValue = parseInt(value) || 0;
+    const percentage = total && total > 0 ? (numValue / total) * 100 : 0;
+    
+    return (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors">
+            <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{title}</p>
+                <div className={`p-2 rounded-lg ${iconBgClass} text-white`}>
+                    {icon}
+                </div>
+            </div>
+            <p className="text-3xl font-bold text-gray-900 dark:text-white mb-3">{value}</p>
+            {/* Visual indicator bar */}
+            {total && total > 0 && (
+                <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                    <div 
+                        className={`h-full ${iconBgClass} transition-all duration-500 ease-out`}
+                        style={{ width: `${Math.min(100, percentage)}%` }}
+                    />
+                </div>
+            )}
         </div>
-        <div className={`p-3 rounded-full text-white ${iconBgClass}`}>
-            {icon}
-        </div>
-    </div>
-));
+    );
+});
 
+// Compact success rate card - smaller and standalone
 const HitRateStatCard: React.FC<{ title: string; value: number; }> = memo(({ title, value }) => {
-  const radius = 52;
-  const stroke = 12;
+  const radius = 55;
+  const stroke = 6;
   const normalizedRadius = radius - stroke / 2;
   const circumference = normalizedRadius * 2 * Math.PI;
   const offset = !isNaN(value) ? circumference - (value / 100) * circumference : circumference;
+  const displayValue = !isNaN(value) ? formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : 'N/A';
+  
+  // Success rate color logic
+  const getColor = () => {
+    if (value >= 90) return { text: 'text-nextrow-success', bg: 'bg-nextrow-success', stroke: '#00b06f' };
+    if (value >= 70) return { text: 'text-yellow-500', bg: 'bg-yellow-500', stroke: '#f59e0b' };
+    return { text: 'text-orange-500', bg: 'bg-orange-500', stroke: '#f97316' };
+  };
+  
+  const colors = getColor();
 
   return (
-    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col items-center justify-center text-center h-full">
-        <div className="relative w-40 h-40">
-            <svg className="w-full h-full" viewBox="0 0 120 120">
-                <circle
-                    className="text-gray-200 dark:text-gray-700"
-                    stroke="currentColor" strokeWidth={stroke} fill="transparent"
-                    r={normalizedRadius} cx="60" cy="60"
-                />
-                <circle
-                    className="text-green-500 transition-all duration-1000 ease-in-out"
-                    stroke="currentColor" strokeWidth={stroke} strokeDasharray={circumference + ' ' + circumference}
-                    style={{ strokeDashoffset: offset }} strokeLinecap="round" fill="transparent"
-                    r={normalizedRadius} cx="60" cy="60" transform="rotate(-90 60 60)"
-                />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-3xl font-bold text-gray-800 dark:text-white">
-                    {!isNaN(value) ? `${formatNumber(value, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%` : 'N/A'}
-                </span>
-            </div>
+    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase tracking-wide">{title}</p>
+            <ChartPieIcon className={`w-4 h-4 ${colors.text}`}/>
         </div>
-        <div className="mt-4 flex items-center gap-2">
-            <div className="p-1.5 rounded-full bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-300">
-                <ChartPieIcon className="w-5 h-5"/>
+        
+        {/* Smaller circular indicator */}
+        <div className="flex items-center gap-4">
+            <div className="relative w-24 h-24 flex-shrink-0">
+                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                    <defs>
+                        <linearGradient id={`successGrad-${Math.round(value)}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor={colors.stroke} stopOpacity="0.3"/>
+                            <stop offset="100%" stopColor={colors.stroke}/>
+                        </linearGradient>
+                    </defs>
+                    {/* Background */}
+                    <circle
+                        cx="60" cy="60"
+                        r={normalizedRadius}
+                        stroke="#e5e7eb"
+                        strokeWidth={stroke}
+                        fill="transparent"
+                        className="dark:stroke-gray-600"
+                    />
+                    {/* Progress */}
+                    <circle
+                        cx="60" cy="60"
+                        r={normalizedRadius}
+                        stroke={colors.stroke}
+                        strokeWidth={stroke}
+                        fill="transparent"
+                        strokeDasharray={circumference}
+                        strokeDashoffset={offset}
+                        strokeLinecap="round"
+                        className="transition-all duration-1000 ease-out"
+                    />
+                </svg>
+                {/* Center value */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className={`text-2xl font-bold ${colors.text}`}>
+                        {displayValue}
+                    </span>
+                    <span className={`text-sm font-semibold ${colors.text} -mt-0.5`}>%</span>
+                </div>
             </div>
-            <p className="text-lg font-medium text-gray-700 dark:text-gray-500">{title}</p>
+            
+            {/* Side info - compact */}
+            <div className="flex-1">
+                <div className="mb-2">
+                    <div className="flex items-center gap-2 mb-1">
+                        <div className={`w-2 h-2 rounded-full ${colors.bg}`}></div>
+                        <p className={`text-xs font-semibold ${colors.text}`}>
+                            {value >= 90 ? 'Excellent' : value >= 70 ? 'Good' : 'Fair'}
+                        </p>
+                    </div>
+                </div>
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Accuracy</p>
+                </div>
+            </div>
         </div>
     </div>
   );
@@ -196,7 +263,7 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
         <div className="flex justify-center items-center h-full p-8"><SpinnerIcon className="w-10 h-10" /></div>
     );
     if (error) return (
-        <div className="p-4 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-lg shadow-md">
+        <div className="p-4 bg-nextrow-danger/20 dark:bg-nextrow-danger/30 text-nextrow-danger dark:text-nextrow-danger/90 rounded-lg shadow-md">
             <p><strong>{t('error_fetching_data')}:</strong> {error}</p>
         </div>
     );
@@ -209,13 +276,13 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
         <div>
             {/* Disclaimer Banner - Conditionally Rendered */}
             {settings.show_educational_disclaimer !== 'false' && (
-                <div className="p-4 mb-8 bg-green-50 dark:bg-green-900/20 border-l-4 border-green-400 dark:border-green-500 rounded-r-lg">
+                <div className="p-4 mb-8 bg-nextrow-success/10 dark:bg-nextrow-success/20 border-l-4 border-nextrow-success rounded-r-lg">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <CheckCircleIcon className="h-5 w-5 text-green-400" />
+                            <CheckCircleIcon className="h-5 w-5 text-nextrow-success" />
                         </div>
                         <div className="ml-3 rtl:mr-3">
-                            <p className="text-sm text-green-700 dark:text-green-200">
+                            <p className="text-sm text-nextrow-success dark:text-nextrow-success/90">
                                 <span className="font-medium">{language === 'ar' ? 'تنبيه' : t('disclaimer_title')}:</span> {language === 'ar' ? 'المعلومات لأغراض تعليمية وليست نصيحة استثمارية.' : t('disclaimer_educational')}
                             </p>
                         </div>
@@ -223,40 +290,63 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
                 </div>
             )}
 
-            <div className="text-center mb-6">
-                <h1 className="text-4xl font-bold text-gray-900 dark:text-white">{language === 'ar' ? 'آخر يوم' : t('stock_analysis_title_last_day')}</h1>
-                {description && <p className="mt-2 text-md text-gray-500 dark:text-gray-400 max-w-3xl mx-auto">{description}</p>}
-            </div>
-
-            <div className="flex items-center justify-center gap-3 mb-8 p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm max-w-md mx-auto">
-                <CalendarDaysIcon className="w-6 h-6 text-blue-500" />
-                <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">{language === 'ar' ? 'فحص التوقعات ليوم:' : t('check_forecasts_for_date')}</span>
-                <span className="text-xl font-bold text-blue-600 dark:text-blue-400 font-mono">{forecastDate || t('n_a')}</span>
+            {/* Header Section - Clean & Professional */}
+            <div className="mb-6 pb-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                            {language === 'ar' ? 'آخر يوم' : t('stock_analysis_title_last_day')}
+                        </h1>
+                        {description && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <CalendarDaysIcon className="w-5 h-5 text-nextrow-primary" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {language === 'ar' ? 'تاريخ:' : 'Date:'}
+                        </span>
+                        <span className="text-sm font-semibold text-nextrow-primary font-mono">
+                            {forecastDate || t('n_a')}
+                        </span>
+                    </div>
+                </div>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                 <SimpleStatCard 
-                    title={language === 'ar' ? 'توقعات خاطئة' : t('incorrect_forecasts')} 
-                    value={String(summaryStats.misses)} 
-                    icon={<XCircleIcon className="w-8 h-8"/>}
-                    iconBgClass="bg-red-500" 
-                />
-                <SimpleStatCard 
-                    title={language === 'ar' ? 'توقعات صحيحة' : t('correct_forecasts')} 
-                    value={String(summaryStats.hits)} 
-                    icon={<CheckCircleIcon className="w-8 h-8"/>}
-                    iconBgClass="bg-green-500" 
-                />
-                <SimpleStatCard 
-                    title={language === 'ar' ? 'إجمالي التوقعات' : t('total_forecasts')} 
-                    value={String(summaryStats.total)} 
-                    icon={<BuildingOfficeIcon className="w-8 h-8"/>}
-                    iconBgClass="bg-blue-500" 
-                />
-                <HitRateStatCard 
-                    title={language === 'ar' ? 'نسبة النجاح' : t('success_rate')} 
-                    value={summaryStats.hitRate * 100} 
-                />
+            {/* Statistics Section - نسبة النجاح لوحدها، ثم الثلاث بطاقات */}
+            <div className="mb-8 space-y-6">
+                {/* نسبة النجاح - لوحدها */}
+                <div className="max-w-xs">
+                    <HitRateStatCard 
+                        title={language === 'ar' ? 'نسبة النجاح' : t('success_rate')} 
+                        value={summaryStats.hitRate * 100} 
+                    />
+                </div>
+                
+                {/* البطاقات الثلاث - مرتبة حسب الطلب */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <SimpleStatCard 
+                        title={language === 'ar' ? 'إجمالي التوقعات' : t('total_forecasts')} 
+                        value={String(summaryStats.total)} 
+                        icon={<BuildingOfficeIcon className="w-4 h-4"/>}
+                        iconBgClass="bg-nextrow-primary"
+                        total={summaryStats.total}
+                    />
+                    <SimpleStatCard 
+                        title={language === 'ar' ? 'توقعات صحيحة' : t('correct_forecasts')} 
+                        value={String(summaryStats.hits)} 
+                        icon={<CheckCircleIcon className="w-4 h-4"/>}
+                        iconBgClass="bg-nextrow-success"
+                        total={summaryStats.total}
+                    />
+                    <SimpleStatCard 
+                        title={language === 'ar' ? 'توقعات خاطئة' : t('incorrect_forecasts')} 
+                        value={String(summaryStats.misses)} 
+                        icon={<XCircleIcon className="w-4 h-4"/>}
+                        iconBgClass="bg-nextrow-danger"
+                        total={summaryStats.total}
+                    />
+                </div>
             </div>
 
             {/* Filters */}
@@ -284,64 +374,103 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
                 </button>
             </div>
 
-            {/* Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700/50">
-                        <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('stock')}</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('price')}</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('predicted_range')}</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('actual_range')}</th>
-                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">{t('result')}</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                        {paginatedData.map(item => {
-                            const favorited = isFavorite(item.stock_symbol);
-                            return (
-                                <tr key={item.stock_symbol} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                                    <td className="px-4 py-3 whitespace-nowrap">
-                                        <div className="flex items-center">
-                                            <button onClick={() => toggleFavorite(item.stock_symbol)} className={`p-1 rounded-full hover:bg-yellow-100 dark:hover:bg-yellow-900/50 transition-colors ${favorited ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'}`}>
-                                                <StarIcon className={`w-5 h-5 ${favorited ? 'fill-current' : ''}`} />
-                                            </button>
-                                            <div className="ml-2">
-                                                <button onClick={() => setPage({ page: 'stock_details', symbol: item.stock_symbol })} className="text-base font-bold text-blue-600 dark:text-blue-400 hover:underline">{item.stock_symbol}</button>
-                                                <div className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-40">{item.stock_name}</div>
+            {/* Data Table - Clean Bloomberg/TradingView Style */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-900/50">
+                            <tr>
+                                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+                                    {t('stock')}
+                                </th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                                    {t('price')}
+                                </th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                                    {t('predicted_range')}
+                                </th>
+                                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                                    {t('actual_range')}
+                                </th>
+                                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                                    {t('result')}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                            {paginatedData.map((item, index) => {
+                                const favorited = isFavorite(item.stock_symbol);
+                                return (
+                                    <tr 
+                                        key={item.stock_symbol} 
+                                        className={`hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                                            index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50/50 dark:bg-gray-800/50'
+                                        }`}
+                                    >
+                                        <td className="px-4 py-3 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">
+                                            <div className="flex items-center gap-2">
+                                                <button 
+                                                    onClick={(e) => { e.stopPropagation(); toggleFavorite(item.stock_symbol); }} 
+                                                    className={`p-1 rounded hover:bg-yellow-50 dark:hover:bg-yellow-900/20 transition-colors ${favorited ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-600'}`}
+                                                >
+                                                    <StarIcon className={`w-4 h-4 ${favorited ? 'fill-current' : ''}`} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => setPage({ page: 'stock_details', symbol: item.stock_symbol })} 
+                                                    className="text-sm font-bold text-nextrow-primary hover:text-nextrow-dark hover:underline"
+                                                >
+                                                    {item.stock_symbol}
+                                                </button>
                                             </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-center text-lg">{formatNumber(item.price)}</td>
-                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-center text-lg">
-                                        <span className="text-red-500">{formatNumber(item.predicted_lo)}</span>
-                                        <span className="mx-1 text-gray-400">-</span>
-                                        <span className="text-green-500">{formatNumber(item.predicted_hi)}</span>
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap font-mono text-center text-lg">
-                                        <span className="text-red-500">{formatNumber(item.actual_low)}</span>
-                                        <span className="mx-1 text-gray-400">-</span>
-                                        <span className="text-green-500">{formatNumber(item.actual_high)}</span>
-                                    </td>
-                                    <td className="px-4 py-3 whitespace-nowrap text-center">
-                                        {item.is_hit ?
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                                                <CheckCircleIcon className="w-5 h-5" /> {t('hit')}
+                                            <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-xs mt-0.5">
+                                                {item.stock_name}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                                            <span className="text-sm font-semibold text-gray-900 dark:text-white font-mono">
+                                                {formatNumber(item.price)}
                                             </span>
-                                        :
-                                            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300">
-                                                <XCircleIcon className="w-5 h-5" /> {t('miss')}
-                                            </span>
-                                        }
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                                            <div className="text-sm font-mono">
+                                                <span className="text-nextrow-danger">{formatNumber(item.predicted_lo)}</span>
+                                                <span className="mx-1 text-gray-400">-</span>
+                                                <span className="text-nextrow-success">{formatNumber(item.predicted_hi)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                                            <div className="text-sm font-mono">
+                                                <span className="text-nextrow-danger">{formatNumber(item.actual_low)}</span>
+                                                <span className="mx-1 text-gray-400">-</span>
+                                                <span className="text-nextrow-success">{formatNumber(item.actual_high)}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 whitespace-nowrap text-center">
+                                            {item.is_hit ? (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-nextrow-success/10 text-nextrow-success border border-nextrow-success/20">
+                                                    <CheckCircleIcon className="w-3.5 h-3.5" /> 
+                                                    {t('hit')}
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-nextrow-danger/10 text-nextrow-danger border border-nextrow-danger/20">
+                                                    <XCircleIcon className="w-3.5 h-3.5" /> 
+                                                    {t('miss')}
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                            {paginatedData.length === 0 && (
+                                <tr>
+                                    <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                                        {t('no_results_found')}
                                     </td>
                                 </tr>
-                            )
-                        })}
-                        {paginatedData.length === 0 && (
-                            <tr><td colSpan={5} className="text-center py-8 text-gray-500 dark:text-gray-400">{t('no_results_found')}</td></tr>
-                        )}
-                    </tbody>
-                </table>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
                 {totalPages > 1 && (
                     <PaginationControls currentPage={currentPage} totalPages={totalPages} onPageChange={setCurrentPage} />
                 )}

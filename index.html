@@ -8,7 +8,7 @@
 
     <!-- PWA Manifest & Theme -->
     <link rel="manifest" href="manifest.json" />
-    <meta name="theme-color" content="#4338ca" />
+    <meta name="theme-color" content="#2d5aa0" />
 
     <!-- Apple PWA specific tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -29,6 +29,40 @@
     <script>
       tailwind.config = {
         darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              // NextRowTheme - Inspired by Investing.com
+              'nextrow': {
+                'primary': '#2d5aa0',      // Investing.com primary blue
+                'dark': '#1a1f2e',         // Investing.com dark blue
+                'accent': '#2d5aa0',       // Accent blue
+                'success': '#00b06f',      // Green for profit/positive
+                'danger': '#e74c3c',       // Red for loss/negative
+                'warning': '#f39c12',      // Orange for warnings
+                'info': '#3498db',         // Light blue for info
+                'bg': '#f5f5f5',          // Light background
+                'bg-dark': '#1a1f2e',      // Dark background
+                'text': '#333333',        // Main text color
+                'text-light': '#666666',  // Light text
+                'border': '#e0e0e0',      // Border color
+                'border-dark': '#2d3a4b', // Dark border
+              }
+            },
+            fontFamily: {
+              'nextrow': ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            },
+            animation: {
+              'shimmer': 'shimmer 3s infinite',
+            },
+            keyframes: {
+              shimmer: {
+                '0%': { transform: 'translateX(-100%)' },
+                '100%': { transform: 'translateX(100%)' },
+              }
+            }
+          }
+        }
       };
     </script>
     
@@ -45,7 +79,7 @@
 }
 </script>
   </head>
-  <body class="bg-gray-50 dark:bg-gray-900">
+  <body class="bg-nextrow-bg dark:bg-nextrow-bg-dark text-nextrow-text dark:text-gray-200">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 

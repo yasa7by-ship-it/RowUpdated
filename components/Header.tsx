@@ -38,9 +38,9 @@ const LoggedInView: React.FC<{
   
   return (
      <div className="relative" ref={profileMenuRef}>
-        <button onClick={() => setProfileOpen(!isProfileOpen)} className="flex items-center space-x-2 rtl:space-x-reverse p-1 rounded-md hover:bg-indigo-700">
+        <button onClick={() => setProfileOpen(!isProfileOpen)} className="flex items-center space-x-2 rtl:space-x-reverse p-1 rounded-md hover:bg-nextrow-primary/80">
         <span className="hidden sm:inline text-sm font-medium text-white px-2 truncate max-w-[150px]">{displayName}</span>
-        <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center font-bold shrink-0">
+        <div className="w-8 h-8 rounded-full bg-nextrow-primary text-white flex items-center justify-center font-bold shrink-0">
             {getInitials(profile?.full_name, profile?.email)}
         </div>
         </button>
@@ -146,7 +146,7 @@ const LoggedOutView: React.FC<{ setPage: (page: PageState) => void; setSignUpMod
             <summary
                 title={t('login_with_email')}
                 aria-label={t('login_with_email')}
-                className="h-9 w-9 list-none bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="h-9 w-9 list-none bg-nextrow-primary text-white rounded-md hover:bg-nextrow-primary/90 flex items-center justify-center cursor-pointer focus:outline-none focus:ring-2 focus:ring-nextrow-primary">
                 <EnvelopeIcon className="w-5 h-5" />
             </summary>
             <div className="absolute top-full right-0 rtl:right-auto rtl:left-0 mt-2 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[340px] z-10 border dark:border-gray-700 group-open:animate-fade-in-down">
@@ -159,7 +159,7 @@ const LoggedOutView: React.FC<{ setPage: (page: PageState) => void; setSignUpMod
                             autoComplete="email"
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="h-10 w-full px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="h-10 w-full px-3 text-sm border border-nextrow-border rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary dark:bg-gray-700 dark:border-nextrow-border-dark dark:text-white"
                         />
                     </div>
                      <div className="flex flex-col">
@@ -170,7 +170,7 @@ const LoggedOutView: React.FC<{ setPage: (page: PageState) => void; setSignUpMod
                             autoComplete="current-password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="h-10 w-full px-3 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                            className="h-10 w-full px-3 text-sm border border-nextrow-border rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary dark:bg-gray-700 dark:border-nextrow-border-dark dark:text-white"
                         />
                     </div>
                     <div className="flex items-center justify-between">
@@ -180,7 +180,7 @@ const LoggedOutView: React.FC<{ setPage: (page: PageState) => void; setSignUpMod
                                 type="checkbox"
                                 checked={rememberMe}
                                 onChange={(e) => setRememberMe(e.target.checked)}
-                                className="h-4 w-4 rounded border-gray-400 text-blue-600 focus:ring-blue-500 dark:border-gray-500 dark:bg-gray-600 dark:ring-offset-gray-800"
+                                className="h-4 w-4 rounded border-gray-400 text-nextrow-primary focus:ring-nextrow-primary dark:border-gray-500 dark:bg-gray-600 dark:ring-offset-gray-800"
                             />
                             <label htmlFor="header-remember-me" className="ml-2 rtl:ml-0 rtl:mr-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('remember_me')}
@@ -190,7 +190,7 @@ const LoggedOutView: React.FC<{ setPage: (page: PageState) => void; setSignUpMod
                     <button
                         type="submit"
                         disabled={loading}
-                        className="h-10 px-6 bg-blue-600 text-white text-sm font-bold rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                        className="h-10 px-6 bg-nextrow-primary text-white text-sm font-bold rounded-md hover:bg-nextrow-primary/90 focus:outline-none focus:ring-2 focus:ring-nextrow-primary disabled:opacity-50"
                     >
                         {loading ? <SpinnerIcon className="w-5 h-5" /> : t('login')}
                     </button>
@@ -327,7 +327,7 @@ const Header: React.FC<{
                 onSuccess={() => setSignUpModalOpen(false)}
             />
         )}
-        <header className="bg-indigo-800 dark:bg-gray-800 shadow-md p-2 md:p-4 flex justify-between items-center z-20">
+        <header className="bg-nextrow-primary dark:bg-nextrow-dark shadow-md p-2 md:p-4 flex justify-between items-center z-20">
         <div className="flex items-center space-x-4 rtl:space-x-reverse">
             <a href="#" onClick={(e) => { e.preventDefault(); setPage('landing'); }} className="flex items-center space-x-2 rtl:space-x-reverse">
                 <span className="inline-block w-8 h-8 text-white" dangerouslySetInnerHTML={{ __html: settings.site_logo || '' }} />
@@ -336,13 +336,13 @@ const Header: React.FC<{
             
             {/* Main navigation for logged-in users */}
             {profile && (
-                <nav className="hidden md:flex items-center space-x-1 rtl:space-x-reverse bg-indigo-900/50 dark:bg-gray-900/50 p-1 rounded-lg">
+                <nav className="hidden md:flex items-center space-x-1 rtl:space-x-reverse bg-nextrow-dark/50 dark:bg-gray-900/50 p-1 rounded-lg">
                     {navLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon, isVisuallyDistinct }) => (
                         <a key={page} href="#" onClick={(e) => { e.preventDefault(); setPage(page); }}
                             className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
                                 isVisuallyDistinct
                                 ? (currentPage === page ? 'bg-amber-400 text-black shadow-inner' : 'bg-amber-300 dark:bg-amber-500 text-black hover:bg-amber-400 dark:hover:bg-amber-600')
-                                : (currentPage === page ? 'bg-white dark:bg-gray-700 text-indigo-700 dark:text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white')
+                                : (currentPage === page ? 'bg-white dark:bg-gray-700 text-nextrow-primary dark:text-white' : 'text-white/80 hover:bg-nextrow-primary/80 hover:text-white')
                             }`}>
                             <Icon className="w-5 h-5" />
                             {label}
@@ -353,7 +353,7 @@ const Header: React.FC<{
                     {canViewSiteManagement && (
                         <div className="relative" ref={siteMgmtMenuRef}>
                             <button onClick={() => setSiteMgmtOpen(!isSiteMgmtOpen)}
-                            className="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-indigo-200 hover:bg-indigo-700 hover:text-white">
+                            className="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-white/80 hover:bg-nextrow-primary/80 hover:text-white">
                                 {t('site_management')}
                                 <ChevronDownIcon className="w-4 h-4 ml-1 rtl:mr-1" />
                             </button>
@@ -394,13 +394,13 @@ const Header: React.FC<{
              {/* Desktop-only controls */}
             <div className="hidden md:flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse rtl:md:space-x-reverse">
                 {/* Theme Toggle */}
-                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full hover:bg-indigo-700 text-white" aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}>
+                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full hover:bg-nextrow-primary/80 text-white" aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}>
                     {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
                 </button>
 
                 {/* Language Selector */}
                 <div className="relative" ref={languageMenuRef}>
-                    <button onClick={() => setLanguageOpen(!isLanguageOpen)} className="p-2 rounded-full hover:bg-indigo-700 text-white" aria-label={t('select_language')}>
+                    <button onClick={() => setLanguageOpen(!isLanguageOpen)} className="p-2 rounded-full hover:bg-nextrow-primary/80 text-white" aria-label={t('select_language')}>
                         <LanguageIcon />
                     </button>
                     {isLanguageOpen && (
@@ -417,7 +417,7 @@ const Header: React.FC<{
              {/* Mobile-only Hamburger Menu Button */}
             {profile && (
                 <div className="md:hidden">
-                    <button onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-full hover:bg-indigo-700 text-white" aria-label={t('toggle_navigation')}>
+                    <button onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-full hover:bg-nextrow-primary/80 text-white" aria-label={t('toggle_navigation')}>
                         {isMobileMenuOpen ? <XMarkIcon className="w-6 h-6"/> : <Bars3Icon className="w-6 h-6"/>}
                     </button>
                 </div>
@@ -427,14 +427,14 @@ const Header: React.FC<{
 
         {/* Mobile Menu Panel */}
         {isMobileMenuOpen && profile && (
-            <div className="md:hidden absolute top-[56px] left-0 right-0 bg-indigo-900 dark:bg-gray-800 shadow-lg z-10 p-4 border-t border-indigo-700 dark:border-gray-700">
+            <div className="md:hidden absolute top-[56px] left-0 right-0 bg-nextrow-dark dark:bg-gray-800 shadow-lg z-10 p-4 border-t border-nextrow-primary/50 dark:border-gray-700">
                 <nav className="flex flex-col space-y-1">
                     {navLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon, isVisuallyDistinct }) => (
                          <a key={page} href="#" onClick={(e) => { e.preventDefault(); setPage(page); setMobileMenuOpen(false); }}
                             className={`flex items-center gap-3 p-3 text-base font-medium rounded-md ${
                                 isVisuallyDistinct
                                 ? (currentPage === page ? 'bg-amber-400 text-black' : 'bg-amber-300/80 dark:bg-amber-500/80 text-black hover:bg-amber-400')
-                                : (currentPage === page ? 'bg-white dark:bg-gray-700 text-indigo-700 dark:text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white')
+                                : (currentPage === page ? 'bg-white dark:bg-gray-700 text-nextrow-primary dark:text-white' : 'text-white/80 hover:bg-nextrow-primary/80 hover:text-white')
                             }`}>
                             <Icon className="w-6 h-6" />
                             {label}
@@ -443,11 +443,11 @@ const Header: React.FC<{
                     
                     {canViewSiteManagement && (
                         <>
-                            <hr className="border-indigo-700 dark:border-gray-600 my-2" />
-                            <h3 className="px-3 pt-2 pb-1 text-xs font-semibold text-indigo-300 dark:text-gray-400 uppercase tracking-wider">{t('site_management')}</h3>
+                            <hr className="border-nextrow-primary/50 dark:border-gray-600 my-2" />
+                            <h3 className="px-3 pt-2 pb-1 text-xs font-semibold text-white/70 dark:text-gray-400 uppercase tracking-wider">{t('site_management')}</h3>
                              {siteManagementLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon }) => (
                                 <a key={page} href="#" onClick={(e) => { e.preventDefault(); setPage(page); setMobileMenuOpen(false); }}
-                                    className={`flex items-center gap-3 p-3 text-base font-medium rounded-md ${currentPage === page ? 'bg-white dark:bg-gray-700 text-indigo-700 dark:text-white' : 'text-indigo-200 hover:bg-indigo-700 hover:text-white'}`}>
+                                    className={`flex items-center gap-3 p-3 text-base font-medium rounded-md ${currentPage === page ? 'bg-white dark:bg-gray-700 text-nextrow-primary dark:text-white' : 'text-white/80 hover:bg-nextrow-primary/80 hover:text-white'}`}>
                                     <Icon className="w-6 h-6" />
                                     {label}
                                 </a>
@@ -456,19 +456,19 @@ const Header: React.FC<{
                     )}
 
                     {/* Controls */}
-                    <hr className="border-indigo-700 dark:border-gray-600 my-2" />
-                    <div className="px-3 py-2 flex justify-between items-center text-indigo-200">
+                    <hr className="border-nextrow-primary/50 dark:border-gray-600 my-2" />
+                    <div className="px-3 py-2 flex justify-between items-center text-white/80">
                         <span>{t('theme')}</span>
-                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full hover:bg-indigo-700" aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}>
+                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full hover:bg-nextrow-primary/80" aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}>
                             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
                         </button>
                     </div>
-                     <div className="px-3 py-2 flex justify-between items-center text-indigo-200">
+                     <div className="px-3 py-2 flex justify-between items-center text-white/80">
                         <span>{t('language')}</span>
                         <div className="flex gap-2">
                             {/* FIX: Removed erroneous function calls on the `language` string variable. The `language` variable is a string, not a function. */}
-                            <button onClick={() => { setLanguage('en'); setMobileMenuOpen(false); }} className={`px-3 py-1 text-sm font-bold rounded ${language === 'en' ? 'bg-white text-indigo-700' : 'bg-indigo-800 hover:bg-indigo-700'}`}>EN</button>
-                            <button onClick={() => { setLanguage('ar'); setMobileMenuOpen(false); }} className={`px-3 py-1 text-sm font-bold rounded ${language === 'ar' ? 'bg-white text-indigo-700' : 'bg-indigo-800 hover:bg-indigo-700'}`}>AR</button>
+                            <button onClick={() => { setLanguage('en'); setMobileMenuOpen(false); }} className={`px-3 py-1 text-sm font-bold rounded ${language === 'en' ? 'bg-white text-nextrow-primary' : 'bg-nextrow-primary/80 hover:bg-nextrow-primary'}`}>EN</button>
+                            <button onClick={() => { setLanguage('ar'); setMobileMenuOpen(false); }} className={`px-3 py-1 text-sm font-bold rounded ${language === 'ar' ? 'bg-white text-nextrow-primary' : 'bg-nextrow-primary/80 hover:bg-nextrow-primary'}`}>AR</button>
                         </div>
                     </div>
                 </nav>

@@ -17,7 +17,7 @@ const Layout: React.FC<LayoutProps> = ({ profile, children, setPage, currentPage
   // while allowing other pages to fill the viewport correctly. 
   // Also synchronized the background color with the main HTML body for a seamless appearance. This permanently resolves the layout issue.
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
+    <div className="flex flex-col min-h-screen bg-nextrow-bg dark:bg-nextrow-bg-dark text-nextrow-text dark:text-gray-200">
       <Header profile={profile} setPage={setPage} currentPage={currentPage} />
       <AnnouncementsBanner />
       <main className="flex-grow">
