@@ -487,17 +487,52 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
                             <p className="text-sm text-gray-600 dark:text-gray-400">{description}</p>
                         )}
                     </div>
-                    <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-                        <CalendarDaysIcon className="w-5 h-5 text-nextrow-primary" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {language === 'ar' ? 'تاريخ:' : 'Date:'}
-                        </span>
-                        <span className="text-sm font-semibold text-nextrow-primary font-mono">
-                            {forecastDate || t('n_a')}
-                        </span>
-                    </div>
                 </div>
             </div>
+            
+            {/* Prominent Date Card - في منتصف الصفحة - حجم مناسب */}
+            {forecastDate && (
+                <div className="flex justify-center mb-6">
+                    <div className="w-full max-w-xl">
+                        <div className="group relative bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-blue-900/20 dark:via-indigo-900/20 dark:to-purple-900/20 rounded-2xl p-6 md:p-8 shadow-xl hover:shadow-blue-500/20 transition-all duration-300 transform hover:-translate-y-1 hover:scale-[1.01] border-2 border-blue-200/50 dark:border-blue-700/50 overflow-hidden backdrop-blur-sm">
+                            {/* Animated gradient backgrounds - أصغر */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-blue-400 via-indigo-400 to-purple-400 opacity-0 group-hover:opacity-10 transition-opacity duration-300"></div>
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500 to-blue-700 opacity-15 blur-2xl rounded-full -mr-16 -mt-16 group-hover:opacity-25 transition-all duration-500" style={{ pointerEvents: 'none' }}></div>
+                            <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-400 opacity-10 blur-xl rounded-full -ml-12 -mb-12 group-hover:opacity-20 transition-opacity duration-300" style={{ pointerEvents: 'none' }}></div>
+                            
+                            {/* Decorative sparkle effects - أصغر */}
+                            <div className="absolute top-3 right-3 w-2 h-2 bg-blue-400 rounded-full opacity-50 animate-pulse"></div>
+                            <div className="absolute top-6 left-4 w-1.5 h-1.5 bg-indigo-400 rounded-full opacity-40 animate-pulse" style={{ animationDelay: '300ms' }}></div>
+                            
+                            {/* Content Layout - أفقي */}
+                            <div className="relative z-10 flex items-center justify-center gap-6">
+                                {/* Icon - أصغر */}
+                                <div className="relative flex-shrink-0">
+                                    <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-blue-700 opacity-20 blur-xl rounded-2xl group-hover:opacity-30 transition-opacity duration-300" style={{ pointerEvents: 'none', transform: 'scale(1.3)' }}></div>
+                                    <div className="relative p-3 md:p-4 rounded-xl bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg transform group-hover:scale-105 group-hover:rotate-2 transition-all duration-300 border-2 border-white/30">
+                                        <CalendarDaysIcon className="w-6 h-6 md:w-7 md:h-7" />
+                                        <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent rounded-xl"></div>
+                                    </div>
+                                </div>
+                                
+                                {/* Title and Date */}
+                                <div className="flex-1 text-center md:text-left">
+                                    <p className="text-xs md:text-sm font-bold text-blue-600 dark:text-blue-300 mb-2 uppercase tracking-wide">
+                                        {language === 'ar' ? 'تاريخ آخر يوم عمل' : 'Last Business Day'}
+                                    </p>
+                                    {/* Date value - حجم مناسب */}
+                                    <p className="text-3xl md:text-4xl lg:text-5xl font-black bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-700 dark:from-blue-300 dark:via-indigo-300 dark:to-purple-300 bg-clip-text text-transparent drop-shadow-lg leading-tight">
+                                        {forecastDate.split('-').join('/')}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Shine effect on hover */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             {/* Statistics Section - جميع البطاقات الأربعة في صف واحد */}
             <div className="mb-8">
