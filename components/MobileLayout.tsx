@@ -3,6 +3,7 @@ import type { Profile, PageName, PageState } from '../types';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import Header from './Header';
 import {
   ChartBarIcon,
   ChartPieIcon,
@@ -95,24 +96,28 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({ profile, children, setPage,
 
   return (
     <div className={`flex flex-col min-h-screen ${bgColor} ${textColor} overflow-hidden`}>
-      {/* Top bar - Minimal TikTok style, only show if logged in */}
-      {profile && (
-        <div className={`flex items-center justify-between px-4 py-3 ${isLandingPage ? 'bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700' : 'bg-black border-b border-gray-800'} sticky top-0 z-50`}>
-          <div className="flex items-center gap-2">
-            <h1 className={`text-lg font-bold ${textColor}`}>{t('site_title')}</h1>
+      {/* Use Header component for landing page, simple bar for logged in */}
+      {isLandingPage ? (
+        <Header profile={profile} setPage={setPage} currentPage={currentPage} />
+      ) : (
+        profile && (
+          <div className="flex items-center justify-between px-4 py-3 bg-black border-b border-gray-800 sticky top-0 z-50">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold text-white">{t('site_title')}</h1>
+            </div>
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+              aria-label="Menu"
+            >
+              {isMenuOpen ? (
+                <XMarkIcon className="w-6 h-6 text-white" />
+              ) : (
+                <Bars3Icon className="w-6 h-6 text-white" />
+              )}
+            </button>
           </div>
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className={`p-2 rounded-full ${isLandingPage ? 'hover:bg-gray-100 dark:hover:bg-gray-700' : 'hover:bg-gray-800'} transition-colors`}
-            aria-label="Menu"
-          >
-            {isMenuOpen ? (
-              <XMarkIcon className={`w-6 h-6 ${textColor}`} />
-            ) : (
-              <Bars3Icon className={`w-6 h-6 ${textColor}`} />
-            )}
-          </button>
-        </div>
+        )
       )}
 
       {/* Side menu - TikTok style slide-in */}
