@@ -160,26 +160,42 @@ BEGIN
         'recent_forecasts', (
             SELECT COALESCE(json_agg(
                 json_build_object(
-                    'stock_symbol', fch.stock_symbol,
-                    'forecast_date', fch.forecast_date::text,
-                    'predicted_lo', fch.predicted_lo,
-                    'predicted_hi', fch.predicted_hi,
-                    'actual_low', fch.actual_low,
-                    'actual_high', fch.actual_high,
-                    'actual_close', fch.actual_close,
-                    'hit_range', fch.hit_range,
-                    'abs_error', fch.abs_error,
-                    'pct_error', fch.pct_error,
-                    'confidence', fch.confidence,
-                    'stock_name', s.name
+                    'stock_symbol', rf.stock_symbol,
+                    'forecast_date', rf.forecast_date::text,
+                    'predicted_lo', rf.predicted_lo,
+                    'predicted_hi', rf.predicted_hi,
+                    'actual_low', rf.actual_low,
+                    'actual_high', rf.actual_high,
+                    'actual_close', rf.actual_close,
+                    'hit_range', rf.hit_range,
+                    'abs_error', rf.abs_error,
+                    'pct_error', rf.pct_error,
+                    'confidence', rf.confidence,
+                    'stock_name', rf.stock_name
                 )
-                ORDER BY fch.forecast_date DESC, fch.created_at DESC
+                ORDER BY rf.forecast_date DESC, rf.created_at DESC
             ), '[]'::json)
-            FROM public.forecast_check_history fch
-            LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
-            WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
-            ORDER BY fch.forecast_date DESC, fch.created_at DESC
-            LIMIT 20
+            FROM (
+                SELECT 
+                    fch.stock_symbol,
+                    fch.forecast_date,
+                    fch.predicted_lo,
+                    fch.predicted_hi,
+                    fch.actual_low,
+                    fch.actual_high,
+                    fch.actual_close,
+                    fch.hit_range,
+                    fch.abs_error,
+                    fch.pct_error,
+                    fch.confidence,
+                    fch.created_at,
+                    s.name AS stock_name
+                FROM public.forecast_check_history fch
+                LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+                WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+                ORDER BY fch.forecast_date DESC, fch.created_at DESC
+                LIMIT 20
+            ) rf
         ),
         
         -- Date Range
