@@ -4,7 +4,6 @@ import type { DailyWatchlistItem, PageState } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAppSettings } from '../../contexts/AppSettingsContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
-import { useIsMobile } from '../../hooks/useIsMobile';
 import { SpinnerIcon, StarIcon, ArrowUpIcon, ArrowDownIcon, ChartBarIcon, SparklesIcon, CalendarDaysIcon } from '../icons';
 
 const formatDate = (dateString: string | null | undefined) => {
