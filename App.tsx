@@ -22,6 +22,7 @@ const TranslationManagement = lazy(() => import('./components/pages/TranslationM
 const ActivityLog = lazy(() => import('./components/pages/ActivityLog'));
 const UserNotes = lazy(() => import('./components/pages/UserNotes'));
 const UserNotesManagement = lazy(() => import('./components/pages/UserNotesManagement'));
+const ForecastAccuracy = lazy(() => import('./components/pages/ForecastAccuracy'));
 
 const App: React.FC = () => {
   const { session, loading, hasPermission, profile } = useAuth();
@@ -53,6 +54,7 @@ const App: React.FC = () => {
       activity_log: 'activity_log',
       user_notes: 'user_notes', // New
       user_notes_management: 'manage_user_notes', // New
+      forecast_accuracy: 'forecast_accuracy', // New
     };
     const titleKey = pageTitleKeyMap[currentPageName];
     document.title = (currentPageName === 'landing' || !session) 
@@ -128,6 +130,7 @@ const App: React.FC = () => {
         activity_log: 'view:activity_log',
         user_notes: 'submit:user_notes', // Use dedicated permission
         user_notes_management: 'manage:user_notes', // Admin-only
+        forecast_accuracy: 'view:forecast_accuracy', // Forecast accuracy page
     };
     
     const requiredPermission = pagePermissions[currentPageName];
@@ -190,6 +193,8 @@ const App: React.FC = () => {
           return hasPermission('submit:user_notes') ? <UserNotes /> : <AccessDenied />;
         case 'user_notes_management':
           return hasPermission('manage:user_notes') ? <UserNotesManagement /> : <AccessDenied />;
+        case 'forecast_accuracy':
+          return hasPermission('view:forecast_accuracy') ? <ForecastAccuracy /> : <AccessDenied />;
         case 'stock_details':
           if (typeof currentPage === 'object' && hasPermission('view:stock_analysis')) {
             return <StockDetails symbol={currentPage.symbol} setPage={setCurrentPage} />;

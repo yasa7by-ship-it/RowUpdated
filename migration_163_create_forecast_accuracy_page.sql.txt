@@ -1,0 +1,276 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Forecast Accuracy Analysis Page
+-- #
+-- # Purpose: Create RPC function and permissions for forecast accuracy page
+-- # This page displays historical forecast accuracy statistics and metrics
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Create RPC function to get forecast accuracy statistics
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_stats(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_result json;
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    -- Set default date range (last 90 days if not specified)
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    SELECT json_build_object(
+        -- Overall Statistics
+        'overall', (
+            SELECT json_build_object(
+                'total_forecasts', COUNT(*)::integer,
+                'hit_range_count', COUNT(*) FILTER (WHERE hit_range = true)::integer,
+                'miss_range_count', COUNT(*) FILTER (WHERE hit_range = false)::integer,
+                'hit_rate', CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END,
+                'avg_abs_error', COALESCE(AVG(abs_error), 0),
+                'avg_pct_error', COALESCE(AVG(pct_error), 0),
+                'avg_confidence', COALESCE(AVG(confidence), 0)
+            )
+            FROM public.forecast_check_history
+            WHERE forecast_date BETWEEN v_start_date AND v_end_date
+        ),
+        
+        -- By Stock Performance
+        'by_stock', (
+            SELECT COALESCE(json_agg(
+                json_build_object(
+                    'stock_symbol', stock_symbol,
+                    'total_forecasts', total_forecasts::integer,
+                    'hit_count', hit_count::integer,
+                    'miss_count', miss_count::integer,
+                    'hit_rate', hit_rate,
+                    'avg_abs_error', avg_abs_error,
+                    'avg_pct_error', avg_pct_error,
+                    'avg_confidence', avg_confidence
+                )
+                ORDER BY hit_rate DESC, total_forecasts DESC
+            ), '[]'::json)
+            FROM (
+                SELECT 
+                    stock_symbol,
+                    COUNT(*) as total_forecasts,
+                    COUNT(*) FILTER (WHERE hit_range = true) as hit_count,
+                    COUNT(*) FILTER (WHERE hit_range = false) as miss_count,
+                    CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END as hit_rate,
+                    COALESCE(AVG(abs_error), 0) as avg_abs_error,
+                    COALESCE(AVG(pct_error), 0) as avg_pct_error,
+                    COALESCE(AVG(confidence), 0) as avg_confidence
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                GROUP BY stock_symbol
+                HAVING COUNT(*) >= 3  -- Only stocks with at least 3 forecasts
+            ) stock_stats
+        ),
+        
+        -- By Date Performance (Last 30 days)
+        'by_date', (
+            SELECT COALESCE(json_agg(
+                json_build_object(
+                    'forecast_date', forecast_date::text,
+                    'total_forecasts', total_forecasts::integer,
+                    'hit_count', hit_count::integer,
+                    'hit_rate', hit_rate
+                )
+                ORDER BY forecast_date DESC
+            ), '[]'::json)
+            FROM (
+                SELECT 
+                    forecast_date,
+                    COUNT(*) as total_forecasts,
+                    COUNT(*) FILTER (WHERE hit_range = true) as hit_count,
+                    CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END as hit_rate
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                GROUP BY forecast_date
+            ) date_stats
+            LIMIT 30
+        ),
+        
+        -- Confidence Level Analysis
+        'by_confidence', (
+            SELECT json_build_object(
+                'high_confidence', (
+                    SELECT json_build_object(
+                        'count', COUNT(*)::integer,
+                        'hit_rate', CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                            ELSE 0 
+                        END
+                    )
+                    FROM public.forecast_check_history
+                    WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                    AND confidence >= 70
+                ),
+                'medium_confidence', (
+                    SELECT json_build_object(
+                        'count', COUNT(*)::integer,
+                        'hit_rate', CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                            ELSE 0 
+                        END
+                    )
+                    FROM public.forecast_check_history
+                    WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                    AND confidence >= 50 AND confidence < 70
+                ),
+                'low_confidence', (
+                    SELECT json_build_object(
+                        'count', COUNT(*)::integer,
+                        'hit_rate', CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                            ELSE 0 
+                        END
+                    )
+                    FROM public.forecast_check_history
+                    WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                    AND confidence < 50
+                )
+            )
+        ),
+        
+        -- Recent Forecasts (Last 20)
+        'recent_forecasts', (
+            SELECT COALESCE(json_agg(
+                json_build_object(
+                    'stock_symbol', fch.stock_symbol,
+                    'forecast_date', fch.forecast_date::text,
+                    'predicted_lo', fch.predicted_lo,
+                    'predicted_hi', fch.predicted_hi,
+                    'actual_low', fch.actual_low,
+                    'actual_high', fch.actual_high,
+                    'actual_close', fch.actual_close,
+                    'hit_range', fch.hit_range,
+                    'abs_error', fch.abs_error,
+                    'pct_error', fch.pct_error,
+                    'confidence', fch.confidence,
+                    'stock_name', s.stock_name
+                )
+                ORDER BY fch.forecast_date DESC, fch.created_at DESC
+            ), '[]'::json)
+            FROM public.forecast_check_history fch
+            LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+            WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+            ORDER BY fch.forecast_date DESC, fch.created_at DESC
+            LIMIT 20
+        ),
+        
+        -- Date Range
+        'date_range', json_build_object(
+            'start_date', v_start_date::text,
+            'end_date', v_end_date::text
+        )
+    ) INTO v_result;
+
+    RETURN v_result;
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_accuracy_stats IS 'Returns comprehensive forecast accuracy statistics for analysis page';
+
+-- Step 2: Add permission for forecast accuracy page
+-- Temporarily disable RLS to update system data
+ALTER TABLE public.permissions DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.permissions (action, description) VALUES
+('view:forecast_accuracy', 'View Forecast Accuracy Analysis Page')
+ON CONFLICT (action) DO NOTHING;
+
+ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
+
+-- Step 3: Add translations
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'forecast_accuracy', 'Forecast Accuracy'),
+('en', 'forecast_accuracy_analysis', 'Forecast Accuracy Analysis'),
+('en', 'overall_statistics', 'Overall Statistics'),
+('en', 'total_forecasts', 'Total Forecasts'),
+('en', 'hit_rate', 'Hit Rate'),
+('en', 'accuracy_rate', 'Accuracy Rate'),
+('en', 'average_error', 'Average Error'),
+('en', 'average_confidence', 'Average Confidence'),
+('en', 'by_stock_performance', 'By Stock Performance'),
+('en', 'by_date_performance', 'Performance by Date'),
+('en', 'by_confidence_level', 'By Confidence Level'),
+('en', 'high_confidence', 'High Confidence (≥70%)'),
+('en', 'medium_confidence', 'Medium Confidence (50-70%)'),
+('en', 'low_confidence', 'Low Confidence (<50%)'),
+('en', 'recent_forecasts', 'Recent Forecasts'),
+('en', 'hit', 'Hit'),
+('en', 'miss', 'Miss'),
+('en', 'predicted_range', 'Predicted Range'),
+('en', 'actual_range', 'Actual Range'),
+('en', 'error_percentage', 'Error %'),
+('en', 'date_range', 'Date Range'),
+('en', 'select_date_range', 'Select Date Range'),
+('en', 'forecast_date', 'Forecast Date'),
+('en', 'confidence', 'Confidence'),
+('en', 'forecasts', 'Forecasts'),
+('en', 'result', 'Result'),
+('en', 'no_data_available', 'No Data Available'),
+
+-- Arabic
+('ar', 'forecast_accuracy', 'دقة التوقعات'),
+('ar', 'forecast_accuracy_analysis', 'تحليل دقة التوقعات'),
+('ar', 'overall_statistics', 'الإحصائيات العامة'),
+('ar', 'total_forecasts', 'إجمالي التوقعات'),
+('ar', 'hit_rate', 'معدل الدقة'),
+('ar', 'accuracy_rate', 'معدل الدقة'),
+('ar', 'average_error', 'متوسط الخطأ'),
+('ar', 'average_confidence', 'متوسط الثقة'),
+('ar', 'by_stock_performance', 'الأداء حسب السهم'),
+('ar', 'by_date_performance', 'الأداء حسب التاريخ'),
+('ar', 'by_confidence_level', 'حسب مستوى الثقة'),
+('ar', 'high_confidence', 'ثقة عالية (≥70%)'),
+('ar', 'medium_confidence', 'ثقة متوسطة (50-70%)'),
+('ar', 'low_confidence', 'ثقة منخفضة (<50%)'),
+('ar', 'recent_forecasts', 'التوقعات الأخيرة'),
+('ar', 'hit', 'نجح'),
+('ar', 'miss', 'أخطأ'),
+('ar', 'predicted_range', 'النطاق المتوقع'),
+('ar', 'actual_range', 'النطاق الفعلي'),
+('ar', 'error_percentage', 'نسبة الخطأ %'),
+('ar', 'date_range', 'النطاق الزمني'),
+('ar', 'select_date_range', 'اختر النطاق الزمني'),
+('ar', 'forecast_date', 'تاريخ التوقع'),
+('ar', 'confidence', 'الثقة'),
+('ar', 'forecasts', 'التوقعات'),
+('ar', 'result', 'النتيجة'),
+('ar', 'no_data_available', 'لا توجد بيانات متاحة')
+ON CONFLICT (lang_id, key) DO NOTHING;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Forecast accuracy page setup completed.';
+

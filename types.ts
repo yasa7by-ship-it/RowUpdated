@@ -74,7 +74,7 @@ export type AppSettings = {
 };
 
 // --- App Navigation Types ---
-export type PageName = 'landing' | 'dashboard' | 'users' | 'roles' | 'announcements' | 'system_documentation' | 'stock_analysis' | 'daily_watchlist' | 'stock_management' | 'translations' | 'stock_details' | 'activity_log' | 'user_notes' | 'user_notes_management';
+export type PageName = 'landing' | 'dashboard' | 'users' | 'roles' | 'announcements' | 'system_documentation' | 'stock_analysis' | 'daily_watchlist' | 'stock_management' | 'translations' | 'stock_details' | 'activity_log' | 'user_notes' | 'user_notes_management' | 'forecast_accuracy';
 export type PageState = PageName | { page: 'stock_details'; symbol: string };
 
 

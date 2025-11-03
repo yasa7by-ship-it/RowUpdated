@@ -1,0 +1,63 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Grant Forecast Accuracy Permission to Admin Role
+-- #
+-- # Purpose: Grant 'view:forecast_accuracy' permission to Admin role
+-- # This script is safe to run multiple times (idempotent)
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Temporarily disable RLS to update role permissions
+ALTER TABLE public.role_permissions DISABLE ROW LEVEL SECURITY;
+
+-- Grant permission to Admin role using DO block for safety
+DO $$
+DECLARE
+    admin_role_id uuid;
+    forecast_accuracy_perm_id uuid;
+BEGIN
+    -- Get Admin role ID
+    SELECT id INTO admin_role_id 
+    FROM public.roles 
+    WHERE name = 'Admin';
+    
+    -- Get Forecast Accuracy permission ID
+    SELECT id INTO forecast_accuracy_perm_id 
+    FROM public.permissions 
+    WHERE action = 'view:forecast_accuracy';
+    
+    -- Only proceed if both IDs exist
+    IF admin_role_id IS NOT NULL AND forecast_accuracy_perm_id IS NOT NULL THEN
+        -- Grant permission (ON CONFLICT ensures idempotency)
+        INSERT INTO public.role_permissions (role_id, permission_id)
+        VALUES (admin_role_id, forecast_accuracy_perm_id)
+        ON CONFLICT (role_id, permission_id) DO NOTHING;
+        
+        RAISE NOTICE 'SUCCESS: Forecast accuracy permission granted to Admin role.';
+    ELSE
+        IF admin_role_id IS NULL THEN
+            RAISE WARNING 'Admin role not found. Please ensure the role exists.';
+        END IF;
+        IF forecast_accuracy_perm_id IS NULL THEN
+            RAISE WARNING 'view:forecast_accuracy permission not found. Please run migration_163_create_forecast_accuracy_page.sql.txt first.';
+        END IF;
+    END IF;
+END $$;
+
+-- Re-enable RLS
+ALTER TABLE public.role_permissions ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+-- Verification Query (Optional - uncomment to verify)
+-- SELECT 
+--     r.name as role_name,
+--     p.action as permission_action,
+--     p.description as permission_description
+-- FROM public.role_permissions rp
+-- JOIN public.roles r ON r.id = rp.role_id
+-- JOIN public.permissions p ON p.id = rp.permission_id
+-- WHERE r.name = 'Admin' AND p.action = 'view:forecast_accuracy';
+
