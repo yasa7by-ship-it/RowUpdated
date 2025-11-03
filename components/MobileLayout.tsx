@@ -91,23 +91,24 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({ profile, children, setPage,
 
   // For landing page, use normal layout styling
   const isLandingPage = currentPage === 'landing' || !profile;
+  // Always use TikTok black background for logged-in pages
   const bgColor = isLandingPage ? 'bg-nextrow-bg dark:bg-nextrow-bg-dark' : 'bg-black';
   const textColor = isLandingPage ? 'text-nextrow-text dark:text-gray-200' : 'text-white';
 
   return (
-    <div className={`flex flex-col min-h-screen ${bgColor} ${textColor} overflow-hidden`}>
-      {/* Use Header component for landing page, simple bar for logged in */}
+    <div className={`flex flex-col min-h-screen h-screen ${bgColor} ${textColor} overflow-hidden`}>
+      {/* Use Header component for landing page, TikTok style bar for logged in */}
       {isLandingPage ? (
         <Header profile={profile} setPage={setPage} currentPage={currentPage} />
       ) : (
         profile && (
-          <div className="flex items-center justify-between px-4 py-3 bg-black border-b border-gray-800 sticky top-0 z-50">
+          <div className="flex items-center justify-between px-4 py-3 bg-black border-b border-gray-800 sticky top-0 z-50 shrink-0">
             <div className="flex items-center gap-2">
               <h1 className="text-lg font-bold text-white">{t('site_title')}</h1>
             </div>
             <button
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 rounded-full hover:bg-gray-800 transition-colors"
+              className="p-2 rounded-full hover:bg-gray-800 transition-colors active:scale-95"
               aria-label="Menu"
             >
               {isMenuOpen ? (
@@ -170,8 +171,8 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({ profile, children, setPage,
       <AnnouncementsBanner />
 
       {/* Main Content - TikTok style full screen vertical scroll */}
-      <main className={`flex-1 overflow-y-auto overscroll-y-contain ${isLandingPage ? 'px-4 py-4' : 'px-2 py-2'}`}>
-        <div className="min-h-full">
+      <main className={`flex-1 overflow-y-auto overscroll-y-contain ${isLandingPage ? 'px-4 py-4 bg-nextrow-bg dark:bg-nextrow-bg-dark' : 'px-0 py-0 bg-black'}`} style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className={`min-h-full ${isLandingPage ? '' : 'h-full'}`}>
           {children}
         </div>
       </main>

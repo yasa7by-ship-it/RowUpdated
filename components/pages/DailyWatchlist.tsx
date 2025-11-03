@@ -486,10 +486,9 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
 
     // TikTok style for mobile - Full screen swipeable cards
     if (isMobile) {
-
         return (
             <div 
-                className="relative h-[calc(100vh-180px)] overflow-hidden bg-black"
+                className="relative h-full w-full overflow-hidden bg-black"
                 onTouchStart={onTouchStart}
                 onTouchMove={onTouchMove}
                 onTouchEnd={onTouchEnd}
