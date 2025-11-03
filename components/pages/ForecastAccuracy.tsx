@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabaseClient';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
-import { SpinnerIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon, ArrowUpIcon, ArrowDownIcon, CalendarDaysIcon, BuildingOfficeIcon, StarIcon } from '../icons';
+import { SpinnerIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon, ArrowUpIcon, ArrowDownIcon, StarIcon, SparklesIcon } from '../icons';
 
 // --- Types ---
 interface ForecastAccuracyStats {
@@ -64,11 +64,6 @@ interface AdvancedStats {
   dayOfWeek: any[];
   biasAnalysis: any;
   extremeForecasts: any;
-}
-
-interface Stock {
-  symbol: string;
-  name: string;
 }
 
 // --- Helper Functions ---
@@ -272,15 +267,10 @@ const ForecastAccuracy: React.FC = () => {
   const [stats, setStats] = useState<ForecastAccuracyStats | null>(null);
   const [advancedStats, setAdvancedStats] = useState<AdvancedStats | null>(null);
   const [advancedStatsPerStock, setAdvancedStatsPerStock] = useState<AdvancedStats | null>(null);
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
   const [selectedStock, setSelectedStock] = useState<string>('');
-  const [stocks, setStocks] = useState<Stock[]>([]);
-  const [loadingStocks, setLoadingStocks] = useState(true);
-  const [stockSearchTerm, setStockSearchTerm] = useState('');
-  const [showStockDropdown, setShowStockDropdown] = useState(false);
   const [byStockPage, setByStockPage] = useState(1);
-  const [recentPage, setRecentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFavorites, setShowFavorites] = useState(false);
   const itemsPerPage = 15;
 
   // Map day names from database to translation keys
@@ -290,94 +280,65 @@ const ForecastAccuracy: React.FC = () => {
     return t(dayKey) || dayName;
   };
 
-  // Fetch stocks list
-  useEffect(() => {
-    const fetchStocks = async () => {
-      setLoadingStocks(true);
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('stocks')
-          .select('symbol, name')
-          .order('symbol', { ascending: true });
-        
-        if (fetchError) throw fetchError;
-        setStocks(data || []);
-      } catch (err: any) {
-        console.error('Error fetching stocks:', err);
-      } finally {
-        setLoadingStocks(false);
-      }
-    };
-    fetchStocks();
-  }, []);
-
   // Set default date range (last 90 days)
-  useEffect(() => {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 90);
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
-  }, []);
+  const end = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - 90);
+  const defaultStartDate = start.toISOString().split('T')[0];
+  const defaultEndDate = end.toISOString().split('T')[0];
 
   // Fetch data using separate RPC functions
   useEffect(() => {
-    if (!startDate || !endDate) return;
-
     const fetchData = async () => {
       setLoading(true);
       setError(null);
       
       try {
         // Fetch basic stats
-        const [overallResult, byStockResult, byDateResult, byConfidenceResult, recentResult] = await Promise.all([
+        const [overallResult, byStockResult, byDateResult, byConfidenceResult] = await Promise.all([
           supabase.rpc('get_forecast_accuracy_overall', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_accuracy_by_stock', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_accuracy_by_date', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_accuracy_by_confidence', {
-            p_start_date: startDate,
-            p_end_date: endDate,
-          }),
-          supabase.rpc('get_forecast_accuracy_recent', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
         ]);
 
         // Fetch advanced stats (overall level)
         const [errorRangeResult, rangeSizeResult, timeTrendsResult, dayOfWeekResult, biasResult, extremeResult] = await Promise.all([
           supabase.rpc('get_forecast_error_range_stats', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_range_size_stats', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_time_trends', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_day_of_week_stats', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_bias_analysis', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_extreme_analysis', {
-            p_start_date: startDate,
-            p_end_date: endDate,
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
             p_limit: 10,
           }),
         ]);
@@ -387,7 +348,6 @@ const ForecastAccuracy: React.FC = () => {
         if (byStockResult.error) throw byStockResult.error;
         if (byDateResult.error) throw byDateResult.error;
         if (byConfidenceResult.error) throw byConfidenceResult.error;
-        if (recentResult.error) throw recentResult.error;
 
         // Fetch per-stock advanced stats if stock is selected
         let perStockStats = null;
@@ -395,23 +355,23 @@ const ForecastAccuracy: React.FC = () => {
           const [errorRangePerStock, rangeSizePerStock, timeTrendsPerStock, biasPerStock] = await Promise.all([
             supabase.rpc('get_forecast_error_range_stats_by_stock', {
               p_stock_symbol: selectedStock,
-              p_start_date: startDate,
-              p_end_date: endDate,
+              p_start_date: defaultStartDate,
+              p_end_date: defaultEndDate,
             }),
             supabase.rpc('get_forecast_range_size_stats_by_stock', {
               p_stock_symbol: selectedStock,
-              p_start_date: startDate,
-              p_end_date: endDate,
+              p_start_date: defaultStartDate,
+              p_end_date: defaultEndDate,
             }),
             supabase.rpc('get_forecast_time_trends_by_stock', {
               p_stock_symbol: selectedStock,
-              p_start_date: startDate,
-              p_end_date: endDate,
+              p_start_date: defaultStartDate,
+              p_end_date: defaultEndDate,
             }),
             supabase.rpc('get_forecast_bias_analysis_by_stock', {
               p_stock_symbol: selectedStock,
-              p_start_date: startDate,
-              p_end_date: endDate,
+              p_start_date: defaultStartDate,
+              p_end_date: defaultEndDate,
             }),
           ]);
 
@@ -445,10 +405,10 @@ const ForecastAccuracy: React.FC = () => {
             medium_confidence: { count: 0, hit_rate: 0 },
             low_confidence: { count: 0, hit_rate: 0 },
           },
-          recent_forecasts: recentResult.data || [],
+          recent_forecasts: [],
           date_range: {
-            start_date: startDate,
-            end_date: endDate,
+            start_date: defaultStartDate,
+            end_date: defaultEndDate,
           },
         };
 
@@ -473,30 +433,30 @@ const ForecastAccuracy: React.FC = () => {
     };
 
     fetchData();
-  }, [startDate, endDate, selectedStock]);
+  }, [selectedStock, defaultStartDate, defaultEndDate]);
+
+  // Filter by stock data
+  const filteredByStockData = useMemo(() => {
+    if (!stats?.by_stock) return [];
+    let filtered = stats.by_stock.filter((stock) => {
+      const matchesSearch = searchTerm === '' || 
+                            stock.stock_symbol.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesFavorites = !showFavorites || isFavorite(stock.stock_symbol);
+      return matchesSearch && matchesFavorites;
+    });
+    return filtered;
+  }, [stats?.by_stock, searchTerm, showFavorites, isFavorite]);
 
   // Pagination calculations - MUST be before any conditional returns (React Hooks rule)
   const byStockTotalPages = useMemo(() => {
-    if (!stats?.by_stock) return 0;
-    return Math.ceil(stats.by_stock.length / itemsPerPage);
-  }, [stats?.by_stock]);
+    return Math.ceil(filteredByStockData.length / itemsPerPage);
+  }, [filteredByStockData.length]);
 
   const byStockPaginated = useMemo(() => {
-    if (!stats?.by_stock) return [];
     const startIndex = (byStockPage - 1) * itemsPerPage;
-    return stats.by_stock.slice(startIndex, startIndex + itemsPerPage);
-  }, [stats?.by_stock, byStockPage]);
+    return filteredByStockData.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredByStockData, byStockPage]);
 
-  const recentTotalPages = useMemo(() => {
-    if (!stats?.recent_forecasts) return 0;
-    return Math.ceil(stats.recent_forecasts.length / itemsPerPage);
-  }, [stats?.recent_forecasts]);
-
-  const recentPaginated = useMemo(() => {
-    if (!stats?.recent_forecasts) return [];
-    const startIndex = (recentPage - 1) * itemsPerPage;
-    return stats.recent_forecasts.slice(startIndex, startIndex + itemsPerPage);
-  }, [stats?.recent_forecasts, recentPage]);
 
   // Check permission
   if (!hasPermission('view:forecast_accuracy')) {
@@ -540,108 +500,12 @@ const ForecastAccuracy: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Page Title & Filters */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      {/* Page Title */}
+      <div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
           <ChartBarIcon className="w-8 h-8 text-nextrow-primary" />
           {t('forecast_accuracy_analysis')}
         </h1>
-        
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Stock Selector - Improved with Search */}
-          <div className="relative">
-            <div className="flex items-center gap-2">
-              <BuildingOfficeIcon className="w-5 h-5 text-gray-500" />
-              <div className="relative">
-                <button
-                  onClick={() => setShowStockDropdown(!showStockDropdown)}
-                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm min-w-[200px] text-left bg-white hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors flex items-center justify-between"
-                  disabled={loadingStocks}
-                >
-                  <span>{selectedStock ? stocks.find(s => s.symbol === selectedStock)?.symbol || t('all_stocks') : t('all_stocks')}</span>
-                  <span className="ml-2">▼</span>
-                </button>
-                {showStockDropdown && (
-                  <div className="absolute z-50 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-hidden">
-                    <div className="p-2 border-b border-gray-200 dark:border-gray-700">
-                      <input
-                        type="text"
-                        placeholder={t('search') || 'Search...'}
-                        value={stockSearchTerm}
-                        onChange={(e) => setStockSearchTerm(e.target.value)}
-                        className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        autoFocus
-                      />
-                    </div>
-                    <div className="overflow-y-auto max-h-48">
-                      <button
-                        onClick={() => {
-                          setSelectedStock('');
-                          setShowStockDropdown(false);
-                          setStockSearchTerm('');
-                        }}
-                        className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                          !selectedStock ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''
-                        }`}
-                      >
-                        {t('all_stocks')}
-                      </button>
-                      {stocks
-                        .filter(stock => 
-                          stockSearchTerm === '' || 
-                          stock.symbol.toLowerCase().includes(stockSearchTerm.toLowerCase()) ||
-                          stock.name.toLowerCase().includes(stockSearchTerm.toLowerCase())
-                        )
-                        .map((stock) => (
-                          <button
-                            key={stock.symbol}
-                            onClick={() => {
-                              setSelectedStock(stock.symbol);
-                              setShowStockDropdown(false);
-                              setStockSearchTerm('');
-                            }}
-                            className={`w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
-                              selectedStock === stock.symbol ? 'bg-blue-50 dark:bg-blue-900/20 font-semibold' : ''
-                            }`}
-                          >
-                            <span className="font-semibold">{stock.symbol}</span> - {stock.name}
-                          </button>
-                        ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            {showStockDropdown && (
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => {
-                  setShowStockDropdown(false);
-                  setStockSearchTerm('');
-                }}
-              />
-            )}
-          </div>
-
-          {/* Date Range Selector */}
-          <div className="flex items-center gap-2">
-            <CalendarDaysIcon className="w-5 h-5 text-gray-500" />
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
-            />
-            <span className="text-gray-500">-</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm"
-            />
-          </div>
-        </div>
       </div>
 
       {/* Overall Statistics - KPI Cards - Main Indicators */}
@@ -1003,6 +867,37 @@ const ForecastAccuracy: React.FC = () => {
           <div className="p-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('by_stock_performance')}</h2>
           </div>
+          
+          {/* Search and Filters Tools */}
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="space-y-4">
+              {/* Search */}
+              <div className="relative">
+                <input 
+                  type="text"
+                  placeholder={t('search_by_symbol_or_name')}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
+                />
+                <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
+              
+              {/* Favorites Filter */}
+              <button
+                onClick={() => setShowFavorites(!showFavorites)}
+                className={`w-full px-4 py-3 rounded-md text-sm font-medium transition-all ${
+                  showFavorites 
+                    ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                <StarIcon className={`w-4 h-4 inline mr-1 ${showFavorites ? 'fill-current' : ''}`} />
+                {t('favorites')}
+              </button>
+            </div>
+          </div>
+          
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
@@ -1037,11 +932,20 @@ const ForecastAccuracy: React.FC = () => {
                 {(byStockPaginated || []).map((stock, index) => (
                   <tr 
                     key={stock.stock_symbol} 
-                    className={`group transition-all duration-200 ${
+                    onClick={() => {
+                      if (selectedStock === stock.stock_symbol) {
+                        setSelectedStock(''); // Deselect if clicking the same stock
+                      } else {
+                        setSelectedStock(stock.stock_symbol); // Select the stock
+                      }
+                    }}
+                    className={`group transition-all duration-200 cursor-pointer ${
                       index % 2 === 0 
                         ? 'bg-white dark:bg-gray-800' 
                         : 'bg-gray-50/50 dark:bg-gray-800/50'
-                    } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
+                    } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md ${
+                      selectedStock === stock.stock_symbol ? 'bg-blue-100 dark:bg-blue-900/30 border-l-4 border-blue-500' : ''
+                    }`}
                   >
                     <td className="px-2 py-2 text-center">
                       <button
@@ -1119,7 +1023,7 @@ const ForecastAccuracy: React.FC = () => {
             <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold">{((byStockPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(byStockPage * itemsPerPage, by_stock?.length || 0)}</span> {t('of') || 'of'} <span className="font-semibold">{by_stock?.length || 0}</span>
+                  <span className="font-semibold">{((byStockPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(byStockPage * itemsPerPage, filteredByStockData.length)}</span> {t('of') || 'of'} <span className="font-semibold">{filteredByStockData.length}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1172,151 +1076,6 @@ const ForecastAccuracy: React.FC = () => {
         </div>
       </div>
 
-      {/* Recent Forecasts Table - Same design as StockAnalysis */}
-      <div className="flex justify-center">
-        <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">{t('recent_forecasts')}</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
-                <tr>
-                  <th className="px-2 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
-                    {t('column_symbol')}
-                  </th>
-                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[90px]">
-                    {t('forecast_date')}
-                  </th>
-                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
-                    {t('predicted_range')}
-                  </th>
-                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
-                    {t('actual_range')}
-                  </th>
-                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
-                    {t('result')}
-                  </th>
-                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
-                    {t('error_percentage')}
-                  </th>
-                  <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
-                    {t('confidence')}
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {(recentPaginated || []).map((forecast, index) => (
-                  <tr 
-                    key={`${forecast.stock_symbol}-${forecast.forecast_date}`} 
-                    className={`group transition-all duration-200 ${
-                      index % 2 === 0 
-                        ? 'bg-white dark:bg-gray-800' 
-                        : 'bg-gray-50/50 dark:bg-gray-800/50'
-                    } hover:bg-blue-50 dark:hover:bg-gray-700/70 hover:shadow-md`}
-                  >
-                    <td className="px-2 py-2 whitespace-nowrap text-left">
-                      <div className="text-xs font-semibold text-nextrow-primary hover:text-nextrow-primary/80 transition-colors">
-                        {forecast.stock_symbol}
-                      </div>
-                      {forecast.stock_name && (
-                        <div className="text-[10px] text-gray-500 dark:text-gray-400">{forecast.stock_name}</div>
-                      )}
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-center text-xs">{formatDate(forecast.forecast_date, t)}</td>
-                    <td className="px-2 py-2 whitespace-nowrap text-center text-xs">
-                      <span className="text-blue-600 dark:text-blue-400 font-semibold">
-                        {formatNumber(forecast.predicted_lo, t)} - {formatNumber(forecast.predicted_hi, t)}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-center text-xs">
-                      <span className="text-gray-700 dark:text-gray-300 font-semibold">
-                        {formatNumber(forecast.actual_low, t)} - {formatNumber(forecast.actual_high, t)}
-                      </span>
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-center">
-                      <HitMissBadge hit={forecast.hit_range} t={t} />
-                    </td>
-                    <td className="px-2 py-2 whitespace-nowrap text-center text-xs">
-                    {forecast.pct_error !== null ? (
-                      <span className={forecast.pct_error <= 5 ? 'text-green-600 dark:text-green-400' : forecast.pct_error <= 10 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}>
-                        {formatPercent(forecast.pct_error, t)}
-                      </span>
-                    ) : t('not_available')}
-                    </td>
-                  <td className="px-2 py-2 whitespace-nowrap text-center text-xs">
-                    {forecast.confidence !== null ? formatPercent(forecast.confidence, t) : t('not_available')}
-                  </td>
-                  </tr>
-                ))}
-                {(!recentPaginated || recentPaginated.length === 0) && (
-                  <tr>
-                    <td colSpan={7} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                      {t('no_data_available')}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          {/* Pagination */}
-          {recentTotalPages > 1 && (
-            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  <span className="font-semibold">{((recentPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(recentPage * itemsPerPage, recent_forecasts?.length || 0)}</span> {t('of') || 'of'} <span className="font-semibold">{recent_forecasts?.length || 0}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setRecentPage(prev => Math.max(1, prev - 1))}
-                    disabled={recentPage === 1}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {t('previous')}
-                  </button>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: recentTotalPages }, (_, i) => i + 1).map((page) => {
-                      if (
-                        page === 1 ||
-                        page === recentTotalPages ||
-                        (page >= recentPage - 1 && page <= recentPage + 1)
-                      ) {
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => setRecentPage(page)}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                              recentPage === page
-                                ? 'bg-nextrow-primary text-white'
-                                : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        );
-                      } else if (
-                        page === recentPage - 2 ||
-                        page === recentPage + 2
-                      ) {
-                        return <span key={page} className="text-gray-400 dark:text-gray-600">...</span>;
-                      }
-                      return null;
-                    })}
-                  </div>
-                  <button
-                    onClick={() => setRecentPage(prev => Math.min(recentTotalPages, prev + 1))}
-                    disabled={recentPage === recentTotalPages}
-                    className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {t('next')}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 };
