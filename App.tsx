@@ -1,8 +1,10 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import Layout from './components/Layout';
+import MobileLayout from './components/MobileLayout';
 import AccessDenied from './components/AccessDenied';
 import { useLanguage } from './contexts/LanguageContext';
 import { useAuth } from './contexts/AuthContext';
+import { useIsMobile } from './hooks/useIsMobile';
 import type { PageName, PageState } from './types';
 
 // Lazy load all pages for better performance
@@ -25,6 +27,7 @@ const App: React.FC = () => {
   const { session, loading, hasPermission, profile } = useAuth();
   const [currentPage, setCurrentPage] = useState<PageState>('landing');
   const { direction, t, language } = useLanguage();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     document.documentElement.dir = direction;
@@ -207,10 +210,13 @@ const App: React.FC = () => {
     );
   };
   
+  // Choose layout based on device type
+  const LayoutComponent = isMobile ? MobileLayout : Layout;
+  
   return (
-    <Layout profile={profile} setPage={setCurrentPage} currentPage={currentPageName}>
+    <LayoutComponent profile={profile} setPage={setCurrentPage} currentPage={currentPageName}>
       {renderPage()}
-    </Layout>
+    </LayoutComponent>
   );
 };
 

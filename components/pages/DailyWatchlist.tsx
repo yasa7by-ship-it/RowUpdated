@@ -4,6 +4,7 @@ import type { DailyWatchlistItem, PageState } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAppSettings } from '../../contexts/AppSettingsContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
+import { useIsMobile } from '../../hooks/useIsMobile';
 import { SpinnerIcon, StarIcon, ArrowUpIcon, ArrowDownIcon, ChartBarIcon, SparklesIcon, CalendarDaysIcon } from '../icons';
 
 const formatDate = (dateString: string | null | undefined) => {
@@ -270,6 +271,7 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
     const { t } = useLanguage();
     const { isFavorite, toggleFavorite } = useFavorites();
     const { settings } = useAppSettings();
+    const isMobile = useIsMobile();
     const [data, setData] = useState<DailyWatchlistItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -445,6 +447,139 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
         );
     }
 
+    // TikTok style for mobile
+    if (isMobile) {
+        return (
+            <div className="space-y-3 pb-20">
+                {/* Date Card - Compact for mobile */}
+                <div className="bg-gradient-to-br from-purple-600 to-indigo-600 rounded-2xl p-4 shadow-xl">
+                    <div className="flex items-center justify-between text-white">
+                        <div>
+                            <p className="text-xs font-semibold opacity-90 mb-1">{nextForecastDate ? t('forecasts_for') : t('daily_watchlist')}</p>
+                            {nextForecastDate && (
+                                <p className="text-2xl font-black">{formatDate(nextForecastDate).split('-').join('/')}</p>
+                            )}
+                        </div>
+                        <CalendarDaysIcon className="w-8 h-8 opacity-80" />
+                    </div>
+                    {showDisclaimer && (
+                        <p className={`${disclaimerSize} text-white/70 mt-2 text-xs`}>
+                            {t('disclaimer_educational_purposes')}
+                        </p>
+                    )}
+                </div>
+
+                {/* Search */}
+                <div className="relative">
+                    <input 
+                        type="text"
+                        placeholder={t('search_by_symbol_or_name')}
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 text-white text-sm"
+                    />
+                    <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                </div>
+
+                {/* Favorites Filter */}
+                <button
+                    onClick={() => setShowFavorites(!showFavorites)}
+                    className={`w-full px-4 py-3 rounded-xl text-sm font-medium transition-all ${
+                        showFavorites 
+                            ? 'bg-yellow-400 text-black' 
+                            : 'bg-gray-900 text-gray-300 border border-gray-700'
+                    }`}
+                >
+                    <StarIcon className={`w-4 h-4 inline mr-2 ${showFavorites ? 'fill-current' : ''}`} />
+                    {t('favorites')}
+                </button>
+
+                {/* TikTok Style Cards - Vertical scroll */}
+                {filteredData.length > 0 ? (
+                    <div className="space-y-3">
+                        {paginatedData.map((item) => (
+                            <div
+                                key={item.symbol}
+                                onClick={() => setPage({ page: 'stock_details', symbol: item.symbol })}
+                                className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl p-4 shadow-xl border border-gray-700 active:scale-[0.98] transition-transform"
+                            >
+                                {/* Header */}
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleFavorite(item.symbol);
+                                            }}
+                                            className={`p-2 rounded-lg ${
+                                                isFavorite(item.symbol) 
+                                                    ? 'text-yellow-400 bg-yellow-400/20' 
+                                                    : 'text-gray-400'
+                                            }`}
+                                        >
+                                            <StarIcon className={`w-5 h-5 ${isFavorite(item.symbol) ? 'fill-current' : ''}`} />
+                                        </button>
+                                        <div>
+                                            <p className="text-white font-bold text-lg">{item.symbol}</p>
+                                            <p className="text-gray-400 text-xs">{item.stock_name || 'N/A'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Price & Date */}
+                                <div className="bg-gray-800/50 rounded-xl p-3 mb-2">
+                                    <p className="text-xs text-gray-400 mb-1">{t('column_price_date')}</p>
+                                    <PriceDateDisplay price={item.last_price} date={item.indicator_date} />
+                                </div>
+
+                                {/* Ranges */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2">
+                                        <p className="text-xs text-red-400 mb-1">{t('column_actual_range')}</p>
+                                        <ActualRangeDisplay low={item.actual_low} high={item.actual_high} />
+                                    </div>
+                                    <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-2">
+                                        <p className="text-xs text-green-400 mb-1">{t('column_expected_range')}</p>
+                                        <ExpectedRangeDisplay low={item.next_predicted_lo} high={item.next_predicted_hi} />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center py-16 bg-gray-900 rounded-2xl border border-gray-700">
+                        <SparklesIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                        <p className="text-gray-400">{t('no_results_found')}</p>
+                    </div>
+                )}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-center gap-2 py-4">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            className="px-4 py-2 bg-gray-900 text-white rounded-xl disabled:opacity-50 border border-gray-700"
+                        >
+                            {t('previous')}
+                        </button>
+                        <span className="text-gray-400 text-sm">
+                            {currentPage} / {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            className="px-4 py-2 bg-gray-900 text-white rounded-xl disabled:opacity-50 border border-gray-700"
+                        >
+                            {t('next')}
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
+    }
+
+    // Desktop layout
     return (
         <div className="space-y-6">
             {/* Header - بطاقة توقعات ليوم */}
