@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, memo } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { SpinnerIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon, TrendingUpIcon, TrendingDownIcon, CalendarDaysIcon, BuildingOfficeIcon } from '../icons';
+import { SpinnerIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon, ArrowUpIcon, ArrowDownIcon, CalendarDaysIcon, BuildingOfficeIcon } from '../icons';
 
 // --- Types ---
 interface ForecastAccuracyStats {
@@ -104,7 +104,7 @@ const KPICard: React.FC<{
         {icon && <div className="ml-2">{icon}</div>}
         {trend && trend !== 'neutral' && (
           <div className={`ml-2 ${trend === 'up' ? 'text-green-600' : 'text-red-600'}`}>
-            {trend === 'up' ? <TrendingUpIcon className="w-5 h-5" /> : <TrendingDownIcon className="w-5 h-5" />}
+            {trend === 'up' ? <ArrowUpIcon className="w-5 h-5" /> : <ArrowDownIcon className="w-5 h-5" />}
           </div>
         )}
       </div>
