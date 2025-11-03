@@ -6,7 +6,6 @@ import { useAppSettings } from '../../contexts/AppSettingsContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { SpinnerIcon, StarIcon, ArrowUpIcon, ArrowDownIcon, ChartBarIcon, SparklesIcon, CalendarDaysIcon } from '../icons';
-import SwipeableStockCard from '../SwipeableStockCard';
 
 const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
@@ -428,41 +427,6 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
     const disclaimerColor = settings?.watchlist_disclaimer_color || 'text-gray-500 dark:text-gray-400';
     const disclaimerSize = settings?.watchlist_disclaimer_size || 'text-sm';
 
-    // TikTok mobile swipe state - MUST be before any conditional returns
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [touchStart, setTouchStart] = useState<number | null>(null);
-    const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-    // Swipe detection handlers
-    const minSwipeDistance = 50;
-
-    const onTouchStart = (e: React.TouchEvent) => {
-        setTouchEnd(null);
-        setTouchStart(e.targetTouches[0].clientY);
-    };
-
-    const onTouchMove = (e: React.TouchEvent) => {
-        setTouchEnd(e.targetTouches[0].clientY);
-    };
-
-    const onTouchEnd = () => {
-        if (!touchStart || !touchEnd) return;
-        const distance = touchStart - touchEnd;
-        const isUpSwipe = distance > minSwipeDistance;
-        const isDownSwipe = distance < -minSwipeDistance;
-
-        if (isUpSwipe && currentIndex < filteredData.length - 1) {
-            setCurrentIndex(prev => prev + 1);
-        }
-        if (isDownSwipe && currentIndex > 0) {
-            setCurrentIndex(prev => prev - 1);
-        }
-    };
-
-    // Reset index when filters change
-    useEffect(() => {
-        setCurrentIndex(0);
-    }, [searchTerm, showFavorites, sortBy, sortOrder]);
 
     if (loading) {
         return (
@@ -484,101 +448,7 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
         );
     }
 
-    // TikTok style for mobile - Full screen swipeable cards
-    if (isMobile) {
-        return (
-            <div 
-                className="relative h-full w-full overflow-hidden bg-black"
-                onTouchStart={onTouchStart}
-                onTouchMove={onTouchMove}
-                onTouchEnd={onTouchEnd}
-            >
-                {/* Header - Compact */}
-                <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black via-black/90 to-transparent px-4 pt-4 pb-2">
-                    <div className="flex items-center justify-between mb-2">
-                        <div>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                {nextForecastDate ? t('forecasts_for') : t('daily_watchlist')}
-                            </p>
-                            {nextForecastDate && (
-                                <p className="text-xl font-black text-white">{formatDate(nextForecastDate).split('-').join('/')}</p>
-                            )}
-                        </div>
-                        {/* Search & Filter Icons */}
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setShowFavorites(!showFavorites);
-                                }}
-                                className={`p-2 rounded-xl ${showFavorites ? 'bg-yellow-400/20 text-yellow-400' : 'bg-gray-800 text-gray-400'}`}
-                            >
-                                <StarIcon className={`w-5 h-5 ${showFavorites ? 'fill-current' : ''}`} />
-                            </button>
-                        </div>
-                    </div>
-                    {/* Stock Counter */}
-                    {filteredData.length > 0 && (
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <span className="font-bold text-white">{currentIndex + 1}</span>
-                            <span>/</span>
-                            <span>{filteredData.length}</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Swipeable Cards Container */}
-                {filteredData.length > 0 ? (
-                    <div className="relative h-full pt-20">
-                        {filteredData.map((item, index) => {
-                            const isActive = index === currentIndex;
-                            return (
-                                <div
-                                    key={item.symbol}
-                                    className={`absolute inset-0 transition-all duration-500 ease-out ${
-                                        isActive 
-                                            ? 'opacity-100 scale-100 z-10 translate-y-0' 
-                                            : index < currentIndex
-                                                ? 'opacity-0 scale-95 z-0 -translate-y-full'
-                                                : 'opacity-0 scale-95 z-0 translate-y-full'
-                                    }`}
-                                >
-                                    <SwipeableStockCard
-                                        item={item}
-                                        isFavorite={isFavorite}
-                                        toggleFavorite={toggleFavorite}
-                                        onCardClick={() => setPage({ page: 'stock_details', symbol: item.symbol })}
-                                        t={t}
-                                        formatNumber={formatNumber}
-                                    />
-                                </div>
-                            );
-                        })}
-                        
-                        {/* Swipe Instructions */}
-                        {filteredData.length > 1 && (
-                            <div className="absolute bottom-4 left-0 right-0 z-30 text-center pointer-events-none">
-                                <div className="inline-flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-xl rounded-full border border-gray-700/50">
-                                    <span className="text-gray-400 text-xs font-medium">
-                                        {currentIndex < filteredData.length - 1 ? '⬆️ Swipe up for next' : '⬇️ Swipe down for previous'}
-                                    </span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                            <SparklesIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                            <p className="text-gray-400">{t('no_results_found')}</p>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    }
-
-    // Desktop layout
+    // Standard web layout for all devices (mobile and desktop)
     return (
         <div className="space-y-6">
             {/* Header - بطاقة توقعات ليوم */}

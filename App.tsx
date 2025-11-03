@@ -210,8 +210,9 @@ const App: React.FC = () => {
     );
   };
   
-  // Choose layout based on device type
-  const LayoutComponent = isMobile ? MobileLayout : Layout;
+  // Always use standard Layout (web design) - mobile will show as regular website
+  // const LayoutComponent = isMobile ? MobileLayout : Layout;
+  const LayoutComponent = Layout;
   
   return (
     <LayoutComponent profile={profile} setPage={setCurrentPage} currentPage={currentPageName}>
