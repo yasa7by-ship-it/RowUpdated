@@ -171,7 +171,7 @@ BEGIN
                     'abs_error', fch.abs_error,
                     'pct_error', fch.pct_error,
                     'confidence', fch.confidence,
-                    'stock_name', s.stock_name
+                    'stock_name', s.name
                 )
                 ORDER BY fch.forecast_date DESC, fch.created_at DESC
             ), '[]'::json)
