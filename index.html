@@ -99,10 +99,66 @@
   }
 }
 </script>
+    <!-- Mobile TikTok Style CSS -->
+    <style>
+      /* Early mobile detection - apply black background for mobile devices */
+      @media (max-width: 767px) {
+        body {
+          background-color: #000000 !important;
+          color: #ffffff !important;
+        }
+        #root {
+          background-color: #000000;
+          min-height: 100vh;
+        }
+      }
+      
+      /* Touch device detection */
+      @media (hover: none) and (pointer: coarse) {
+        body {
+          background-color: #000000 !important;
+          color: #ffffff !important;
+        }
+        #root {
+          background-color: #000000;
+          min-height: 100vh;
+        }
+      }
+      
+      /* Prevent horizontal scroll on mobile */
+      body, html {
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      /* TikTok-style smooth scrolling */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
   </head>
   <body class="bg-nextrow-bg dark:bg-nextrow-bg-dark text-nextrow-text dark:text-gray-200">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
+
+    <!-- Early Mobile Detection Script -->
+    <script>
+      // Detect mobile immediately on load
+      (function() {
+        const width = window.innerWidth;
+        const userAgent = navigator.userAgent.toLowerCase();
+        const isMobileDevice = /iphone|ipad|ipod|android|webos|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
+        const isSmallScreen = width < 768;
+        const hasTouchScreen = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        if ((isMobileDevice && isSmallScreen) || (isSmallScreen && hasTouchScreen)) {
+          document.body.classList.add('mobile-device');
+          document.body.style.backgroundColor = '#000000';
+          document.body.style.color = '#ffffff';
+          document.getElementById('root').style.backgroundColor = '#000000';
+        }
+      })();
+    </script>
 
     <!-- PWA Service Worker Registration -->
     <script>
