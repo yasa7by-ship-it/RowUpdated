@@ -302,6 +302,7 @@ const Header: React.FC<{
   const navLinks = [
     { page: 'daily_watchlist', label: t('daily_watchlist'), Icon: EyeIcon, permission: 'view:daily_watchlist', isVisuallyDistinct: false },
     { page: 'stock_analysis', label: t('stock_analysis'), Icon: ChartBarIcon, permission: 'view:stock_analysis', isVisuallyDistinct: false },
+    { page: 'forecast_accuracy', label: t('forecast_accuracy'), Icon: ChartPieIcon, permission: 'view:forecast_accuracy', isVisuallyDistinct: false },
     { page: 'user_notes', label: t('user_notes'), Icon: PencilSquareIcon, permission: 'submit:user_notes', isVisuallyDistinct: true }, // New Link
   ] as const;
   
