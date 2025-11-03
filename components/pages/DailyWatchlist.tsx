@@ -270,7 +270,6 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
     const { t } = useLanguage();
     const { isFavorite, toggleFavorite } = useFavorites();
     const { settings } = useAppSettings();
-    const isMobile = useIsMobile();
     const [data, setData] = useState<DailyWatchlistItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
