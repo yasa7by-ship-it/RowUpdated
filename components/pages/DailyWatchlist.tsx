@@ -6,6 +6,7 @@ import { useAppSettings } from '../../contexts/AppSettingsContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
 import { useIsMobile } from '../../hooks/useIsMobile';
 import { SpinnerIcon, StarIcon, ArrowUpIcon, ArrowDownIcon, ChartBarIcon, SparklesIcon, CalendarDaysIcon } from '../icons';
+import SwipeableStockCard from '../SwipeableStockCard';
 
 const formatDate = (dateString: string | null | undefined) => {
     if (!dateString) return 'N/A';
@@ -427,6 +428,42 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
     const disclaimerColor = settings?.watchlist_disclaimer_color || 'text-gray-500 dark:text-gray-400';
     const disclaimerSize = settings?.watchlist_disclaimer_size || 'text-sm';
 
+    // TikTok mobile swipe state - MUST be before any conditional returns
+    const [currentIndex, setCurrentIndex] = useState(0);
+    const [touchStart, setTouchStart] = useState<number | null>(null);
+    const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+    // Swipe detection handlers
+    const minSwipeDistance = 50;
+
+    const onTouchStart = (e: React.TouchEvent) => {
+        setTouchEnd(null);
+        setTouchStart(e.targetTouches[0].clientY);
+    };
+
+    const onTouchMove = (e: React.TouchEvent) => {
+        setTouchEnd(e.targetTouches[0].clientY);
+    };
+
+    const onTouchEnd = () => {
+        if (!touchStart || !touchEnd) return;
+        const distance = touchStart - touchEnd;
+        const isUpSwipe = distance > minSwipeDistance;
+        const isDownSwipe = distance < -minSwipeDistance;
+
+        if (isUpSwipe && currentIndex < filteredData.length - 1) {
+            setCurrentIndex(prev => prev + 1);
+        }
+        if (isDownSwipe && currentIndex > 0) {
+            setCurrentIndex(prev => prev - 1);
+        }
+    };
+
+    // Reset index when filters change
+    useEffect(() => {
+        setCurrentIndex(0);
+    }, [searchTerm, showFavorites, sortBy, sortOrder]);
+
     if (loading) {
         return (
             <div className="flex justify-center items-center h-full min-h-[400px]">
@@ -447,157 +484,95 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
         );
     }
 
-    // TikTok style for mobile - Enhanced visual identity
+    // TikTok style for mobile - Full screen swipeable cards
     if (isMobile) {
+
         return (
-            <div className="space-y-4 pb-24">
-                {/* Date Card - TikTok Style with Glow Effect */}
-                <div className="relative bg-gradient-to-br from-purple-600 via-indigo-600 to-pink-600 rounded-3xl p-6 shadow-2xl overflow-hidden">
-                    {/* Animated gradient overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-[shimmer_3s_ease-in-out_infinite]"></div>
-                    {/* Glow effect */}
-                    <div className="absolute -inset-1 bg-gradient-to-br from-purple-400 via-indigo-400 to-pink-400 rounded-3xl blur-xl opacity-50"></div>
-                    
-                    <div className="relative flex items-center justify-between text-white z-10">
+            <div 
+                className="relative h-[calc(100vh-180px)] overflow-hidden bg-black"
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+            >
+                {/* Header - Compact */}
+                <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black via-black/90 to-transparent px-4 pt-4 pb-2">
+                    <div className="flex items-center justify-between mb-2">
                         <div>
-                            <p className="text-sm font-bold opacity-90 mb-2 tracking-wide">{nextForecastDate ? t('forecasts_for') : t('daily_watchlist')}</p>
+                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                {nextForecastDate ? t('forecasts_for') : t('daily_watchlist')}
+                            </p>
                             {nextForecastDate && (
-                                <p className="text-4xl font-black drop-shadow-lg">{formatDate(nextForecastDate).split('-').join('/')}</p>
+                                <p className="text-xl font-black text-white">{formatDate(nextForecastDate).split('-').join('/')}</p>
                             )}
                         </div>
-                        <div className="relative">
-                            <CalendarDaysIcon className="w-12 h-12 opacity-90 drop-shadow-xl" />
-                            <div className="absolute inset-0 bg-white/20 blur-2xl rounded-full"></div>
+                        {/* Search & Filter Icons */}
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setShowFavorites(!showFavorites);
+                                }}
+                                className={`p-2 rounded-xl ${showFavorites ? 'bg-yellow-400/20 text-yellow-400' : 'bg-gray-800 text-gray-400'}`}
+                            >
+                                <StarIcon className={`w-5 h-5 ${showFavorites ? 'fill-current' : ''}`} />
+                            </button>
                         </div>
                     </div>
-                    {showDisclaimer && (
-                        <p className={`${disclaimerSize} text-white/80 mt-3 text-xs relative z-10`}>
-                            {t('disclaimer_educational_purposes')}
-                        </p>
+                    {/* Stock Counter */}
+                    {filteredData.length > 0 && (
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <span className="font-bold text-white">{currentIndex + 1}</span>
+                            <span>/</span>
+                            <span>{filteredData.length}</span>
+                        </div>
                     )}
                 </div>
 
-                {/* Search - TikTok Style */}
-                <div className="relative">
-                    <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-indigo-500/20 rounded-2xl blur-xl"></div>
-                    <input 
-                        type="text"
-                        placeholder={t('search_by_symbol_or_name')}
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="relative w-full pl-12 pr-4 py-4 bg-black/80 backdrop-blur-xl border-2 border-gray-700/50 rounded-2xl focus:outline-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/30 text-white text-base font-medium placeholder:text-gray-500 transition-all"
-                    />
-                    <SparklesIcon className="absolute left-4 top-1/2 transform -translate-y-1/2 w-6 h-6 text-purple-400" />
-                </div>
-
-                {/* Favorites Filter - TikTok Style */}
-                <button
-                    onClick={() => setShowFavorites(!showFavorites)}
-                    className={`w-full px-5 py-4 rounded-2xl text-base font-bold transition-all transform active:scale-95 ${
-                        showFavorites 
-                            ? 'bg-gradient-to-r from-yellow-400 to-orange-500 text-black shadow-2xl shadow-yellow-500/50' 
-                            : 'bg-gray-900/80 backdrop-blur-xl text-gray-200 border-2 border-gray-700/50 hover:border-purple-500/50'
-                    }`}
-                >
-                    <StarIcon className={`w-5 h-5 inline mr-2 ${showFavorites ? 'fill-current' : ''}`} />
-                    {t('favorites')}
-                </button>
-
-                {/* TikTok Style Cards - Full Screen Vertical Scroll with Enhanced Design */}
+                {/* Swipeable Cards Container */}
                 {filteredData.length > 0 ? (
-                    <div className="space-y-4">
-                        {paginatedData.map((item, index) => (
-                            <div
-                                key={item.symbol}
-                                onClick={() => setPage({ page: 'stock_details', symbol: item.symbol })}
-                                className="group relative bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 rounded-3xl p-5 shadow-2xl border-2 border-gray-700/50 active:scale-[0.97] transition-all duration-300 hover:border-purple-500/50 overflow-hidden"
-                            >
-                                {/* Glow effect on hover */}
-                                <div className="absolute -inset-1 bg-gradient-to-r from-purple-500/0 via-purple-500/20 to-indigo-500/0 opacity-0 group-hover:opacity-100 blur-xl transition-opacity duration-300 rounded-3xl"></div>
-                                
-                                {/* Animated shimmer */}
-                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 rounded-3xl"></div>
-
-                                <div className="relative z-10">
-                                    {/* Header */}
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    toggleFavorite(item.symbol);
-                                                }}
-                                                className={`p-3 rounded-xl transition-all transform active:scale-90 ${
-                                                    isFavorite(item.symbol) 
-                                                        ? 'text-yellow-400 bg-yellow-400/20 shadow-lg shadow-yellow-400/30' 
-                                                        : 'text-gray-400 hover:text-yellow-400 hover:bg-yellow-400/10'
-                                                }`}
-                                            >
-                                                <StarIcon className={`w-6 h-6 ${isFavorite(item.symbol) ? 'fill-current' : ''}`} />
-                                            </button>
-                                            <div>
-                                                <p className="text-white font-black text-2xl mb-1">{item.symbol}</p>
-                                                <p className="text-gray-400 text-sm font-medium">{item.stock_name || 'N/A'}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Price & Date - Enhanced */}
-                                    <div className="bg-gradient-to-r from-gray-800/80 to-gray-700/80 backdrop-blur-sm rounded-2xl p-4 mb-3 border border-gray-600/30">
-                                        <p className="text-xs text-gray-400 mb-2 font-semibold uppercase tracking-wider">{t('column_price_date')}</p>
-                                        <div className="text-white">
-                                            <PriceDateDisplay price={item.last_price} date={item.indicator_date} />
-                                        </div>
-                                    </div>
-
-                                    {/* Ranges - TikTok Style with Glow */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="relative bg-gradient-to-br from-red-500/20 to-red-600/10 border-2 border-red-500/40 rounded-2xl p-4 backdrop-blur-sm overflow-hidden">
-                                            <div className="absolute inset-0 bg-red-500/10 blur-xl"></div>
-                                            <div className="relative z-10">
-                                                <p className="text-xs text-red-400 mb-2 font-bold uppercase tracking-wide">{t('column_actual_range')}</p>
-                                                <ActualRangeDisplay low={item.actual_low} high={item.actual_high} />
-                                            </div>
-                                        </div>
-                                        <div className="relative bg-gradient-to-br from-green-500/20 to-green-600/10 border-2 border-green-500/40 rounded-2xl p-4 backdrop-blur-sm overflow-hidden">
-                                            <div className="absolute inset-0 bg-green-500/10 blur-xl"></div>
-                                            <div className="relative z-10">
-                                                <p className="text-xs text-green-400 mb-2 font-bold uppercase tracking-wide">{t('column_expected_range')}</p>
-                                                <ExpectedRangeDisplay low={item.next_predicted_lo} high={item.next_predicted_hi} />
-                                            </div>
-                                        </div>
-                                    </div>
+                    <div className="relative h-full pt-20">
+                        {filteredData.map((item, index) => {
+                            const isActive = index === currentIndex;
+                            return (
+                                <div
+                                    key={item.symbol}
+                                    className={`absolute inset-0 transition-all duration-500 ease-out ${
+                                        isActive 
+                                            ? 'opacity-100 scale-100 z-10 translate-y-0' 
+                                            : index < currentIndex
+                                                ? 'opacity-0 scale-95 z-0 -translate-y-full'
+                                                : 'opacity-0 scale-95 z-0 translate-y-full'
+                                    }`}
+                                >
+                                    <SwipeableStockCard
+                                        item={item}
+                                        isFavorite={isFavorite}
+                                        toggleFavorite={toggleFavorite}
+                                        onCardClick={() => setPage({ page: 'stock_details', symbol: item.symbol })}
+                                        t={t}
+                                        formatNumber={formatNumber}
+                                    />
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Swipe Instructions */}
+                        {filteredData.length > 1 && (
+                            <div className="absolute bottom-4 left-0 right-0 z-30 text-center pointer-events-none">
+                                <div className="inline-flex items-center gap-2 px-4 py-2 bg-black/60 backdrop-blur-xl rounded-full border border-gray-700/50">
+                                    <span className="text-gray-400 text-xs font-medium">
+                                        {currentIndex < filteredData.length - 1 ? '⬆️ Swipe up for next' : '⬇️ Swipe down for previous'}
+                                    </span>
                                 </div>
                             </div>
-                        ))}
+                        )}
                     </div>
                 ) : (
-                    <div className="text-center py-16 bg-gray-900 rounded-2xl border border-gray-700">
-                        <SparklesIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                        <p className="text-gray-400">{t('no_results_found')}</p>
-                    </div>
-                )}
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex items-center justify-center gap-2 py-4">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                            disabled={currentPage === 1}
-                            className="px-4 py-2 bg-gray-900 text-white rounded-xl disabled:opacity-50 border border-gray-700"
-                        >
-                            {t('previous')}
-                        </button>
-                        <span className="text-gray-400 text-sm">
-                            {currentPage} / {totalPages}
-                        </span>
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                            disabled={currentPage === totalPages}
-                            className="px-4 py-2 bg-gray-900 text-white rounded-xl disabled:opacity-50 border border-gray-700"
-                        >
-                            {t('next')}
-                        </button>
+                    <div className="flex items-center justify-center h-full">
+                        <div className="text-center">
+                            <SparklesIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+                            <p className="text-gray-400">{t('no_results_found')}</p>
+                        </div>
                     </div>
                 )}
             </div>
