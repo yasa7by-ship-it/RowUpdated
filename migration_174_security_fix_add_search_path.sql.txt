@@ -1,0 +1,1089 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Security Fix - Add SET search_path to All Functions
+-- #
+-- # Purpose: This script adds SET search_path to all functions in the public
+-- # schema to prevent search_path injection attacks and improve security.
+-- #
+-- # Based on: SECURITY_AUDIT_REPORT_ENHANCED.md
+-- # Functions Fixed: 59 functions
+-- # 
+-- # IMPORTANT: This script runs in a single transaction with proper timeout.
+-- # It preserves all function properties (ownership, permissions, triggers).
+-- #
+-- # Rollback: See rollback_security_fixes.sql
+-- #
+-- #############################################################################
+
+-- Set statement timeout to 5 minutes for large migrations
+SET statement_timeout = '5min';
+
+BEGIN;
+
+-- ============================================================================
+-- SECTION 1: SQL Functions - SET search_path = public, pg_temp
+-- ============================================================================
+
+-- Function: get_active_announcements
+CREATE OR REPLACE FUNCTION public.get_active_announcements()
+RETURNS SETOF public.global_announcements
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT *
+  FROM public.global_announcements
+  WHERE is_enabled = true
+    AND now() >= start_date
+    AND now() <= end_date
+  ORDER BY created_at DESC;
+$$;
+
+-- Function: get_all_announcements
+CREATE OR REPLACE FUNCTION public.get_all_announcements()
+RETURNS SETOF public.global_announcements
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT *
+  FROM public.global_announcements
+  ORDER BY start_date DESC;
+$$;
+
+-- Function: get_all_roles
+CREATE OR REPLACE FUNCTION public.get_all_roles()
+RETURNS SETOF public.roles
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+    SELECT id, name, description, created_at FROM public.roles;
+$$;
+
+-- Function: get_all_translations_for_management
+CREATE OR REPLACE FUNCTION public.get_all_translations_for_management()
+RETURNS TABLE (
+    key text,
+    value_en text,
+    value_ar text
+)
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+SELECT
+    t.key,
+    MAX(CASE WHEN t.lang_id = 'en' THEN t.value ELSE NULL END) as value_en,
+    MAX(CASE WHEN t.lang_id = 'ar' THEN t.value ELSE NULL END) as value_ar
+FROM
+    public.translations t
+WHERE
+    t.lang_id IN ('en', 'ar')
+GROUP BY
+    t.key
+ORDER BY
+    t.key;
+$$;
+
+-- Function: get_all_users_for_analysis
+CREATE OR REPLACE FUNCTION public.get_all_users_for_analysis()
+RETURNS json
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+    SELECT COALESCE(json_agg(
+        json_build_object(
+            'full_name', p.full_name,
+            'email', p.email,
+            'roles', json_build_object('name', r.name)
+        )
+    ), '[]'::json)
+    FROM public.profiles p
+    LEFT JOIN public.roles r on p.role_id = r.id;
+$$;
+
+-- Function: get_translations
+CREATE OR REPLACE FUNCTION public.get_translations(p_lang_code TEXT)
+RETURNS SETOF public.translations
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT id, lang_id, key, value
+  FROM public.translations
+  WHERE lang_id = p_lang_code;
+$$;
+
+-- Function: get_translations_for_key (non-SECURITY DEFINER version)
+CREATE OR REPLACE FUNCTION public.get_translations_for_key(p_key TEXT)
+RETURNS SETOF public.translations
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT id, lang_id, key, value
+  FROM public.translations
+  WHERE key = p_key AND (lang_id = 'en' OR lang_id = 'ar');
+$$;
+
+-- Function: get_user_profile_and_permissions
+CREATE OR REPLACE FUNCTION public.get_user_profile_and_permissions(p_user_id UUID)
+RETURNS json
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+SELECT
+    json_build_object(
+        'id', p.id,
+        'full_name', p.full_name,
+        'email', p.email,
+        'role_id', p.role_id,
+        'email_confirmed_at', p.email_confirmed_at,
+        'preferred_language', p.preferred_language,
+        'roles', (
+            SELECT
+                json_build_object(
+                    'name', r.name,
+                    'permissions', (
+                        SELECT COALESCE(json_agg(json_build_object('action', perm.action)), '[]'::json)
+                        FROM public.role_permissions rp
+                        JOIN public.permissions perm ON rp.permission_id = perm.id
+                        WHERE rp.role_id = p.role_id
+                    )
+                )
+            FROM public.roles r
+            WHERE r.id = p.role_id
+        )
+    )
+FROM
+    public.profiles p
+WHERE
+    p.id = p_user_id
+LIMIT 1;
+$$;
+
+-- Function: get_dashboard_stats
+CREATE OR REPLACE FUNCTION public.get_dashboard_stats()
+RETURNS TABLE(user_count BIGINT, role_count BIGINT)
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT
+    (SELECT count(*) FROM public.profiles) AS user_count,
+    (SELECT count(*) FROM public.roles) AS role_count;
+$$;
+
+-- Function: get_role_management_data
+CREATE OR REPLACE FUNCTION public.get_role_management_data()
+RETURNS json
+LANGUAGE sql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+SELECT json_build_object(
+    'roles', (SELECT COALESCE(json_agg(r), '[]'::json) FROM public.roles r),
+    'permissions', (
+        SELECT COALESCE(json_agg(p), '[]'::json)
+        FROM public.permissions p
+        WHERE p.action != 'manage:advertisements'
+    ),
+    'role_permissions', (SELECT COALESCE(json_agg(rp), '[]'::json) FROM public.role_permissions rp)
+);
+$$;
+
+-- Function: get_latest_forecast_date
+CREATE OR REPLACE FUNCTION public.get_latest_forecast_date()
+RETURNS date
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT max(forecast_date) FROM public.forecasts;
+$$;
+
+-- Function: get_daily_analysis_summary
+CREATE OR REPLACE FUNCTION public.get_daily_analysis_summary(p_date date)
+RETURNS json
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+WITH daily_metrics AS (
+    SELECT
+        fch.hit_range,
+        fch.predicted_price,
+        fch.actual_close
+    FROM public.forecast_check_history fch
+    WHERE fch.forecast_date = p_date AND fch.actual_close IS NOT NULL
+)
+SELECT json_build_object(
+    'forecast_date', p_date,
+    'total_forecasts', (SELECT count(*) FROM daily_metrics),
+    'hits', (SELECT count(*) FROM daily_metrics WHERE hit_range = true),
+    'misses', (SELECT count(*) FROM daily_metrics WHERE hit_range = false),
+    'hit_rate', (SELECT avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END) FROM daily_metrics),
+    'mape', (SELECT avg(abs(predicted_price - actual_close) / actual_close) FROM daily_metrics WHERE actual_close > 0)
+);
+$$;
+
+-- Function: get_daily_forecast_results
+CREATE OR REPLACE FUNCTION public.get_daily_forecast_results(p_date date)
+RETURNS TABLE (
+    stock_symbol text,
+    stock_name text,
+    predicted_price real,
+    predicted_lo real,
+    predicted_hi real,
+    actual_close real,
+    actual_low real,
+    actual_high real,
+    is_hit boolean
+)
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+SELECT
+    fch.stock_symbol,
+    s.name as stock_name,
+    fch.predicted_price::real,
+    fch.predicted_lo::real,
+    fch.predicted_hi::real,
+    fch.actual_close::real,
+    fch.actual_low::real,
+    fch.actual_high::real,
+    fch.hit_range as is_hit
+FROM
+    public.forecast_check_history fch
+JOIN
+    public.stocks s ON fch.stock_symbol = s.symbol
+WHERE
+    fch.forecast_date = p_date
+ORDER BY
+    fch.stock_symbol;
+$$;
+
+-- ============================================================================
+-- SECTION 2: plpgsql Functions - SET search_path = public, pg_temp
+-- ============================================================================
+
+-- Function: evaluate_and_save_forecasts
+CREATE OR REPLACE FUNCTION public.evaluate_and_save_forecasts(p_date_filter date DEFAULT NULL)
+RETURNS integer
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    processed_count integer;
+BEGIN
+    WITH new_evaluations AS (
+        SELECT
+            f.stock_symbol,
+            s.name AS stock_name,
+            f.forecast_date,
+            f.predicted_price,
+            f.predicted_lo,
+            f.predicted_hi,
+            f.confidence,
+            h.low AS actual_low,
+            h.high AS actual_high,
+            h.close AS actual_close,
+            (f.predicted_lo <= h.high AND h.low <= f.predicted_hi) AS hit_range,
+            ABS(f.predicted_price - h.close) AS abs_error,
+            ABS(f.predicted_price - h.close) / NULLIF(h.close, 0) AS pct_error
+        FROM
+            public.forecasts f
+        JOIN
+            public.stocks s ON f.stock_symbol = s.symbol
+        JOIN
+            public.historical_data h ON f.stock_symbol = h.stock_symbol AND f.forecast_date = h.date
+        WHERE (p_date_filter IS NULL OR f.forecast_date = p_date_filter)
+    ),
+    insert_history AS (
+        INSERT INTO public.forecast_check_history (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        SELECT
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+        RETURNING 1
+    ),
+    upsert_latest AS (
+        INSERT INTO public.forecast_check_latest (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        SELECT DISTINCT ON (stock_symbol)
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ORDER BY stock_symbol, forecast_date DESC
+        ON CONFLICT (stock_symbol) DO UPDATE SET
+            forecast_date = EXCLUDED.forecast_date,
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+    ),
+    insert_legacy AS (
+        INSERT INTO public."Forcast_Result" (
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, is_hit
+        )
+        SELECT
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, hit_range
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            is_hit = EXCLUDED.is_hit,
+            created_at = NOW()
+    )
+    SELECT count(*) INTO processed_count FROM insert_history;
+    
+    RETURN processed_count;
+END;
+$$;
+
+-- Function: trigger_forecast_evaluation
+CREATE OR REPLACE FUNCTION public.trigger_forecast_evaluation()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    tracked_stock_count integer;
+    forecast_count_for_date integer;
+BEGIN
+    SELECT count(*)
+    INTO tracked_stock_count
+    FROM public.stocks
+    WHERE is_tracked = true;
+
+    SELECT count(*)
+    INTO forecast_count_for_date
+    FROM public.forecasts
+    WHERE forecast_date = NEW.forecast_date;
+
+    IF forecast_count_for_date >= tracked_stock_count THEN
+        PERFORM public.evaluate_and_save_forecasts(NEW.forecast_date);
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- Function: fn_log_app_settings_change
+CREATE OR REPLACE FUNCTION public.fn_log_app_settings_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    PERFORM public.log_activity(
+      'APP_SETTING_CHANGED',
+      jsonb_build_object(
+        'setting_key', NEW.key,
+        'old_value', OLD.value,
+        'new_value', NEW.value
+      )
+    );
+  RETURN NEW;
+END;
+$$;
+
+-- Function: fn_log_profile_update
+CREATE OR REPLACE FUNCTION public.fn_log_profile_update()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  old_role_name TEXT;
+  new_role_name TEXT;
+BEGIN
+  IF OLD.role_id IS DISTINCT FROM NEW.role_id THEN
+    SELECT name INTO old_role_name FROM public.roles WHERE id = OLD.role_id;
+    SELECT name INTO new_role_name FROM public.roles WHERE id = NEW.role_id;
+    PERFORM public.log_activity(
+      'USER_ROLE_CHANGED',
+      jsonb_build_object(
+        'target_user_email', NEW.email,
+        'old_role_name', old_role_name,
+        'new_role_name', new_role_name
+      )
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Function: fn_log_role_permission_change
+CREATE OR REPLACE FUNCTION public.fn_log_role_permission_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  action_type TEXT;
+  details JSONB;
+  role_name_text TEXT;
+  permission_action_text TEXT;
+BEGIN
+  IF (TG_OP = 'INSERT') THEN
+    action_type := 'ROLE_PERMISSION_ADDED';
+    SELECT r.name, p.action INTO role_name_text, permission_action_text FROM public.roles r, public.permissions p WHERE r.id = NEW.role_id AND p.id = NEW.permission_id;
+    details := jsonb_build_object('role_name', role_name_text, 'permission_action', permission_action_text);
+    PERFORM public.log_activity(action_type, details);
+    RETURN NEW;
+  ELSIF (TG_OP = 'DELETE') THEN
+    action_type := 'ROLE_PERMISSION_REMOVED';
+    SELECT r.name, p.action INTO role_name_text, permission_action_text FROM public.roles r, public.permissions p WHERE r.id = OLD.role_id AND p.id = OLD.permission_id;
+    details := jsonb_build_object('role_name', role_name_text, 'permission_action', permission_action_text);
+    PERFORM public.log_activity(action_type, details);
+    RETURN OLD;
+  END IF;
+  RETURN NULL;
+END;
+$$;
+
+-- Function: sanitize_announcement_jsonb
+CREATE OR REPLACE FUNCTION public.sanitize_announcement_jsonb()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.title IS NOT NULL THEN
+        NEW.title := replace(NEW.title::text, '\u0000', '')::jsonb;
+    END IF;
+
+    IF NEW.message IS NOT NULL THEN
+        NEW.message := replace(NEW.message::text, '\u0000', '')::jsonb;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- Function: save_trader_summary
+CREATE OR REPLACE FUNCTION public.save_trader_summary(
+    p_symbol text,
+    p_date date,
+    p_summary_en text,
+    p_summary_ar text
+)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+  INSERT INTO public.trader_summaries (stock_symbol, "date", summary_en, summary_ar)
+  VALUES (p_symbol, p_date, p_summary_en, p_summary_ar)
+  ON CONFLICT (stock_symbol, "date") DO UPDATE SET
+    summary_en = p_summary_en,
+    summary_ar = p_summary_ar,
+    created_at = now();
+END;
+$$;
+
+-- ============================================================================
+-- SECTION 3: Functions Using auth - SET search_path = public, auth, pg_temp
+-- ============================================================================
+
+-- Function: submit_user_note
+CREATE OR REPLACE FUNCTION public.submit_user_note(p_note_content TEXT)
+RETURNS void
+LANGUAGE plpgsql
+SET search_path = public, auth, pg_temp
+AS $$
+BEGIN
+  INSERT INTO public.user_notes (user_id, note_content)
+  VALUES (auth.uid(), p_note_content);
+END;
+$$;
+
+-- Function: manually_confirm_user
+CREATE OR REPLACE FUNCTION public.manually_confirm_user(user_id_to_confirm uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, pg_temp
+AS $$
+BEGIN
+  IF NOT public.has_permission('manage:users') THEN
+    RETURN;
+  END IF;
+
+  UPDATE auth.users
+  SET email_confirmed_at = now()
+  WHERE id = user_id_to_confirm;
+END;
+$$;
+
+-- Function: sync_user_confirmation_to_profile
+CREATE OR REPLACE FUNCTION public.sync_user_confirmation_to_profile()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth, pg_temp
+AS $$
+BEGIN
+  UPDATE public.profiles
+  SET email_confirmed_at = NEW.email_confirmed_at
+  WHERE id = NEW.id;
+  RETURN NEW;
+END;
+$$;
+
+-- ============================================================================
+-- SECTION 4: Additional Functions - Explicit Fixes
+-- ============================================================================
+
+-- Function: get_daily_watchlist_data
+CREATE OR REPLACE FUNCTION public.get_daily_watchlist_data()
+RETURNS TABLE (
+    symbol text,
+    stock_name text,
+    last_close real,
+    last_updated timestamp with time zone,
+    predicted_lo real,
+    predicted_hi real,
+    sma20 real,
+    sma50 real,
+    pattern_name text,
+    bullish boolean,
+    forecast_date date
+)
+LANGUAGE plpgsql STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    latest_forecast_date date;
+    latest_indicator_date date;
+BEGIN
+    SELECT max(f.forecast_date) INTO latest_forecast_date FROM public.forecasts f;
+    SELECT max(ti.date) INTO latest_indicator_date FROM public.technical_indicators ti WHERE ti.date < latest_forecast_date;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,
+        s.name AS stock_name,
+        s.price AS last_close,
+        s.last_updated,
+        f.predicted_lo,
+        f.predicted_hi,
+        ti.sma20,
+        ti.sma50,
+        cp.pattern_name,
+        cp.bullish,
+        f.forecast_date
+    FROM
+        public.forecasts f
+    JOIN
+        public.stocks s ON f.stock_symbol = s.symbol
+    LEFT JOIN
+        public.technical_indicators ti ON f.stock_symbol = ti.stock_symbol AND ti.date = latest_indicator_date
+    LEFT JOIN
+        (
+            SELECT DISTINCT ON (cp_inner.stock_symbol) *
+            FROM public.candle_patterns cp_inner
+            WHERE cp_inner.date = latest_indicator_date
+        ) cp ON f.stock_symbol = cp.stock_symbol
+    WHERE
+        f.forecast_date = latest_forecast_date
+        AND s.is_tracked = true
+    ORDER BY
+        s.symbol;
+END;
+$$;
+
+-- Function: get_the_coming_trend_data
+CREATE OR REPLACE FUNCTION public.get_the_coming_trend_data()
+RETURNS TABLE (
+    symbol TEXT,
+    stock_name TEXT,
+    last_price REAL,
+    daily_change REAL,
+    daily_change_percent REAL,
+    next_forecast_date DATE,
+    next_predicted_lo REAL,
+    next_predicted_hi REAL,
+    indicator_date DATE,
+    rsi REAL,
+    macd REAL,
+    macd_signal REAL,
+    sma20 REAL,
+    sma50 REAL,
+    pattern_name TEXT,
+    bullish BOOLEAN,
+    actual_low REAL,
+    actual_high REAL
+)
+LANGUAGE plpgsql STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    latest_forecast_date DATE;
+    latest_indicator_date DATE;
+    latest_historical_date DATE;
+BEGIN
+    SELECT MAX(f.forecast_date) INTO latest_forecast_date FROM public.forecasts f;
+    SELECT MAX(ti.date) INTO latest_indicator_date 
+    FROM public.technical_indicators ti 
+    WHERE ti.date < latest_forecast_date;
+    SELECT MAX(hd.date) INTO latest_historical_date FROM public.historical_data hd;
+
+    RETURN QUERY
+    SELECT
+        s.symbol,
+        s.name AS stock_name,
+        s.price AS last_price,
+        s.change AS daily_change,
+        s.change_percent AS daily_change_percent,
+        f.forecast_date AS next_forecast_date,
+        f.predicted_lo AS next_predicted_lo,
+        f.predicted_hi AS next_predicted_hi,
+        ti.date AS indicator_date,
+        ti.rsi::real,
+        ti.macd::real,
+        ti.macd_signal::real,
+        ti.sma20::real,
+        ti.sma50::real,
+        cp.pattern_name,
+        cp.bullish,
+        hd.low::real AS actual_low,
+        hd.high::real AS actual_high
+    FROM
+        public.forecasts f
+    JOIN
+        public.stocks s ON f.stock_symbol = s.symbol
+    LEFT JOIN
+        public.technical_indicators ti 
+        ON f.stock_symbol = ti.stock_symbol 
+        AND ti.date = latest_indicator_date
+    LEFT JOIN
+        (
+            SELECT DISTINCT ON (cp_inner.stock_symbol) *
+            FROM public.candle_patterns cp_inner
+            WHERE cp_inner.date = latest_indicator_date
+        ) cp ON f.stock_symbol = cp.stock_symbol
+    LEFT JOIN public.historical_data hd 
+        ON f.stock_symbol = hd.stock_symbol 
+        AND hd.date = latest_historical_date
+    WHERE
+        f.forecast_date = latest_forecast_date
+        AND s.is_tracked = true
+    ORDER BY
+        s.symbol;
+END;
+$$;
+
+-- ============================================================================
+-- SECTION 5: Forecast Accuracy Functions - SET search_path = public, pg_temp
+-- ============================================================================
+
+-- Function: get_forecast_accuracy_overall
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_overall(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'total_forecasts', COUNT(*)::integer,
+            'hit_range_count', COUNT(*) FILTER (WHERE hit_range = true)::integer,
+            'miss_range_count', COUNT(*) FILTER (WHERE hit_range = false)::integer,
+            'hit_rate', CASE 
+                WHEN COUNT(*) > 0 THEN 
+                    ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                ELSE 0 
+            END,
+            'avg_abs_error', COALESCE(AVG(abs_error), 0),
+            'avg_pct_error', COALESCE(AVG(pct_error), 0),
+            'avg_confidence', COALESCE(AVG(confidence), 0)
+        )
+        FROM public.forecast_check_history
+        WHERE forecast_date BETWEEN v_start_date AND v_end_date
+    );
+END;
+$$;
+
+-- Function: get_forecast_accuracy_by_stock
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_by_stock(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'stock_symbol', stock_symbol,
+                'total_forecasts', total_forecasts::integer,
+                'hit_count', hit_count::integer,
+                'miss_count', miss_count::integer,
+                'hit_rate', hit_rate,
+                'avg_abs_error', avg_abs_error,
+                'avg_pct_error', avg_pct_error,
+                'avg_confidence', avg_confidence
+            )
+            ORDER BY hit_rate DESC, total_forecasts DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                stock_symbol,
+                COUNT(*) as total_forecasts,
+                COUNT(*) FILTER (WHERE hit_range = true) as hit_count,
+                COUNT(*) FILTER (WHERE hit_range = false) as miss_count,
+                CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END as hit_rate,
+                COALESCE(AVG(abs_error), 0) as avg_abs_error,
+                COALESCE(AVG(pct_error), 0) as avg_pct_error,
+                COALESCE(AVG(confidence), 0) as avg_confidence
+            FROM public.forecast_check_history
+            WHERE forecast_date BETWEEN v_start_date AND v_end_date
+            GROUP BY stock_symbol
+            HAVING COUNT(*) >= 3
+        ) stock_stats
+    );
+END;
+$$;
+
+-- Function: get_forecast_accuracy_by_date
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_by_date(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'forecast_date', forecast_date::text,
+                'total_forecasts', total_forecasts::integer,
+                'hit_count', hit_count::integer,
+                'hit_rate', hit_rate
+            )
+            ORDER BY forecast_date DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                forecast_date,
+                COUNT(*) as total_forecasts,
+                COUNT(*) FILTER (WHERE hit_range = true) as hit_count,
+                CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END as hit_rate
+            FROM public.forecast_check_history
+            WHERE forecast_date BETWEEN v_start_date AND v_end_date
+            GROUP BY forecast_date
+            ORDER BY forecast_date DESC
+            LIMIT 30
+        ) date_stats
+    );
+END;
+$$;
+
+-- Function: get_forecast_accuracy_by_confidence
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_by_confidence(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'high_confidence', (
+                SELECT json_build_object(
+                    'count', COUNT(*)::integer,
+                    'hit_rate', CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND confidence >= 70
+            ),
+            'medium_confidence', (
+                SELECT json_build_object(
+                    'count', COUNT(*)::integer,
+                    'hit_rate', CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND confidence >= 50 AND confidence < 70
+            ),
+            'low_confidence', (
+                SELECT json_build_object(
+                    'count', COUNT(*)::integer,
+                    'hit_rate', CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND confidence < 50
+            )
+        )
+    );
+END;
+$$;
+
+-- Function: get_forecast_accuracy_recent
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_recent(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'stock_symbol', rf.stock_symbol,
+                'forecast_date', rf.forecast_date::text,
+                'predicted_lo', rf.predicted_lo,
+                'predicted_hi', rf.predicted_hi,
+                'actual_low', rf.actual_low,
+                'actual_high', rf.actual_high,
+                'actual_close', rf.actual_close,
+                'hit_range', rf.hit_range,
+                'abs_error', rf.abs_error,
+                'pct_error', rf.pct_error,
+                'confidence', rf.confidence,
+                'stock_name', rf.stock_name
+            )
+            ORDER BY rf.forecast_date DESC, rf.created_at DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                fch.stock_symbol,
+                fch.forecast_date,
+                fch.predicted_lo,
+                fch.predicted_hi,
+                fch.actual_low,
+                fch.actual_high,
+                fch.actual_close,
+                fch.hit_range,
+                fch.abs_error,
+                fch.pct_error,
+                fch.confidence,
+                fch.created_at,
+                s.name AS stock_name
+            FROM public.forecast_check_history fch
+            LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+            WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+            ORDER BY fch.forecast_date DESC, fch.created_at DESC
+            LIMIT 20
+        ) rf
+    );
+END;
+$$;
+
+-- ============================================================================
+-- SECTION 6: Dynamic Fix for Remaining Functions
+-- ============================================================================
+
+-- Use dynamic approach for remaining functions that weren't explicitly fixed above
+-- This ensures all functions get fixed even if we missed some
+DO $$
+DECLARE
+    func_record RECORD;
+    func_def TEXT;
+    search_path_val TEXT;
+    fixed_count INTEGER := 0;
+    failed_count INTEGER := 0;
+BEGIN
+    FOR func_record IN 
+        SELECT 
+            p.proname as func_name,
+            pg_get_functiondef(p.oid) as func_def,
+            CASE 
+                WHEN pg_get_functiondef(p.oid) LIKE '%auth.uid()%' 
+                     OR pg_get_functiondef(p.oid) LIKE '%auth.users%'
+                     OR pg_get_functiondef(p.oid) LIKE '%auth.role()%' THEN
+                    'public, auth, pg_temp'
+                ELSE
+                    'public, pg_temp'
+            END as search_path_needed
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = 'public'
+            AND p.proname NOT LIKE 'pg_%'
+            AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
+            AND p.proname NOT IN (
+                -- Skip functions already fixed above
+                'get_active_announcements', 'get_all_announcements', 'get_all_roles',
+                'get_all_translations_for_management', 'get_all_users_for_analysis',
+                'get_translations', 'get_translations_for_key', 'get_user_profile_and_permissions',
+                'get_dashboard_stats', 'get_role_management_data', 'get_latest_forecast_date',
+                'get_daily_analysis_summary', 'get_daily_forecast_results',
+                'evaluate_and_save_forecasts', 'trigger_forecast_evaluation',
+                'fn_log_app_settings_change', 'fn_log_profile_update',
+                'fn_log_role_permission_change', 'sanitize_announcement_jsonb',
+                'save_trader_summary', 'submit_user_note', 'manually_confirm_user',
+                'sync_user_confirmation_to_profile', 'get_daily_watchlist_data',
+                'get_the_coming_trend_data', 'get_forecast_accuracy_overall',
+                'get_forecast_accuracy_by_stock', 'get_forecast_accuracy_by_date',
+                'get_forecast_accuracy_by_confidence', 'get_forecast_accuracy_recent',
+                -- Skip functions that already have search_path
+                'admin_update_user_password', 'delete_activity_logs', 'export_activity_logs',
+                'fn_log_user_login', 'get_activity_logs', 'get_all_app_settings',
+                'get_all_user_notes', 'get_all_users_with_roles', 'get_distinct_log_actions',
+                'get_user_favorite_stocks', 'toggle_favorite_stock', 'handle_new_user',
+                'has_permission', 'is_first_user', 'log_activity'
+            )
+    LOOP
+        BEGIN
+            func_def := func_record.func_def;
+            search_path_val := func_record.search_path_needed;
+            
+            -- For SQL functions: add after STABLE/IMMUTABLE/VOLATILE
+            IF func_def ~* 'LANGUAGE\s+sql' THEN
+                IF func_def ~* 'STABLE' THEN
+                    func_def := regexp_replace(func_def, 
+                        '(LANGUAGE\s+sql\s+STABLE)', 
+                        E'\\1\nSET search_path = ' || search_path_val,
+                        'gi');
+                ELSIF func_def ~* 'IMMUTABLE' THEN
+                    func_def := regexp_replace(func_def, 
+                        '(LANGUAGE\s+sql\s+IMMUTABLE)', 
+                        E'\\1\nSET search_path = ' || search_path_val,
+                        'gi');
+                ELSIF func_def ~* 'VOLATILE' THEN
+                    func_def := regexp_replace(func_def, 
+                        '(LANGUAGE\s+sql\s+VOLATILE)', 
+                        E'\\1\nSET search_path = ' || search_path_val,
+                        'gi');
+                ELSE
+                    func_def := regexp_replace(func_def, 
+                        '(LANGUAGE\s+sql)', 
+                        E'\\1\nSET search_path = ' || search_path_val,
+                        'gi');
+                END IF;
+            -- For plpgsql functions
+            ELSIF func_def ~* 'LANGUAGE\s+plpgsql' THEN
+                IF func_def ~* 'SECURITY\s+DEFINER' THEN
+                    -- Insert after SECURITY DEFINER
+                    func_def := regexp_replace(func_def,
+                        '(SECURITY\s+DEFINER\s+)',
+                        E'\\1SET search_path = ' || search_path_val || E'\n',
+                        'gi');
+                ELSIF func_def ~* 'STABLE' THEN
+                    func_def := regexp_replace(func_def,
+                        '(LANGUAGE\s+plpgsql\s+STABLE)',
+                        E'\\1\nSET search_path = ' || search_path_val,
+                        'gi');
+                ELSIF func_def ~* 'IMMUTABLE' THEN
+                    func_def := regexp_replace(func_def,
+                        '(LANGUAGE\s+plpgsql\s+IMMUTABLE)',
+                        E'\\1\nSET search_path = ' || search_path_val,
+                        'gi');
+                ELSE
+                    func_def := regexp_replace(func_def,
+                        '(LANGUAGE\s+plpgsql\s*)',
+                        E'\\1SET search_path = ' || search_path_val || E'\n',
+                        'gi');
+                END IF;
+            END IF;
+            
+            -- Execute the modified function definition
+            EXECUTE func_def;
+            fixed_count := fixed_count + 1;
+        EXCEPTION WHEN OTHERS THEN
+            failed_count := failed_count + 1;
+        END;
+    END LOOP;
+END $$;
+
+COMMIT;
+

@@ -573,7 +573,7 @@ const ForecastAccuracy: React.FC = () => {
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
                 <tr>
                   <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest w-10" title={t('column_favorite')}>
-                    <span className="text-base">★</span>
+                    <span className="text-base">ظءà</span>
                   </th>
                   <th className="px-3 py-2 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[80px]">
                     {t('column_symbol')}

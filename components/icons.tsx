@@ -87,3 +87,5 @@ export const GoogleIcon: React.FC<{className?: string}> = ({className}) => (
         l6.19,5.238C39.99,36.623,44,30.651,44,24C44,22.659,43.862,21.35,43.611,20.083z"/>
     </svg>
 );
+export const TrendingUpIcon: React.FC<{className?: string}> = ({className}) => <svg {...iconProps} className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814 2.314c1.195.834 2.598 1.251 4.027 1.251H21.75M21.75 9.75v4.5m0-4.5h-4.5M2.25 18v-4.5m0 4.5h4.5" /></svg>;
+export const TrendingDownIcon: React.FC<{className?: string}> = ({className}) => <svg {...iconProps} className={className}><path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6L9 12.75l4.306-4.307a11.95 11.95 0 015.814-2.314c1.195-.834 2.598-1.251 4.027-1.251H21.75M21.75 14.25v4.5m0-4.5h-4.5M2.25 6v4.5m0-4.5h4.5" /></svg>;

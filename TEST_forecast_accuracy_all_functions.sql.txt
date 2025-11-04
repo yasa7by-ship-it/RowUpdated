@@ -1,0 +1,417 @@
+-- #############################################################################
+-- #
+-- # TEST SCRIPT: Test All Forecast Accuracy RPC Functions
+-- #
+-- # Purpose: Test all RPC functions used in ForecastAccuracy page
+-- #          - Overall level functions (default view)
+-- #          - Per-stock level functions (when stock is selected)
+-- #
+-- # Usage: Execute this script in Supabase SQL Editor
+-- #        Results will be displayed as SELECT queries
+-- #
+-- #############################################################################
+
+-- ============================================
+-- TEST 1: Basic Stats - Overall
+-- ============================================
+SELECT 
+    'TEST 1: get_forecast_accuracy_overall' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_accuracy_overall'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_accuracy_overall(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 2: Basic Stats - By Stock
+-- ============================================
+SELECT 
+    'TEST 2: get_forecast_accuracy_by_stock' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_accuracy_by_stock'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    json_array_length(
+        COALESCE(
+            get_forecast_accuracy_by_stock(
+                (CURRENT_DATE - INTERVAL '90 days')::date,
+                CURRENT_DATE::date
+            ),
+            '[]'::json
+        )
+    ) AS number_of_rows,
+    get_forecast_accuracy_by_stock(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 3: Basic Stats - By Date
+-- ============================================
+SELECT 
+    'TEST 3: get_forecast_accuracy_by_date' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_accuracy_by_date'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    json_array_length(
+        COALESCE(
+            get_forecast_accuracy_by_date(
+                (CURRENT_DATE - INTERVAL '90 days')::date,
+                CURRENT_DATE::date
+            ),
+            '[]'::json
+        )
+    ) AS number_of_rows,
+    get_forecast_accuracy_by_date(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 4: Basic Stats - By Confidence
+-- ============================================
+SELECT 
+    'TEST 4: get_forecast_accuracy_by_confidence' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_accuracy_by_confidence'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_accuracy_by_confidence(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 5: Basic Stats - Recent Forecasts
+-- ============================================
+SELECT 
+    'TEST 5: get_forecast_accuracy_recent' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_accuracy_recent'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    json_array_length(
+        COALESCE(
+            get_forecast_accuracy_recent(
+                (CURRENT_DATE - INTERVAL '90 days')::date,
+                CURRENT_DATE::date
+            ),
+            '[]'::json
+        )
+    ) AS number_of_rows,
+    get_forecast_accuracy_recent(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 6: Advanced Stats - Error Range
+-- ============================================
+SELECT 
+    'TEST 6: get_forecast_error_range_stats' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_error_range_stats'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_error_range_stats(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 7: Advanced Stats - Range Size
+-- ============================================
+SELECT 
+    'TEST 7: get_forecast_range_size_stats' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_range_size_stats'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_range_size_stats(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 8: Advanced Stats - Time Trends
+-- ============================================
+SELECT 
+    'TEST 8: get_forecast_time_trends' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_time_trends'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_time_trends(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 9: Advanced Stats - Day of Week
+-- ============================================
+SELECT 
+    'TEST 9: get_forecast_day_of_week_stats' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_day_of_week_stats'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    json_array_length(
+        COALESCE(
+            get_forecast_day_of_week_stats(
+                (CURRENT_DATE - INTERVAL '90 days')::date,
+                CURRENT_DATE::date
+            ),
+            '[]'::json
+        )
+    ) AS number_of_rows,
+    get_forecast_day_of_week_stats(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 10: Advanced Stats - Bias Analysis
+-- ============================================
+SELECT 
+    'TEST 10: get_forecast_bias_analysis' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_bias_analysis'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_bias_analysis(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result;
+
+-- ============================================
+-- TEST 11: Advanced Stats - Extreme Forecasts
+-- ============================================
+SELECT 
+    'TEST 11: get_forecast_extreme_analysis' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_extreme_analysis'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    get_forecast_extreme_analysis(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date,
+        10
+    ) AS result;
+
+-- ============================================
+-- TEST 12: Per-Stock - Error Range Stats
+-- ============================================
+SELECT 
+    'TEST 12: get_forecast_error_range_stats_by_stock' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_error_range_stats_by_stock'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    COALESCE(
+        (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+        (SELECT symbol FROM public.stocks LIMIT 1)
+    ) AS test_stock_symbol,
+    get_forecast_error_range_stats_by_stock(
+        COALESCE(
+            (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+            (SELECT symbol FROM public.stocks LIMIT 1)
+        ),
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result
+WHERE COALESCE(
+    (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+    (SELECT symbol FROM public.stocks LIMIT 1)
+) IS NOT NULL;
+
+-- ============================================
+-- TEST 13: Per-Stock - Range Size Stats
+-- ============================================
+SELECT 
+    'TEST 13: get_forecast_range_size_stats_by_stock' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_range_size_stats_by_stock'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    COALESCE(
+        (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+        (SELECT symbol FROM public.stocks LIMIT 1)
+    ) AS test_stock_symbol,
+    get_forecast_range_size_stats_by_stock(
+        COALESCE(
+            (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+            (SELECT symbol FROM public.stocks LIMIT 1)
+        ),
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result
+WHERE COALESCE(
+    (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+    (SELECT symbol FROM public.stocks LIMIT 1)
+) IS NOT NULL;
+
+-- ============================================
+-- TEST 14: Per-Stock - Time Trends
+-- ============================================
+SELECT 
+    'TEST 14: get_forecast_time_trends_by_stock' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_time_trends_by_stock'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    COALESCE(
+        (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+        (SELECT symbol FROM public.stocks LIMIT 1)
+    ) AS test_stock_symbol,
+    get_forecast_time_trends_by_stock(
+        COALESCE(
+            (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+            (SELECT symbol FROM public.stocks LIMIT 1)
+        ),
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result
+WHERE COALESCE(
+    (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+    (SELECT symbol FROM public.stocks LIMIT 1)
+) IS NOT NULL;
+
+-- ============================================
+-- TEST 15: Per-Stock - Bias Analysis
+-- ============================================
+SELECT 
+    'TEST 15: get_forecast_bias_analysis_by_stock' AS test_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT 1 FROM information_schema.routines 
+            WHERE routine_schema = 'public' 
+            AND routine_name = 'get_forecast_bias_analysis_by_stock'
+        ) THEN 'Function exists ✓'
+        ELSE 'Function does NOT exist ✗'
+    END AS function_status,
+    COALESCE(
+        (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+        (SELECT symbol FROM public.stocks LIMIT 1)
+    ) AS test_stock_symbol,
+    get_forecast_bias_analysis_by_stock(
+        COALESCE(
+            (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+            (SELECT symbol FROM public.stocks LIMIT 1)
+        ),
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result
+WHERE COALESCE(
+    (SELECT symbol FROM public.stocks WHERE symbol = 'AAPL' LIMIT 1),
+    (SELECT symbol FROM public.stocks LIMIT 1)
+) IS NOT NULL;
+
+-- ============================================
+-- SUMMARY: Overall Statistics (Human-Readable)
+-- ============================================
+SELECT 
+    'SUMMARY: Overall Statistics' AS summary_type,
+    (overall.result->>'total_forecasts')::int AS total_forecasts,
+    ROUND((overall.result->>'hit_rate')::numeric, 2) AS hit_rate_percent,
+    ROUND((overall.result->>'avg_pct_error')::numeric, 2) AS avg_error_percent,
+    ROUND((overall.result->>'avg_confidence')::numeric, 2) AS avg_confidence_percent,
+    overall.result AS full_result
+FROM (
+    SELECT get_forecast_accuracy_overall(
+        (CURRENT_DATE - INTERVAL '90 days')::date,
+        CURRENT_DATE::date
+    ) AS result
+) overall;
+
+-- ============================================
+-- VERIFICATION: Check All Functions Exist
+-- ============================================
+SELECT 
+    'VERIFICATION: All Functions' AS check_type,
+    routine_name AS function_name,
+    routine_type,
+    data_type AS return_type
+FROM information_schema.routines
+WHERE routine_schema = 'public'
+    AND routine_name LIKE 'get_forecast%'
+ORDER BY routine_name;
+
+-- ============================================
+-- VERIFICATION: Data Availability
+-- ============================================
+SELECT 
+    'VERIFICATION: Data Availability' AS check_type,
+    COUNT(*) AS total_forecast_checks,
+    MIN(forecast_date) AS earliest_date,
+    MAX(forecast_date) AS latest_date,
+    COUNT(DISTINCT stock_symbol) AS unique_stocks
+FROM public.forecast_check_history;
+
+-- ============================================
+-- VERIFICATION: Available Stocks
+-- ============================================
+SELECT 
+    'VERIFICATION: Available Stocks' AS check_type,
+    COUNT(*) AS total_stocks,
+    STRING_AGG(symbol, ', ' ORDER BY symbol) AS stock_symbols
+FROM public.stocks;

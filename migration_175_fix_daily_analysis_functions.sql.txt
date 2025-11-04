@@ -1,0 +1,82 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Fix get_daily_analysis_summary and get_daily_forecast_results
+-- #
+-- # Purpose: This script fixes the functions that reference the deprecated
+-- # audit_forecast_metrics table. These functions now use forecast_check_history
+-- # which is the current table for storing forecast evaluation results.
+-- #
+-- # Issue: The functions were referencing audit_forecast_metrics which was
+-- # dropped in migration_057 and replaced with forecast_check_history.
+-- #
+-- # This script is safe to run multiple times.
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Function: get_daily_analysis_summary
+-- Fixed: Changed from audit_forecast_metrics to forecast_check_history
+CREATE OR REPLACE FUNCTION public.get_daily_analysis_summary(p_date date)
+RETURNS json
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+WITH daily_metrics AS (
+    SELECT
+        fch.hit_range,
+        fch.predicted_price,
+        fch.actual_close
+    FROM public.forecast_check_history fch
+    WHERE fch.forecast_date = p_date AND fch.actual_close IS NOT NULL
+)
+SELECT json_build_object(
+    'forecast_date', p_date,
+    'total_forecasts', (SELECT count(*) FROM daily_metrics),
+    'hits', (SELECT count(*) FROM daily_metrics WHERE hit_range = true),
+    'misses', (SELECT count(*) FROM daily_metrics WHERE hit_range = false),
+    'hit_rate', (SELECT avg(CASE WHEN hit_range = true THEN 1 ELSE 0 END) FROM daily_metrics),
+    'mape', (SELECT avg(abs(predicted_price - actual_close) / actual_close) FROM daily_metrics WHERE actual_close > 0)
+);
+$$;
+
+-- Function: get_daily_forecast_results
+-- Fixed: Changed from audit_forecast_metrics to forecast_check_history
+-- Also removed unnecessary LEFT JOIN with historical_data since actual_low/actual_high are in forecast_check_history
+CREATE OR REPLACE FUNCTION public.get_daily_forecast_results(p_date date)
+RETURNS TABLE (
+    stock_symbol text,
+    stock_name text,
+    predicted_price real,
+    predicted_lo real,
+    predicted_hi real,
+    actual_close real,
+    actual_low real,
+    actual_high real,
+    is_hit boolean
+)
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+SELECT
+    fch.stock_symbol,
+    s.name as stock_name,
+    fch.predicted_price::real,
+    fch.predicted_lo::real,
+    fch.predicted_hi::real,
+    fch.actual_close::real,
+    fch.actual_low::real,
+    fch.actual_high::real,
+    fch.hit_range as is_hit
+FROM
+    public.forecast_check_history fch
+JOIN
+    public.stocks s ON fch.stock_symbol = s.symbol
+WHERE
+    fch.forecast_date = p_date
+ORDER BY
+    fch.stock_symbol;
+$$;
+
+COMMIT;
+

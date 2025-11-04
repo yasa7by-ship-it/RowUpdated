@@ -1,0 +1,153 @@
+-- #############################################################################
+-- #
+-- # SECURITY AUDIT: Proposed Changes for Public Schema Functions
+-- #
+-- # Purpose: This script analyzes functions in the 'public' schema and
+-- #          proposes security fixes for missing_search_path and security_definer issues
+-- #
+-- # NOTE: This is a PROPOSAL script. Review the results before applying changes.
+-- #       Functions in other schemas (auth, extensions, graphql, storage, vault)
+-- #       are Supabase system functions and should NOT be modified.
+-- #
+-- #############################################################################
+
+-- ============================================================================
+-- PART 1: List all functions with missing_search_path in public schema
+-- ============================================================================
+
+SELECT 
+    'PROPOSED CHANGE' as action_type,
+    'ADD SET search_path' as change_type,
+    p.proname::text as function_name,
+    pg_get_functiondef(p.oid) as current_definition,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%' THEN
+            'ALREADY HAS SECURITY DEFINER - Review if needed'
+        ELSE
+            'NEEDS: SET search_path = public, security_invoker;'
+    END as proposed_change
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%'
+    AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
+ORDER BY p.proname;
+
+-- ============================================================================
+-- PART 2: List all functions with SECURITY DEFINER in public schema
+-- ============================================================================
+
+SELECT 
+    'REVIEW REQUIRED' as action_type,
+    'SECURITY DEFINER REVIEW' as change_type,
+    p.proname::text as function_name,
+    pg_get_functiondef(p.oid) as current_definition,
+    CASE 
+        WHEN p.proname IN (
+            'admin_update_user_password',
+            'log_activity',
+            'has_permission',
+            'get_user_favorite_stocks',
+            'toggle_favorite_stock',
+            'handle_new_user',
+            'is_first_user',
+            'manually_confirm_user'
+        ) THEN
+            'SECURITY DEFINER REQUIRED - Keep as is (runs with elevated privileges for security)'
+        ELSE
+            'CONSIDER: Change to SECURITY INVOKER if possible, or add SET search_path = public'
+    END as proposed_change
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%'
+    AND pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%'
+ORDER BY p.proname;
+
+-- ============================================================================
+-- PART 3: Detailed Analysis by Function Category
+-- ============================================================================
+
+-- Forecast Accuracy Functions (missing_search_path)
+SELECT 
+    'FORECAST_ACCURACY' as category,
+    p.proname::text as function_name,
+    'ADD: SET search_path = public, security_invoker;' as proposed_change,
+    'LOW RISK' as risk_level,
+    'These functions fetch forecast data - adding search_path is safe' as notes
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname LIKE 'get_forecast_accuracy%'
+    AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
+ORDER BY p.proname;
+
+-- Forecast Analysis Functions (missing_search_path)
+SELECT 
+    'FORECAST_ANALYSIS' as category,
+    p.proname::text as function_name,
+    'ADD: SET search_path = public, security_invoker;' as proposed_change,
+    'LOW RISK' as risk_level,
+    'These functions analyze forecast data - adding search_path is safe' as notes
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND (p.proname LIKE 'get_forecast_%' OR p.proname LIKE 'get_daily_%' OR p.proname LIKE 'get_stock_%')
+    AND p.proname NOT LIKE 'get_forecast_accuracy%'
+    AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
+ORDER BY p.proname;
+
+-- Security Functions (SECURITY DEFINER - Review carefully)
+SELECT 
+    'SECURITY_FUNCTIONS' as category,
+    p.proname::text as function_name,
+    CASE 
+        WHEN p.proname IN ('has_permission', 'log_activity', 'admin_update_user_password') THEN
+            'KEEP SECURITY DEFINER - Required for security checks'
+        ELSE
+            'REVIEW: Consider if SECURITY DEFINER is necessary'
+    END as proposed_change,
+    'HIGH RISK' as risk_level,
+    'These functions run with elevated privileges - review carefully' as notes
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%'
+ORDER BY p.proname;
+
+-- Other Functions (missing_search_path)
+SELECT 
+    'OTHER_FUNCTIONS' as category,
+    p.proname::text as function_name,
+    'ADD: SET search_path = public, security_invoker;' as proposed_change,
+    'MEDIUM RISK' as risk_level,
+    'Review each function individually before adding search_path' as notes
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%'
+    AND p.proname NOT LIKE 'get_forecast%'
+    AND p.proname NOT LIKE 'get_daily%'
+    AND p.proname NOT LIKE 'get_stock%'
+    AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
+    AND pg_get_functiondef(p.oid) NOT LIKE '%SECURITY DEFINER%'
+ORDER BY p.proname;
+
+-- ============================================================================
+-- PART 4: Summary of Proposed Changes
+-- ============================================================================
+
+SELECT 
+    'SUMMARY' as report_type,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%' 
+                     AND pg_get_functiondef(p.oid) NOT LIKE '%SECURITY DEFINER%') as functions_needing_search_path,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%') as functions_with_security_definer,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%' 
+                     AND pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%') as security_definer_needing_search_path,
+    COUNT(*) as total_public_functions
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%';
+
+

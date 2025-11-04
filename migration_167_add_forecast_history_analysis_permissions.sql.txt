@@ -1,0 +1,62 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Permissions and Translations for Forecast History Analysis Page
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Step 1: Add permission for forecast history analysis page
+ALTER TABLE public.permissions DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.permissions (action, description) VALUES
+('view:forecast_history_analysis', 'View Forecast History Analysis Page')
+ON CONFLICT (action) DO NOTHING;
+
+ALTER TABLE public.permissions ENABLE ROW LEVEL SECURITY;
+
+-- Step 2: Add translations
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'forecast_history_analysis', 'Forecast History Analysis'),
+('en', 'total_records', 'Total Records'),
+('en', 'unique_stocks', 'Unique Stocks'),
+('en', 'total_days', 'Days'),
+('en', 'confidence_distribution', 'Confidence Distribution'),
+('en', 'error_distribution', 'Error Distribution'),
+('en', 'min_error', 'Min Error'),
+('en', 'max_error', 'Max Error'),
+('en', 'weekly_trend', 'Weekly Trend'),
+('en', 'monthly_trend', 'Monthly Trend'),
+('en', 'last', 'Last'),
+('en', 'weeks', 'weeks'),
+('en', 'months', 'months'),
+('en', 'best_performers', 'Best Performers'),
+('en', 'worst_performers', 'Worst Performers'),
+
+-- Arabic
+('ar', 'forecast_history_analysis', 'تحليل تاريخ التوقعات'),
+('ar', 'total_records', 'إجمالي السجلات'),
+('ar', 'unique_stocks', 'أسهم فريدة'),
+('ar', 'total_days', 'أيام'),
+('ar', 'confidence_distribution', 'توزيع الثقة'),
+('ar', 'error_distribution', 'توزيع الخطأ'),
+('ar', 'min_error', 'أقل خطأ'),
+('ar', 'max_error', 'أعلى خطأ'),
+('ar', 'weekly_trend', 'الاتجاه الأسبوعي'),
+('ar', 'monthly_trend', 'الاتجاه الشهري'),
+('ar', 'last', 'آخر'),
+('ar', 'weeks', 'أسابيع'),
+('ar', 'months', 'أشهر'),
+('ar', 'best_performers', 'أفضل الأداء'),
+('ar', 'worst_performers', 'أسوأ الأداء')
+ON CONFLICT (lang_id, key) DO NOTHING;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Forecast history analysis permissions and translations added.';
+

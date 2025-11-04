@@ -1,0 +1,106 @@
+-- #############################################################################
+-- #
+-- # REPORT: Before/After Security Fix
+-- #
+-- # Purpose: Generate reports showing functions before and after the security fix
+-- #
+-- #############################################################################
+
+-- ============================================================================
+-- BEFORE MIGRATION REPORT
+-- ============================================================================
+-- Run this BEFORE executing migration_174_security_fix_add_search_path.sql.txt
+-- Save the output to: BEFORE_SECURITY_FIX_REPORT.txt
+
+SELECT 
+    'BEFORE' as report_type,
+    p.proname as function_name,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path%' THEN 'HAS search_path'
+        ELSE 'MISSING search_path'
+    END as search_path_status,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%' THEN 'SECURITY DEFINER'
+        ELSE 'SECURITY INVOKER'
+    END as security_type,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%auth.uid()%' 
+             OR pg_get_functiondef(p.oid) LIKE '%auth.users%' THEN 'USES auth'
+        ELSE 'NO auth'
+    END as auth_usage,
+    pg_get_functiondef(p.oid) as function_definition
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%'
+ORDER BY 
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path%' THEN 1
+        ELSE 0
+    END,
+    p.proname;
+
+-- ============================================================================
+-- AFTER MIGRATION REPORT
+-- ============================================================================
+-- Run this AFTER executing migration_174_security_fix_add_search_path.sql.txt
+-- Save the output to: AFTER_SECURITY_FIX_REPORT.txt
+
+SELECT 
+    'AFTER' as report_type,
+    p.proname as function_name,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path%' THEN 'HAS search_path'
+        ELSE 'MISSING search_path'
+    END as search_path_status,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path = public, pg_temp%' THEN 'public, pg_temp'
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path = public, auth, pg_temp%' THEN 'public, auth, pg_temp'
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path = public, extensions, auth, pg_temp%' THEN 'public, extensions, auth, pg_temp'
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path = auth, public, pg_temp%' THEN 'auth, public, pg_temp'
+        WHEN pg_get_functiondef(p.oid) LIKE '%SET search_path%' THEN 'OTHER'
+        ELSE 'NONE'
+    END as search_path_value,
+    CASE 
+        WHEN pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%' THEN 'SECURITY DEFINER'
+        ELSE 'SECURITY INVOKER'
+    END as security_type,
+    pg_get_functiondef(p.oid) as function_definition
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%'
+ORDER BY p.proname;
+
+-- ============================================================================
+-- SUMMARY REPORT
+-- ============================================================================
+
+SELECT 
+    'SUMMARY' as report_type,
+    COUNT(*) as total_functions,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) LIKE '%SET search_path%') as functions_with_search_path,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%') as functions_without_search_path,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) LIKE '%SECURITY DEFINER%') as security_definer_functions,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) LIKE '%SET search_path = public, pg_temp%') as functions_with_public_pg_temp,
+    COUNT(*) FILTER (WHERE pg_get_functiondef(p.oid) LIKE '%SET search_path = public, auth, pg_temp%') as functions_with_auth
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%';
+
+-- ============================================================================
+-- FUNCTIONS STILL MISSING search_path (if any)
+-- ============================================================================
+
+SELECT 
+    'MISSING' as report_type,
+    p.proname as function_name,
+    pg_get_functiondef(p.oid) as function_definition
+FROM pg_proc p
+JOIN pg_namespace n ON p.pronamespace = n.oid
+WHERE n.nspname = 'public'
+    AND p.proname NOT LIKE 'pg_%'
+    AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
+ORDER BY p.proname;
+

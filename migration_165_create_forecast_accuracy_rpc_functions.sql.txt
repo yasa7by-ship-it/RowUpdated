@@ -1,0 +1,294 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create Separate RPC Functions for Forecast Accuracy Page
+-- #
+-- # Purpose: Create individual RPC functions for each section of the forecast
+-- # accuracy page. This allows better modularity and separation of concerns.
+-- # The page will call these functions instead of accessing tables directly.
+-- #
+-- # Functions Created:
+-- # 1. get_forecast_accuracy_overall - Overall statistics
+-- # 2. get_forecast_accuracy_by_stock - Performance by stock
+-- # 3. get_forecast_accuracy_by_date - Performance by date
+-- # 4. get_forecast_accuracy_by_confidence - Analysis by confidence level
+-- # 5. get_forecast_accuracy_recent - Recent forecasts list
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Function 1: Get Overall Statistics
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_overall(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    -- Set default date range (last 90 days if not specified)
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'total_forecasts', COUNT(*)::integer,
+            'hit_range_count', COUNT(*) FILTER (WHERE hit_range = true)::integer,
+            'miss_range_count', COUNT(*) FILTER (WHERE hit_range = false)::integer,
+            'hit_rate', CASE 
+                WHEN COUNT(*) > 0 THEN 
+                    ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                ELSE 0 
+            END,
+            'avg_abs_error', COALESCE(AVG(abs_error), 0),
+            'avg_pct_error', COALESCE(AVG(pct_error), 0),
+            'avg_confidence', COALESCE(AVG(confidence), 0)
+        )
+        FROM public.forecast_check_history
+        WHERE forecast_date BETWEEN v_start_date AND v_end_date
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_accuracy_overall IS 'Returns overall forecast accuracy statistics for the given date range';
+
+-- Function 2: Get Performance by Stock
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_by_stock(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    -- Set default date range (last 90 days if not specified)
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'stock_symbol', stock_symbol,
+                'total_forecasts', total_forecasts::integer,
+                'hit_count', hit_count::integer,
+                'miss_count', miss_count::integer,
+                'hit_rate', hit_rate,
+                'avg_abs_error', avg_abs_error,
+                'avg_pct_error', avg_pct_error,
+                'avg_confidence', avg_confidence
+            )
+            ORDER BY hit_rate DESC, total_forecasts DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                stock_symbol,
+                COUNT(*) as total_forecasts,
+                COUNT(*) FILTER (WHERE hit_range = true) as hit_count,
+                COUNT(*) FILTER (WHERE hit_range = false) as miss_count,
+                CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END as hit_rate,
+                COALESCE(AVG(abs_error), 0) as avg_abs_error,
+                COALESCE(AVG(pct_error), 0) as avg_pct_error,
+                COALESCE(AVG(confidence), 0) as avg_confidence
+            FROM public.forecast_check_history
+            WHERE forecast_date BETWEEN v_start_date AND v_end_date
+            GROUP BY stock_symbol
+            HAVING COUNT(*) >= 3  -- Only stocks with at least 3 forecasts
+        ) stock_stats
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_accuracy_by_stock IS 'Returns forecast accuracy performance grouped by stock symbol';
+
+-- Function 3: Get Performance by Date
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_by_date(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    -- Set default date range (last 90 days if not specified)
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'forecast_date', forecast_date::text,
+                'total_forecasts', total_forecasts::integer,
+                'hit_count', hit_count::integer,
+                'hit_rate', hit_rate
+            )
+            ORDER BY forecast_date DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                forecast_date,
+                COUNT(*) as total_forecasts,
+                COUNT(*) FILTER (WHERE hit_range = true) as hit_count,
+                CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END as hit_rate
+            FROM public.forecast_check_history
+            WHERE forecast_date BETWEEN v_start_date AND v_end_date
+            GROUP BY forecast_date
+            ORDER BY forecast_date DESC
+            LIMIT 30
+        ) date_stats
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_accuracy_by_date IS 'Returns forecast accuracy performance grouped by date (last 30 days)';
+
+-- Function 4: Get Analysis by Confidence Level
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_by_confidence(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    -- Set default date range (last 90 days if not specified)
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'high_confidence', (
+                SELECT json_build_object(
+                    'count', COUNT(*)::integer,
+                    'hit_rate', CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND confidence >= 70
+            ),
+            'medium_confidence', (
+                SELECT json_build_object(
+                    'count', COUNT(*)::integer,
+                    'hit_rate', CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND confidence >= 50 AND confidence < 70
+            ),
+            'low_confidence', (
+                SELECT json_build_object(
+                    'count', COUNT(*)::integer,
+                    'hit_rate', CASE 
+                        WHEN COUNT(*) > 0 THEN 
+                            ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                        ELSE 0 
+                    END
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND confidence < 50
+            )
+        )
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_accuracy_by_confidence IS 'Returns forecast accuracy analysis grouped by confidence level';
+
+-- Function 5: Get Recent Forecasts
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_recent(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    -- Set default date range (last 90 days if not specified)
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'stock_symbol', rf.stock_symbol,
+                'forecast_date', rf.forecast_date::text,
+                'predicted_lo', rf.predicted_lo,
+                'predicted_hi', rf.predicted_hi,
+                'actual_low', rf.actual_low,
+                'actual_high', rf.actual_high,
+                'actual_close', rf.actual_close,
+                'hit_range', rf.hit_range,
+                'abs_error', rf.abs_error,
+                'pct_error', rf.pct_error,
+                'confidence', rf.confidence,
+                'stock_name', rf.stock_name
+            )
+            ORDER BY rf.forecast_date DESC, rf.created_at DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                fch.stock_symbol,
+                fch.forecast_date,
+                fch.predicted_lo,
+                fch.predicted_hi,
+                fch.actual_low,
+                fch.actual_high,
+                fch.actual_close,
+                fch.hit_range,
+                fch.abs_error,
+                fch.pct_error,
+                fch.confidence,
+                fch.created_at,
+                s.name AS stock_name
+            FROM public.forecast_check_history fch
+            LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+            WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+            ORDER BY fch.forecast_date DESC, fch.created_at DESC
+            LIMIT 20
+        ) rf
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_accuracy_recent IS 'Returns recent forecasts with details (last 20)';
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Forecast accuracy RPC functions created successfully.';
+

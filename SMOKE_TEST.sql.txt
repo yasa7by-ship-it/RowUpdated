@@ -1,0 +1,263 @@
+-- #############################################################################
+-- #
+-- # SMOKE TEST: Security Fix Verification
+-- #
+-- # Purpose: Run these tests after executing migration_174_security_fix_add_search_path.sql.txt
+-- # to verify that functions still work correctly
+-- #
+-- #############################################################################
+
+-- Set to show all notices and warnings
+SET client_min_messages TO NOTICE;
+
+BEGIN;
+
+-- ============================================================================
+-- TEST 1: Core Functions
+-- ============================================================================
+
+DO $$
+DECLARE
+    test_result RECORD;
+    test_passed BOOLEAN := TRUE;
+BEGIN
+    RAISE NOTICE '=== TEST 1: Core Functions ===';
+    
+    -- Test get_active_announcements
+    BEGIN
+        SELECT COUNT(*) INTO test_result FROM public.get_active_announcements();
+        RAISE NOTICE '✓ get_active_announcements: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_active_announcements: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test get_translations
+    BEGIN
+        SELECT COUNT(*) INTO test_result FROM public.get_translations('en');
+        RAISE NOTICE '✓ get_translations: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_translations: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test get_dashboard_stats
+    BEGIN
+        SELECT * INTO test_result FROM public.get_dashboard_stats();
+        RAISE NOTICE '✓ get_dashboard_stats: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_dashboard_stats: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test get_all_roles
+    BEGIN
+        SELECT COUNT(*) INTO test_result FROM public.get_all_roles();
+        RAISE NOTICE '✓ get_all_roles: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_all_roles: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    IF test_passed THEN
+        RAISE NOTICE '=== TEST 1: ALL PASSED ===';
+    ELSE
+        RAISE WARNING '=== TEST 1: SOME FAILED ===';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- TEST 2: User Functions (require authentication)
+-- ============================================================================
+
+DO $$
+DECLARE
+    test_result RECORD;
+    test_passed BOOLEAN := TRUE;
+BEGIN
+    RAISE NOTICE '=== TEST 2: User Functions ===';
+    
+    -- Test get_user_profile_and_permissions (requires valid UUID)
+    BEGIN
+        -- Try with a test UUID (will return empty if user doesn't exist, but shouldn't error)
+        SELECT * INTO test_result FROM public.get_user_profile_and_permissions('00000000-0000-0000-0000-000000000000'::uuid);
+        RAISE NOTICE '✓ get_user_profile_and_permissions: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_user_profile_and_permissions: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    IF test_passed THEN
+        RAISE NOTICE '=== TEST 2: ALL PASSED ===';
+    ELSE
+        RAISE WARNING '=== TEST 2: SOME FAILED ===';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- TEST 3: Forecast Functions
+-- ============================================================================
+
+DO $$
+DECLARE
+    test_result RECORD;
+    test_passed BOOLEAN := TRUE;
+BEGIN
+    RAISE NOTICE '=== TEST 3: Forecast Functions ===';
+    
+    -- Test get_latest_forecast_date
+    BEGIN
+        SELECT * INTO test_result FROM public.get_latest_forecast_date();
+        RAISE NOTICE '✓ get_latest_forecast_date: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_latest_forecast_date: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test get_daily_analysis_summary (requires valid date)
+    BEGIN
+        SELECT * INTO test_result FROM public.get_daily_analysis_summary(CURRENT_DATE);
+        RAISE NOTICE '✓ get_daily_analysis_summary: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_daily_analysis_summary: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test get_forecast_accuracy_overall
+    BEGIN
+        SELECT * INTO test_result FROM public.get_forecast_accuracy_overall();
+        RAISE NOTICE '✓ get_forecast_accuracy_overall: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_forecast_accuracy_overall: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test evaluate_and_save_forecasts (may return 0 if no data)
+    BEGIN
+        SELECT * INTO test_result FROM public.evaluate_and_save_forecasts();
+        RAISE NOTICE '✓ evaluate_and_save_forecasts: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ evaluate_and_save_forecasts: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    IF test_passed THEN
+        RAISE NOTICE '=== TEST 3: ALL PASSED ===';
+    ELSE
+        RAISE WARNING '=== TEST 3: SOME FAILED ===';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- TEST 4: Admin Functions (require permissions)
+-- ============================================================================
+
+DO $$
+DECLARE
+    test_result RECORD;
+    test_passed BOOLEAN := TRUE;
+BEGIN
+    RAISE NOTICE '=== TEST 4: Admin Functions ===';
+    
+    -- Test get_all_users_with_roles (may return empty if no permission)
+    BEGIN
+        SELECT COUNT(*) INTO test_result FROM public.get_all_users_with_roles();
+        RAISE NOTICE '✓ get_all_users_with_roles: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_all_users_with_roles: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test get_activity_logs (may return empty if no permission)
+    BEGIN
+        SELECT COUNT(*) INTO test_result FROM public.get_activity_logs(1, 10);
+        RAISE NOTICE '✓ get_activity_logs: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ get_activity_logs: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    -- Test has_permission (may return false if not authenticated)
+    BEGIN
+        SELECT * INTO test_result FROM public.has_permission('manage:users');
+        RAISE NOTICE '✓ has_permission: PASSED';
+    EXCEPTION WHEN OTHERS THEN
+        RAISE WARNING '✗ has_permission: FAILED - %', SQLERRM;
+        test_passed := FALSE;
+    END;
+    
+    IF test_passed THEN
+        RAISE NOTICE '=== TEST 4: ALL PASSED ===';
+    ELSE
+        RAISE WARNING '=== TEST 4: SOME FAILED ===';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- TEST 5: Check for Warnings
+-- ============================================================================
+
+DO $$
+DECLARE
+    warning_count INTEGER;
+BEGIN
+    RAISE NOTICE '=== TEST 5: Checking for Warnings ===';
+    
+    -- Count functions without search_path
+    SELECT COUNT(*) INTO warning_count
+    FROM pg_proc p
+    JOIN pg_namespace n ON p.pronamespace = n.oid
+    WHERE n.nspname = 'public'
+        AND p.proname NOT LIKE 'pg_%'
+        AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%';
+    
+    IF warning_count > 0 THEN
+        RAISE WARNING '✗ Found % functions still missing SET search_path', warning_count;
+    ELSE
+        RAISE NOTICE '✓ All functions have SET search_path';
+    END IF;
+END $$;
+
+-- ============================================================================
+-- TEST 6: Verify search_path Values
+-- ============================================================================
+
+DO $$
+DECLARE
+    func_record RECORD;
+    incorrect_count INTEGER := 0;
+BEGIN
+    RAISE NOTICE '=== TEST 6: Verifying search_path Values ===';
+    
+    FOR func_record IN 
+        SELECT 
+            p.proname as func_name,
+            pg_get_functiondef(p.oid) as func_def
+        FROM pg_proc p
+        JOIN pg_namespace n ON p.pronamespace = n.oid
+        WHERE n.nspname = 'public'
+            AND p.proname NOT LIKE 'pg_%'
+            AND pg_get_functiondef(p.oid) LIKE '%SET search_path%'
+    LOOP
+        -- Check if function uses auth but doesn't have auth in search_path
+        IF (func_record.func_def LIKE '%auth.uid()%' 
+            OR func_record.func_def LIKE '%auth.users%'
+            OR func_record.func_def LIKE '%auth.role()%')
+            AND func_record.func_def NOT LIKE '%SET search_path =%auth%' THEN
+            incorrect_count := incorrect_count + 1;
+            RAISE WARNING '✗ Function % uses auth but search_path may not include auth', func_record.func_name;
+        END IF;
+    END LOOP;
+    
+    IF incorrect_count = 0 THEN
+        RAISE NOTICE '✓ All search_path values are correct';
+    ELSE
+        RAISE WARNING '✗ Found % functions with incorrect search_path', incorrect_count;
+    END IF;
+END $$;
+
+COMMIT;
+
+RAISE NOTICE '=== SMOKE TESTS COMPLETED ===';
+RAISE NOTICE 'Please review the results above. All tests should show PASSED.';
+

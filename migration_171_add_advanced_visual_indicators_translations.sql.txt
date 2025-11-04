@@ -1,0 +1,37 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Advanced Visual Indicators
+-- #
+-- # Purpose: Add translation keys for new visual indicators added to Forecast Accuracy page
+-- #
+-- #############################################################################
+
+BEGIN;
+
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'forecast_comparison', 'Forecast Comparison'),
+('en', 'error_distribution', 'Error Distribution'),
+('en', 'performance_indicators', 'Performance Indicators'),
+('en', 'key_metrics', 'Key Metrics'),
+('en', 'accuracy', 'Accuracy'),
+('en', 'hit_ratio', 'Hit Ratio'),
+
+-- Arabic
+('ar', 'forecast_comparison', 'مقارنة التوقعات'),
+('ar', 'error_distribution', 'توزيع الأخطاء'),
+('ar', 'performance_indicators', 'مؤشرات الأداء'),
+('ar', 'key_metrics', 'المؤشرات الرئيسية'),
+('ar', 'accuracy', 'الدقة'),
+('ar', 'hit_ratio', 'نسبة الإصابات')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Advanced visual indicators translations added.';
+

@@ -1,0 +1,43 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Visual Indicators Explanations
+-- #
+-- # Purpose: Add translation keys for explanations of visual indicators
+-- #          on the Forecast Accuracy page
+-- #
+-- #############################################################################
+
+BEGIN;
+
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'total_forecasts_explanation', 'The total number of forecasts made during the selected period. This includes both correct and incorrect predictions.'),
+('en', 'correct_forecasts_explanation', 'The number of forecasts where the actual stock price fell within the predicted price range. Higher numbers indicate better prediction accuracy.'),
+('en', 'incorrect_forecasts_explanation', 'The number of forecasts where the actual stock price did not fall within the predicted price range. Lower numbers indicate better prediction accuracy.'),
+('en', 'success_rate_explanation', 'The percentage of forecasts that were correct. This is calculated as (Correct Forecasts / Total Forecasts) × 100. Higher percentages indicate better overall prediction performance.'),
+('en', 'forecast_comparison_explanation', 'A visual comparison showing the proportion of correct forecasts (green) versus incorrect forecasts (red). This helps quickly assess the overall prediction performance.'),
+('en', 'average_error_explanation', 'The average percentage error across all forecasts. This measures how far off the predictions were on average. Lower percentages indicate more accurate predictions.'),
+('en', 'average_confidence_explanation', 'The average confidence level of all forecasts. Confidence levels indicate how certain the prediction model was about each forecast.'),
+('en', 'error_distribution_explanation', 'A breakdown showing how forecasts are distributed across different error ranges. This helps identify patterns in prediction accuracy and areas for improvement.'),
+('en', 'by_confidence_level_explanation', 'Forecast performance analyzed by confidence level. This shows how prediction accuracy varies based on the model''s confidence in each forecast. Higher confidence forecasts typically show better accuracy.'),
+
+-- Arabic
+('ar', 'total_forecasts_explanation', 'إجمالي عدد التوقعات التي تم إجراؤها خلال الفترة المحددة. يتضمن هذا الرقم كلاً من التوقعات الصحيحة والخاطئة.'),
+('ar', 'correct_forecasts_explanation', 'عدد التوقعات التي كانت فيها السعر الفعلي للسهم ضمن نطاق السعر المتوقع. الأرقام الأعلى تشير إلى دقة تنبؤ أفضل.'),
+('ar', 'incorrect_forecasts_explanation', 'عدد التوقعات التي لم يكن فيها السعر الفعلي للسهم ضمن نطاق السعر المتوقع. الأرقام الأقل تشير إلى دقة تنبؤ أفضل.'),
+('ar', 'success_rate_explanation', 'نسبة التوقعات التي كانت صحيحة. يتم حسابها على أنها (التوقعات الصحيحة / إجمالي التوقعات) × 100. النسب الأعلى تشير إلى أداء تنبؤي أفضل بشكل عام.'),
+('ar', 'forecast_comparison_explanation', 'مقارنة بصرية توضح نسبة التوقعات الصحيحة (أخضر) مقابل التوقعات الخاطئة (أحمر). يساعد هذا في تقييم أداء التنبؤ بشكل عام بسرعة.'),
+('ar', 'average_error_explanation', 'متوسط نسبة الخطأ عبر جميع التوقعات. يقيس هذا مدى بعد التوقعات في المتوسط. النسب الأقل تشير إلى توقعات أكثر دقة.'),
+('ar', 'average_confidence_explanation', 'متوسط مستوى الثقة لجميع التوقعات. مستويات الثقة تشير إلى مدى يقين نموذج التنبؤ بكل توقع.'),
+('ar', 'error_distribution_explanation', 'تحليل يوضح كيفية توزيع التوقعات عبر نطاقات أخطاء مختلفة. يساعد هذا في تحديد أنماط دقة التنبؤ والمناطق التي تحتاج إلى تحسين.'),
+('ar', 'by_confidence_level_explanation', 'أداء التوقعات محلل حسب مستوى الثقة. يوضح هذا كيف تختلف دقة التنبؤ بناءً على ثقة النموذج في كل توقع. التوقعات ذات الثقة العالية عادة ما تُظهر دقة أفضل.')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Visual indicators explanations translations added.';

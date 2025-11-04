@@ -1,0 +1,108 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Translations for Advanced Forecast Accuracy Features
+-- #
+-- #############################################################################
+
+BEGIN;
+
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'error_range_analysis', 'Error Range Analysis'),
+('en', 'very_low_error', 'Very Low Error (≤2%)'),
+('en', 'low_error_range', 'Low Error (2-5%)'),
+('en', 'medium_error_range', 'Medium Error (5-10%)'),
+('en', 'high_error_range', 'High Error (10-20%)'),
+('en', 'very_high_error', 'Very High Error (>20%)'),
+('en', 'range_size_analysis', 'Range Size Analysis'),
+('en', 'narrow_range', 'Narrow Range (<5%)'),
+('en', 'medium_range', 'Medium Range (5-10%)'),
+('en', 'wide_range', 'Wide Range (>10%)'),
+('en', 'time_trends', 'Time Trends'),
+('en', 'first_period', 'First Period'),
+('en', 'second_period', 'Second Period'),
+('en', 'trend_improving', 'Improving'),
+('en', 'trend_declining', 'Declining'),
+('en', 'trend_stable', 'Stable'),
+('en', 'day_of_week_analysis', 'Performance by Day of Week'),
+('en', 'sunday', 'Sunday'),
+('en', 'monday', 'Monday'),
+('en', 'tuesday', 'Tuesday'),
+('en', 'wednesday', 'Wednesday'),
+('en', 'thursday', 'Thursday'),
+('en', 'friday', 'Friday'),
+('en', 'saturday', 'Saturday'),
+('en', 'bias_analysis', 'Forecast Bias Analysis'),
+('en', 'overestimated', 'Overestimated'),
+('en', 'underestimated', 'Underestimated'),
+('en', 'within_range', 'Within Range'),
+('en', 'extreme_forecasts', 'Extreme Forecasts'),
+('en', 'most_accurate', 'Most Accurate'),
+('en', 'least_accurate', 'Least Accurate'),
+('en', 'select_stock', 'Select Stock'),
+('en', 'all_stocks', 'All Stocks'),
+('en', 'avg_range_size', 'Avg Range Size'),
+('en', 'avg_overestimate', 'Avg Overestimate'),
+('en', 'avg_underestimate', 'Avg Underestimate'),
+('en', 'forecasts_count', 'Forecasts Count'),
+('en', 'advanced_statistics', 'Advanced Statistics'),
+('en', 'trend', 'Trend'),
+('en', 'not_available', 'Not Available'),
+('en', 'invalid_date', 'Invalid Date'),
+('en', 'of', 'of'),
+('en', 'search', 'Search'),
+
+-- Arabic
+('ar', 'error_range_analysis', 'تحليل نطاق الخطأ'),
+('ar', 'very_low_error', 'خطأ منخفض جداً (≤2%)'),
+('ar', 'low_error_range', 'خطأ منخفض (2-5%)'),
+('ar', 'medium_error_range', 'خطأ متوسط (5-10%)'),
+('ar', 'high_error_range', 'خطأ عالي (10-20%)'),
+('ar', 'very_high_error', 'خطأ عالي جداً (>20%)'),
+('ar', 'range_size_analysis', 'تحليل حجم النطاق'),
+('ar', 'narrow_range', 'نطاق ضيق (<5%)'),
+('ar', 'medium_range', 'نطاق متوسط (5-10%)'),
+('ar', 'wide_range', 'نطاق واسع (>10%)'),
+('ar', 'time_trends', 'الاتجاهات الزمنية'),
+('ar', 'first_period', 'الفترة الأولى'),
+('ar', 'second_period', 'الفترة الثانية'),
+('ar', 'trend_improving', 'يتحسن'),
+('ar', 'trend_declining', 'يتدهور'),
+('ar', 'trend_stable', 'مستقر'),
+('ar', 'day_of_week_analysis', 'الأداء حسب يوم الأسبوع'),
+('ar', 'sunday', 'الأحد'),
+('ar', 'monday', 'الإثنين'),
+('ar', 'tuesday', 'الثلاثاء'),
+('ar', 'wednesday', 'الأربعاء'),
+('ar', 'thursday', 'الخميس'),
+('ar', 'friday', 'الجمعة'),
+('ar', 'saturday', 'السبت'),
+('ar', 'bias_analysis', 'تحليل التحيز في التوقعات'),
+('ar', 'overestimated', 'مبالغ فيه'),
+('ar', 'underestimated', 'مقدر بأقل'),
+('ar', 'within_range', 'ضمن النطاق'),
+('ar', 'extreme_forecasts', 'التوقعات المتطرفة'),
+('ar', 'most_accurate', 'الأكثر دقة'),
+('ar', 'least_accurate', 'الأقل دقة'),
+('ar', 'select_stock', 'اختر السهم'),
+('ar', 'all_stocks', 'جميع الأسهم'),
+('ar', 'avg_range_size', 'متوسط حجم النطاق'),
+('ar', 'avg_overestimate', 'متوسط المبالغة'),
+('ar', 'avg_underestimate', 'متوسط التقليل'),
+('ar', 'forecasts_count', 'عدد التوقعات'),
+('ar', 'advanced_statistics', 'إحصائيات متقدمة'),
+('ar', 'trend', 'الاتجاه'),
+('ar', 'not_available', 'غير متاح'),
+('ar', 'invalid_date', 'تاريخ غير صحيح'),
+('ar', 'of', 'من'),
+('ar', 'search', 'بحث')
+ON CONFLICT (lang_id, key) DO NOTHING;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Advanced forecast accuracy translations added.';
+

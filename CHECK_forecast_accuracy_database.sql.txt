@@ -1,0 +1,369 @@
+-- #############################################################################
+-- #
+-- # VERIFICATION SCRIPT: Check All Database Details for Forecast Accuracy Page
+-- #
+-- # Purpose: Verify all database components required for "Forecast Accuracy" page
+-- # This script checks tables, functions, permissions, and translations
+-- #
+-- #############################################################################
+
+-- ==============================================================================
+-- SECTION 1: Check Required Tables and Columns
+-- ==============================================================================
+
+-- Check forecast_check_history table
+SELECT 
+    CASE WHEN EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'forecast_check_history'
+    ) THEN '✓ Table forecast_check_history EXISTS' 
+    ELSE '✗ Table forecast_check_history MISSING' 
+    END AS table_status;
+
+-- Check required columns in forecast_check_history
+SELECT 
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+AND table_name = 'forecast_check_history'
+AND column_name IN (
+    'stock_symbol', 'forecast_date', 'predicted_lo', 'predicted_hi',
+    'actual_low', 'actual_high', 'actual_close', 'hit_range',
+    'abs_error', 'pct_error', 'confidence', 'created_at'
+)
+ORDER BY column_name;
+
+-- Check stocks table
+SELECT 
+    CASE WHEN EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name = 'stocks'
+    ) THEN '✓ Table stocks EXISTS' 
+    ELSE '✗ Table stocks MISSING' 
+    END AS table_status;
+
+-- Check required columns in stocks
+SELECT 
+    column_name,
+    data_type,
+    is_nullable
+FROM information_schema.columns
+WHERE table_schema = 'public'
+AND table_name = 'stocks'
+AND column_name IN ('symbol', 'name')
+ORDER BY column_name;
+
+-- ==============================================================================
+-- SECTION 2: Check RPC Functions
+-- ==============================================================================
+
+-- List all forecast accuracy functions
+SELECT 
+    routine_name AS function_name,
+    CASE 
+        WHEN routine_name IN (
+            'get_forecast_accuracy_overall',
+            'get_forecast_accuracy_by_stock',
+            'get_forecast_accuracy_by_date',
+            'get_forecast_accuracy_by_confidence',
+            'get_forecast_accuracy_recent'
+        ) THEN '✓ Required Function'
+        ELSE '⚠ Additional Function'
+    END AS status,
+    CASE 
+        WHEN data_type = 'USER-DEFINED' THEN udt_name
+        ELSE data_type 
+    END AS return_type
+FROM information_schema.routines
+WHERE routine_schema = 'public'
+AND routine_name LIKE 'get_forecast_accuracy%'
+ORDER BY routine_name;
+
+-- Get function parameters
+SELECT 
+    r.routine_name AS function_name,
+    p.parameter_name,
+    p.data_type,
+    p.parameter_mode
+FROM information_schema.routines r
+LEFT JOIN information_schema.parameters p ON (
+    p.specific_schema = r.routine_schema 
+    AND p.specific_name = r.specific_name
+)
+WHERE r.routine_schema = 'public'
+AND r.routine_name IN (
+    'get_forecast_accuracy_overall',
+    'get_forecast_accuracy_by_stock',
+    'get_forecast_accuracy_by_date',
+    'get_forecast_accuracy_by_confidence',
+    'get_forecast_accuracy_recent'
+)
+ORDER BY r.routine_name, p.ordinal_position;
+
+-- ==============================================================================
+-- SECTION 3: Check Permissions
+-- ==============================================================================
+
+-- Check if permission exists
+SELECT 
+    id,
+    action,
+    description,
+    CASE WHEN id IS NOT NULL THEN '✓ Permission EXISTS' 
+    ELSE '✗ Permission MISSING' 
+    END AS status
+FROM public.permissions
+WHERE action = 'view:forecast_accuracy';
+
+-- Check which roles have the permission
+SELECT 
+    r.name AS role_name,
+    r.description AS role_description,
+    p.action AS permission_action,
+    '✓ Permission GRANTED' AS status
+FROM public.role_permissions rp
+JOIN public.roles r ON r.id = rp.role_id
+JOIN public.permissions p ON p.id = rp.permission_id
+WHERE p.action = 'view:forecast_accuracy'
+ORDER BY r.name;
+
+-- ==============================================================================
+-- SECTION 4: Check Translations
+-- ==============================================================================
+
+-- Check required translation keys
+SELECT 
+    key,
+    lang_id,
+    value,
+    CASE WHEN key IS NOT NULL THEN '✓ Translation EXISTS' 
+    ELSE '✗ Translation MISSING' 
+    END AS status
+FROM public.translations
+WHERE key IN (
+    'forecast_accuracy',
+    'forecast_accuracy_analysis',
+    'overall_statistics',
+    'total_forecasts',
+    'hit_rate',
+    'average_error',
+    'average_confidence',
+    'by_stock_performance',
+    'by_date_performance',
+    'by_confidence_level',
+    'high_confidence',
+    'medium_confidence',
+    'low_confidence',
+    'recent_forecasts',
+    'hit',
+    'miss',
+    'predicted_range',
+    'actual_range',
+    'error_percentage',
+    'date_range',
+    'select_date_range',
+    'forecast_date',
+    'confidence',
+    'forecasts',
+    'result',
+    'no_data_available',
+    'column_symbol'
+)
+ORDER BY key, lang_id;
+
+-- Check missing translations
+WITH required_keys AS (
+    SELECT unnest(ARRAY[
+        'forecast_accuracy', 'forecast_accuracy_analysis', 'overall_statistics',
+        'total_forecasts', 'hit_rate', 'average_error', 'average_confidence',
+        'by_stock_performance', 'by_date_performance', 'by_confidence_level',
+        'high_confidence', 'medium_confidence', 'low_confidence',
+        'recent_forecasts', 'hit', 'miss', 'predicted_range', 'actual_range',
+        'error_percentage', 'date_range', 'select_date_range', 'forecast_date',
+        'confidence', 'forecasts', 'result', 'no_data_available', 'column_symbol'
+    ]) AS key
+),
+existing_keys AS (
+    SELECT DISTINCT key FROM public.translations
+)
+SELECT 
+    rk.key AS missing_key,
+    '✗ MISSING TRANSLATION' AS status
+FROM required_keys rk
+LEFT JOIN existing_keys ek ON rk.key = ek.key
+WHERE ek.key IS NULL
+ORDER BY rk.key;
+
+-- ==============================================================================
+-- SECTION 5: Data Verification
+-- ==============================================================================
+
+-- Count records
+SELECT 
+    COUNT(*) AS total_records,
+    COUNT(DISTINCT stock_symbol) AS unique_stocks,
+    COUNT(DISTINCT forecast_date) AS unique_dates,
+    MIN(forecast_date) AS earliest_date,
+    MAX(forecast_date) AS latest_date,
+    CASE 
+        WHEN COUNT(*) > 0 THEN '✓ Data EXISTS'
+        ELSE '⚠ No Data Available'
+    END AS status
+FROM public.forecast_check_history;
+
+-- Data statistics
+SELECT 
+    COUNT(*) FILTER (WHERE hit_range = true) AS total_hits,
+    COUNT(*) FILTER (WHERE hit_range = false) AS total_misses,
+    ROUND(AVG(CASE WHEN hit_range = true THEN 100.0 ELSE 0.0 END)::numeric, 2) AS hit_rate_percent,
+    ROUND(AVG(pct_error)::numeric, 2) AS avg_pct_error,
+    ROUND(AVG(confidence)::numeric, 2) AS avg_confidence
+FROM public.forecast_check_history;
+
+-- Sample records (last 5)
+SELECT 
+    stock_symbol,
+    forecast_date,
+    hit_range,
+    CASE 
+        WHEN pct_error IS NOT NULL THEN ROUND(pct_error::numeric, 2)
+        ELSE NULL
+    END AS pct_error,
+    CASE 
+        WHEN confidence IS NOT NULL THEN ROUND(confidence::numeric, 2)
+        ELSE NULL
+    END AS confidence,
+    created_at
+FROM public.forecast_check_history
+ORDER BY forecast_date DESC, created_at DESC
+LIMIT 5;
+
+-- ==============================================================================
+-- SECTION 6: Test RPC Functions
+-- ==============================================================================
+
+-- Test get_forecast_accuracy_overall
+SELECT 
+    'get_forecast_accuracy_overall' AS function_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT FROM information_schema.routines
+            WHERE routine_schema = 'public'
+            AND routine_name = 'get_forecast_accuracy_overall'
+        ) THEN '✓ Function EXISTS - Testing...'
+        ELSE '✗ Function MISSING'
+    END AS status;
+
+SELECT * FROM public.get_forecast_accuracy_overall(
+    (CURRENT_DATE - INTERVAL '90 days')::date,
+    CURRENT_DATE::date
+) AS test_result;
+
+-- Test get_forecast_accuracy_by_stock
+SELECT 
+    'get_forecast_accuracy_by_stock' AS function_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT FROM information_schema.routines
+            WHERE routine_schema = 'public'
+            AND routine_name = 'get_forecast_accuracy_by_stock'
+        ) THEN '✓ Function EXISTS'
+        ELSE '✗ Function MISSING'
+    END AS status;
+
+-- Test get_forecast_accuracy_by_date
+SELECT 
+    'get_forecast_accuracy_by_date' AS function_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT FROM information_schema.routines
+            WHERE routine_schema = 'public'
+            AND routine_name = 'get_forecast_accuracy_by_date'
+        ) THEN '✓ Function EXISTS'
+        ELSE '✗ Function MISSING'
+    END AS status;
+
+-- Test get_forecast_accuracy_by_confidence
+SELECT 
+    'get_forecast_accuracy_by_confidence' AS function_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT FROM information_schema.routines
+            WHERE routine_schema = 'public'
+            AND routine_name = 'get_forecast_accuracy_by_confidence'
+        ) THEN '✓ Function EXISTS'
+        ELSE '✗ Function MISSING'
+    END AS status;
+
+-- Test get_forecast_accuracy_recent
+SELECT 
+    'get_forecast_accuracy_recent' AS function_name,
+    CASE 
+        WHEN EXISTS (
+            SELECT FROM information_schema.routines
+            WHERE routine_schema = 'public'
+            AND routine_name = 'get_forecast_accuracy_recent'
+        ) THEN '✓ Function EXISTS'
+        ELSE '✗ Function MISSING'
+    END AS status;
+
+-- ==============================================================================
+-- SECTION 7: Summary Report
+-- ==============================================================================
+
+SELECT 
+    '========================================' AS separator,
+    'SUMMARY REPORT' AS title,
+    '========================================' AS separator;
+
+SELECT 
+    (SELECT COUNT(*) FROM information_schema.tables 
+     WHERE table_schema = 'public' 
+     AND table_name IN ('forecast_check_history', 'stocks')) AS tables_count,
+    (SELECT COUNT(*) FROM information_schema.routines
+     WHERE routine_schema = 'public'
+     AND routine_name IN (
+         'get_forecast_accuracy_overall',
+         'get_forecast_accuracy_by_stock',
+         'get_forecast_accuracy_by_date',
+         'get_forecast_accuracy_by_confidence',
+         'get_forecast_accuracy_recent'
+     )) AS functions_count,
+    (SELECT COUNT(*) FROM public.permissions
+     WHERE action = 'view:forecast_accuracy') AS permission_exists,
+    (SELECT COUNT(*) FROM public.role_permissions rp
+     JOIN public.permissions p ON p.id = rp.permission_id
+     WHERE p.action = 'view:forecast_accuracy') AS roles_with_permission,
+    (SELECT COUNT(DISTINCT key) FROM public.translations
+     WHERE key LIKE 'forecast_accuracy%' OR key IN (
+         'total_forecasts', 'hit_rate', 'average_error', 'average_confidence',
+         'by_stock_performance', 'by_confidence_level', 'recent_forecasts'
+     )) AS translation_keys_count,
+    (SELECT COUNT(*) FROM public.forecast_check_history) AS data_records_count;
+
+SELECT 
+    CASE 
+        WHEN 
+            (SELECT COUNT(*) FROM information_schema.tables 
+             WHERE table_schema = 'public' 
+             AND table_name IN ('forecast_check_history', 'stocks')) = 2
+            AND (SELECT COUNT(*) FROM information_schema.routines
+                 WHERE routine_schema = 'public'
+                 AND routine_name IN (
+                     'get_forecast_accuracy_overall',
+                     'get_forecast_accuracy_by_stock',
+                     'get_forecast_accuracy_by_date',
+                     'get_forecast_accuracy_by_confidence',
+                     'get_forecast_accuracy_recent'
+                 )) = 5
+            AND (SELECT COUNT(*) FROM public.permissions
+                 WHERE action = 'view:forecast_accuracy') > 0
+        THEN '✓ ALL CHECKS PASSED - Page should work correctly!'
+        ELSE '✗ SOME CHECKS FAILED - Please review the issues above'
+    END AS final_status;
+
+-- ==============================================================================
+-- END OF VERIFICATION SCRIPT
+-- ==============================================================================

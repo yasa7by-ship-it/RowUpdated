@@ -1,0 +1,76 @@
+function_name,language,security_type,search_path_required,uses_auth,notes,status
+evaluate_and_save_forecasts,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_active_announcements,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_all_announcements,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_all_roles,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_all_translations_for_management,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_all_users_for_analysis,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_daily_analysis_summary,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_daily_checklist,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_daily_forecast_results,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_daily_stock_analysis_page_data,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_daily_watchlist_data,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_dashboard_stats,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_latest_forecast_date,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_role_management_data,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_stock_analysis_summary,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_stock_deep_dive,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_stock_details_page_data,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_the_coming_trend_data,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_tomorrows_forecasts,sql,NORMAL,"public, pg_temp",false,NOT_FOUND - May be replaced by get_the_coming_trend_data,PENDING_REVIEW
+get_tracked_stocks_list,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_translations,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_translations_for_key,sql,NORMAL,"public, pg_temp",false,Needs search_path (non-SECURITY DEFINER version),NEEDS_FIX
+get_user_profile_and_permissions,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_by_confidence,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_by_date,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_by_stock,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_overall,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_recent,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_stats,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_accuracy_trends,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_bias_analysis,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_bias_analysis_by_stock,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_day_of_week_stats,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_detailed_comparison,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_error_range_stats,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_error_range_stats_by_stock,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_extreme_analysis,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_history_summary,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_performance_by_month,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_range_size_stats,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_range_size_stats_by_stock,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_stock_leaders,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_time_trends,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_forecast_time_trends_by_stock,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_indicators_for_stock_date,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_market_highlights,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+get_trader_summary,sql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+save_trader_summary,plpgsql,NORMAL,"public, pg_temp",false,Needs search_path,NEEDS_FIX
+fn_log_app_settings_change,plpgsql,NORMAL,"public, pg_temp",false,Trigger function - needs search_path,NEEDS_FIX
+fn_log_profile_update,plpgsql,NORMAL,"public, pg_temp",false,Trigger function - needs search_path,NEEDS_FIX
+fn_log_role_permission_change,plpgsql,NORMAL,"public, pg_temp",false,Trigger function - needs search_path,NEEDS_FIX
+sanitize_announcement_jsonb,plpgsql,NORMAL,"public, pg_temp",false,Trigger function - needs search_path,NEEDS_FIX
+trigger_forecast_evaluation,plpgsql,NORMAL,"public, pg_temp",false,Trigger function - needs search_path,NEEDS_FIX
+set_updated_at,plpgsql,NORMAL,"public, pg_temp",false,NOT_FOUND - May exist in other migrations,PENDING_REVIEW
+submit_user_note,plpgsql,NORMAL,"public, auth, pg_temp",true,Uses auth.uid() - needs auth in search_path,NEEDS_FIX
+manually_confirm_user,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Uses auth.users - needs auth in search_path,NEEDS_FIX
+sync_user_confirmation_to_profile,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Uses auth.users - needs auth in search_path,NEEDS_FIX
+get_confidence_analysis_data,plpgsql,SECURITY_DEFINER,"public, pg_temp",false,NOT_FOUND - Needs verification,PENDING_REVIEW
+get_my_role,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,NOT_FOUND - Likely uses auth.uid(),PENDING_REVIEW
+admin_update_user_password,plpgsql,SECURITY_DEFINER,"public, extensions, auth, pg_temp",true,Already has search_path - CORRECT,OK
+delete_activity_logs,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+export_activity_logs,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+fn_log_user_login,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+get_activity_logs,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+get_all_app_settings,sql,SECURITY_DEFINER,"public, pg_temp",false,Already has search_path - CORRECT,OK
+get_all_user_notes,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+get_all_users_with_roles,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+get_distinct_log_actions,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+get_user_favorite_stocks,sql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+toggle_favorite_stock,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+handle_new_user,plpgsql,SECURITY_DEFINER,"auth, public, pg_temp",true,Already has search_path - CORRECT,OK
+has_permission,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+is_first_user,sql,SECURITY_DEFINER,"auth, public, pg_temp",true,Already has search_path - CORRECT,OK
+log_activity,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
+

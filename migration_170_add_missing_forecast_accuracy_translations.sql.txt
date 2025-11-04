@@ -1,0 +1,34 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Missing Translations for Forecast Accuracy Page
+-- #
+-- # Purpose: Add missing translation keys that are used in ForecastAccuracy.tsx
+-- # but not present in the translations table
+-- #
+-- #############################################################################
+
+BEGIN;
+
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'success_rate', 'Success Rate'),
+('en', 'hit_count', 'Hit Count'),
+('en', 'miss_count', 'Miss Count'),
+('en', 'performance_by_stock', 'Performance by Stock'),
+
+-- Arabic
+('ar', 'success_rate', 'نسبة النجاح'),
+('ar', 'hit_count', 'عدد التوقعات الصحيحة'),
+('ar', 'miss_count', 'عدد التوقعات الخاطئة'),
+('ar', 'performance_by_stock', 'الأداء حسب السهم')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Missing forecast accuracy translations added.';
+

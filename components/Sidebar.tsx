@@ -42,7 +42,10 @@ const Sidebar: React.FC<SidebarProps> = ({ setPage, currentPage }) => {
             <NavLink icon={<ChartBarIcon />} label={t('stock_analysis')} isActive={currentPage === 'stock_analysis'} onClick={() => setPage('stock_analysis')} />
         )}
         {hasPermission('view:forecast_accuracy') && (
-            <NavLink icon={<ChartBarIcon />} label={t('forecast_accuracy')} isActive={currentPage === 'forecast_accuracy'} onClick={() => setPage('forecast_accuracy')} />
+            <NavLink icon={<ChartPieIcon />} label={t('forecast_accuracy')} isActive={currentPage === 'forecast_accuracy'} onClick={() => setPage('forecast_accuracy')} />
+        )}
+        {hasPermission('view:forecast_history_analysis') && (
+            <NavLink icon={<ChartBarIcon />} label={t('forecast_history_analysis')} isActive={currentPage === 'forecast_history_analysis'} onClick={() => setPage('forecast_history_analysis')} />
         )}
         {hasPermission('manage:users') && (
             <NavLink icon={<UsersIcon />} label={t('user_management')} isActive={currentPage === 'users'} onClick={() => setPage('users')} />

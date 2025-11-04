@@ -1,0 +1,326 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Create RPC Functions for Forecast History Analysis Page
+-- #
+-- # Purpose: Create specialized RPC functions to analyze forecast_check_history
+-- # with maximum visual insights and statistics
+-- #
+-- #############################################################################
+
+BEGIN;
+
+-- Function 1: Get comprehensive forecast history summary
+CREATE OR REPLACE FUNCTION public.get_forecast_history_summary(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '365 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'total_records', COUNT(*)::integer,
+            'unique_stocks', COUNT(DISTINCT stock_symbol)::integer,
+            'date_range', json_build_object(
+                'first_date', MIN(forecast_date)::text,
+                'last_date', MAX(forecast_date)::text,
+                'total_days', COUNT(DISTINCT forecast_date)::integer
+            ),
+            'hit_stats', json_build_object(
+                'total_hits', COUNT(*) FILTER (WHERE hit_range = true)::integer,
+                'total_misses', COUNT(*) FILTER (WHERE hit_range = false)::integer,
+                'hit_rate', CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END
+            ),
+            'error_stats', json_build_object(
+                'avg_abs_error', COALESCE(AVG(abs_error), 0),
+                'max_abs_error', COALESCE(MAX(abs_error), 0),
+                'min_abs_error', COALESCE(MIN(abs_error), 0),
+                'avg_pct_error', COALESCE(AVG(pct_error), 0),
+                'max_pct_error', COALESCE(MAX(pct_error), 0)
+            ),
+            'confidence_stats', json_build_object(
+                'avg_confidence', COALESCE(AVG(confidence), 0),
+                'max_confidence', COALESCE(MAX(confidence), 0),
+                'min_confidence', COALESCE(MIN(confidence), 0),
+                'high_confidence_count', COUNT(*) FILTER (WHERE confidence >= 70)::integer,
+                'medium_confidence_count', COUNT(*) FILTER (WHERE confidence >= 50 AND confidence < 70)::integer,
+                'low_confidence_count', COUNT(*) FILTER (WHERE confidence < 50)::integer
+            )
+        )
+        FROM public.forecast_check_history
+        WHERE forecast_date BETWEEN v_start_date AND v_end_date
+    );
+END;
+$$;
+
+-- Function 2: Get performance by month
+CREATE OR REPLACE FUNCTION public.get_forecast_performance_by_month(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '365 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'year', year::integer,
+                'month', month::integer,
+                'month_name', TO_CHAR(DATE_TRUNC('month', forecast_date), 'Month'),
+                'total_forecasts', total_forecasts::integer,
+                'hits', hits::integer,
+                'misses', misses::integer,
+                'hit_rate', hit_rate,
+                'avg_error', avg_error
+            )
+            ORDER BY year DESC, month DESC
+        ), '[]'::json)
+        FROM (
+            SELECT 
+                EXTRACT(YEAR FROM forecast_date)::integer as year,
+                EXTRACT(MONTH FROM forecast_date)::integer as month,
+                DATE_TRUNC('month', forecast_date) as forecast_date,
+                COUNT(*) as total_forecasts,
+                COUNT(*) FILTER (WHERE hit_range = true) as hits,
+                COUNT(*) FILTER (WHERE hit_range = false) as misses,
+                CASE 
+                    WHEN COUNT(*) > 0 THEN 
+                        ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                    ELSE 0 
+                END as hit_rate,
+                COALESCE(AVG(pct_error), 0) as avg_error
+            FROM public.forecast_check_history
+            WHERE forecast_date BETWEEN v_start_date AND v_end_date
+            GROUP BY DATE_TRUNC('month', forecast_date)
+        ) monthly_stats
+    );
+END;
+$$;
+
+-- Function 3: Get best and worst performing stocks
+CREATE OR REPLACE FUNCTION public.get_forecast_stock_leaders(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL,
+    p_limit INTEGER DEFAULT 10
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '365 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'best_performers', (
+                SELECT COALESCE(json_agg(
+                    json_build_object(
+                        'stock_symbol', stock_symbol,
+                        'stock_name', stock_name,
+                        'total_forecasts', total_forecasts::integer,
+                        'hit_rate', hit_rate,
+                        'avg_error', avg_error
+                    )
+                    ORDER BY hit_rate DESC, total_forecasts DESC
+                ), '[]'::json)
+                FROM (
+                    SELECT 
+                        fch.stock_symbol,
+                        s.name as stock_name,
+                        COUNT(*) as total_forecasts,
+                        CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                            ELSE 0 
+                        END as hit_rate,
+                        COALESCE(AVG(fch.pct_error), 0) as avg_error
+                    FROM public.forecast_check_history fch
+                    LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+                    WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+                    GROUP BY fch.stock_symbol, s.name
+                    HAVING COUNT(*) >= 5
+                    ORDER BY hit_rate DESC, total_forecasts DESC
+                    LIMIT p_limit
+                ) best
+            ),
+            'worst_performers', (
+                SELECT COALESCE(json_agg(
+                    json_build_object(
+                        'stock_symbol', stock_symbol,
+                        'stock_name', stock_name,
+                        'total_forecasts', total_forecasts::integer,
+                        'hit_rate', hit_rate,
+                        'avg_error', avg_error
+                    )
+                    ORDER BY hit_rate ASC, total_forecasts DESC
+                ), '[]'::json)
+                FROM (
+                    SELECT 
+                        fch.stock_symbol,
+                        s.name as stock_name,
+                        COUNT(*) as total_forecasts,
+                        CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                            ELSE 0 
+                        END as hit_rate,
+                        COALESCE(AVG(fch.pct_error), 0) as avg_error
+                    FROM public.forecast_check_history fch
+                    LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+                    WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+                    GROUP BY fch.stock_symbol, s.name
+                    HAVING COUNT(*) >= 5
+                    ORDER BY hit_rate ASC, total_forecasts DESC
+                    LIMIT p_limit
+                ) worst
+            )
+        )
+    );
+END;
+$$;
+
+-- Function 4: Get forecast accuracy trends
+CREATE OR REPLACE FUNCTION public.get_forecast_accuracy_trends(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '365 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT json_build_object(
+            'weekly_trend', (
+                SELECT COALESCE(json_agg(
+                    json_build_object(
+                        'week', week::text,
+                        'total_forecasts', total_forecasts::integer,
+                        'hit_rate', hit_rate
+                    )
+                    ORDER BY week DESC
+                ), '[]'::json)
+                FROM (
+                    SELECT 
+                        DATE_TRUNC('week', forecast_date)::text as week,
+                        COUNT(*) as total_forecasts,
+                        CASE 
+                            WHEN COUNT(*) > 0 THEN 
+                                ROUND((COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric) * 100, 2)
+                            ELSE 0 
+                        END as hit_rate
+                    FROM public.forecast_check_history
+                    WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                    GROUP BY DATE_TRUNC('week', forecast_date)
+                    ORDER BY week DESC
+                    LIMIT 52
+                ) weekly
+            ),
+            'error_distribution', (
+                SELECT json_build_object(
+                    'very_low_error', COUNT(*) FILTER (WHERE pct_error <= 2)::integer,
+                    'low_error', COUNT(*) FILTER (WHERE pct_error > 2 AND pct_error <= 5)::integer,
+                    'medium_error', COUNT(*) FILTER (WHERE pct_error > 5 AND pct_error <= 10)::integer,
+                    'high_error', COUNT(*) FILTER (WHERE pct_error > 10 AND pct_error <= 20)::integer,
+                    'very_high_error', COUNT(*) FILTER (WHERE pct_error > 20)::integer
+                )
+                FROM public.forecast_check_history
+                WHERE forecast_date BETWEEN v_start_date AND v_end_date
+                AND pct_error IS NOT NULL
+            )
+        )
+    );
+END;
+$$;
+
+-- Function 5: Get detailed forecast comparison
+CREATE OR REPLACE FUNCTION public.get_forecast_detailed_comparison(
+    p_start_date DATE DEFAULT NULL,
+    p_end_date DATE DEFAULT NULL,
+    p_limit INTEGER DEFAULT 50
+)
+RETURNS json
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+    v_start_date DATE;
+    v_end_date DATE;
+BEGIN
+    v_start_date := COALESCE(p_start_date, CURRENT_DATE - INTERVAL '90 days');
+    v_end_date := COALESCE(p_end_date, CURRENT_DATE);
+
+    RETURN (
+        SELECT COALESCE(json_agg(
+            json_build_object(
+                'stock_symbol', fch.stock_symbol,
+                'stock_name', s.name,
+                'forecast_date', fch.forecast_date::text,
+                'predicted_range', json_build_object(
+                    'low', fch.predicted_lo,
+                    'high', fch.predicted_hi,
+                    'range_size', (fch.predicted_hi - fch.predicted_lo)
+                ),
+                'actual_range', json_build_object(
+                    'low', fch.actual_low,
+                    'high', fch.actual_high,
+                    'range_size', (fch.actual_high - fch.actual_low)
+                ),
+                'accuracy', json_build_object(
+                    'hit_range', fch.hit_range,
+                    'abs_error', fch.abs_error,
+                    'pct_error', fch.pct_error
+                ),
+                'confidence', fch.confidence
+            )
+            ORDER BY fch.forecast_date DESC, fch.pct_error ASC
+        ), '[]'::json)
+        FROM public.forecast_check_history fch
+        LEFT JOIN public.stocks s ON s.symbol = fch.stock_symbol
+        WHERE fch.forecast_date BETWEEN v_start_date AND v_end_date
+        ORDER BY fch.forecast_date DESC, fch.pct_error ASC
+        LIMIT p_limit
+    );
+END;
+$$;
+
+COMMENT ON FUNCTION public.get_forecast_history_summary IS 'Returns comprehensive summary statistics for forecast history analysis';
+COMMENT ON FUNCTION public.get_forecast_performance_by_month IS 'Returns forecast performance grouped by month';
+COMMENT ON FUNCTION public.get_forecast_stock_leaders IS 'Returns best and worst performing stocks';
+COMMENT ON FUNCTION public.get_forecast_accuracy_trends IS 'Returns forecast accuracy trends over time';
+COMMENT ON FUNCTION public.get_forecast_detailed_comparison IS 'Returns detailed forecast comparison data';
+
+COMMIT;
+
+RAISE NOTICE 'SUCCESS: Forecast history analysis RPC functions created successfully.';
+
