@@ -23,7 +23,8 @@ echo [2] التحقق من node_modules...
 if not exist "node_modules" (
     echo [X] المكتبات غير مثبتة
     echo [→] جاري تثبيت المكتبات... (قد يستغرق بضع دقائق)
-    call npm install
+    echo [→] ملاحظة: استخدام --legacy-peer-deps لحل تعارضات الإصدارات
+    call npm install --legacy-peer-deps
     if errorlevel 1 (
         echo [X] فشل التثبيت!
         pause
@@ -39,7 +40,7 @@ echo [3] تشغيل الموقع...
 echo.
 echo ========================================
 echo   الموقع سيعمل على:
-echo   http://localhost:3000
+echo   http://localhost:5173
 echo ========================================
 echo.
 echo اضغط Ctrl+C لإيقاف الموقع
