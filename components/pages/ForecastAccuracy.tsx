@@ -1392,7 +1392,7 @@ const ForecastAccuracy: React.FC = () => {
         </div>
       </div>
 
-      {/* New Visual Components Section (مثل الصورة) */}
+      {/* New Visual Components Section (مثل الصورة) - Updated: TradingView-style charts */}
       <div className="mb-6">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
           {t('forecast_performance_analysis') || 'تحليل أداء التوقعات'}
