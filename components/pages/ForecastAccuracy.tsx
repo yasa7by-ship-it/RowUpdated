@@ -2007,6 +2007,133 @@ const ForecastAccuracy: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* By Confidence Level & Bias Analysis Section - Bottom Section */}
+      {by_confidence && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+          {/* By Confidence Level - Left Side */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{t('by_confidence_level') || 'حسب مستوى الثقة'}</h3>
+            <div className="space-y-4">
+              {/* High Confidence */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    {t('high_confidence') || 'ثقة عالية'} (&gt;70%)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {by_confidence.high_confidence.count} {t('forecasts') || 'التوقعات'}
+                    </span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                      {formatPercent(by_confidence.high_confidence.hit_rate, t)}
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-500 rounded-full"
+                    style={{ width: `${Math.min(100, by_confidence.high_confidence.hit_rate)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Medium Confidence */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    {t('medium_confidence') || 'ثقة متوسطة'} (50-70%)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {by_confidence.medium_confidence.count} {t('forecasts') || 'التوقعات'}
+                    </span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                      {formatPercent(by_confidence.medium_confidence.hit_rate, t)}
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-yellow-500 to-yellow-600 transition-all duration-500 rounded-full"
+                    style={{ width: `${Math.min(100, by_confidence.medium_confidence.hit_rate)}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Low Confidence */}
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    {t('low_confidence') || 'ثقة منخفضة'} (&lt;50%)
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600 dark:text-gray-400">
+                      {by_confidence.low_confidence.count} {t('forecasts') || 'التوقعات'}
+                    </span>
+                    <span className="text-sm font-bold text-gray-900 dark:text-white">
+                      {formatPercent(by_confidence.low_confidence.hit_rate, t)}
+                    </span>
+                  </div>
+                </div>
+                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-500 rounded-full"
+                    style={{ width: `${Math.min(100, by_confidence.low_confidence.hit_rate)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bias Analysis - Right Side */}
+          {adv?.biasAnalysis && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{t('bias_analysis') || 'تحليل التحيز في التوقعات'}</h3>
+              <div className="grid grid-cols-1 gap-4">
+                {/* Within Range */}
+                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                  <div className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">
+                    {t('within_range') || 'ضمن النطاق'}
+                  </div>
+                  <div className="text-2xl font-black text-green-700 dark:text-green-400 mb-1">
+                    {adv.biasAnalysis.within_range?.count || 0}
+                  </div>
+                  <div className="text-sm font-bold text-green-600 dark:text-green-400">
+                    ({formatPercent(adv.biasAnalysis.within_range?.percentage || 0, t)})
+                  </div>
+                </div>
+
+                {/* Underestimated */}
+                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-700">
+                  <div className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-1">
+                    {t('underestimated') || 'مقدر بأقل'}
+                  </div>
+                  <div className="text-2xl font-black text-yellow-700 dark:text-yellow-400 mb-1">
+                    {adv.biasAnalysis.underestimated?.count || 0}
+                  </div>
+                  <div className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
+                    ({formatPercent(adv.biasAnalysis.underestimated?.percentage || 0, t)})
+                  </div>
+                </div>
+
+                {/* Overestimated */}
+                <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-4 border border-red-200 dark:border-red-700">
+                  <div className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
+                    {t('overestimated') || 'مبالغ فيه'}
+                  </div>
+                  <div className="text-2xl font-black text-red-700 dark:text-red-400 mb-1">
+                    {adv.biasAnalysis.overestimated?.count || 0}
+                  </div>
+                  <div className="text-sm font-bold text-red-600 dark:text-red-400">
+                    ({formatPercent(adv.biasAnalysis.overestimated?.percentage || 0, t)})
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
