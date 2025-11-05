@@ -104,3 +104,5 @@ WHERE n.nspname = 'public'
     AND pg_get_functiondef(p.oid) NOT LIKE '%SET search_path%'
 ORDER BY p.proname;
 
+
+

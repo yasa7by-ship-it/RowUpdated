@@ -1,0 +1,108 @@
+-- #############################################################################
+-- #
+-- # MIGRATION SCRIPT: Add Chart Titles Translations for Forecast Accuracy Page
+-- #
+-- # Purpose: Add missing translation keys for chart titles that are currently
+-- # showing in English even when Arabic is selected
+-- #
+-- #############################################################################
+
+BEGIN;
+
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+-- English
+('en', 'area_trend', 'Area Trend'),
+('en', 'hit_rate_trend', 'Hit Rate Trend'),
+('en', 'line_trend', 'Line Trend'),
+('en', 'radar', 'Radar Chart'),
+('en', 'radial', 'Radial Chart'),
+('en', 'scatter', 'Scatter Plot'),
+('en', 'stacked', 'Stacked Bar'),
+('en', 'composed', 'Composed Chart'),
+('en', 'top_stocks', 'Top Stocks'),
+('en', 'funnel', 'Funnel Chart'),
+('en', 'reliability', 'Reliability'),
+('en', 'coverage', 'Coverage'),
+('en', 'avg_error', 'Average Error'),
+('en', 'hits', 'Hits'),
+('en', 'high_confidence_hits', 'High Confidence Hits'),
+('en', 'candlestick_with_forecast_range', 'Candlestick with Forecast Range'),
+('en', 'predicted_high', 'Predicted High'),
+('en', 'predicted_low', 'Predicted Low'),
+('en', 'actual_high', 'Actual High'),
+('en', 'actual_low', 'Actual Low'),
+('en', 'predicted', 'Predicted'),
+('en', 'actual', 'Actual'),
+('en', 'waterfall_daily_change', 'Daily Hit Rate Change'),
+('en', 'hit_map', 'Hit Map'),
+('en', 'top_10_stocks', 'Top 10 Stocks'),
+('en', 'range_size_vs_hit_rate', 'Range Size vs Hit Rate'),
+('en', 'range_size', 'Range Size'),
+('en', 'overall_hit_rate', 'Overall Hit Rate'),
+('en', 'total_hits', 'Total Hits'),
+('en', 'total_misses', 'Total Misses'),
+('en', 'successful_forecasts', 'Successful Forecasts'),
+('en', 'failed_forecasts', 'Failed Forecasts'),
+('en', 'forecast_accuracy_indicators_dashboard', 'Forecast Accuracy Indicators Dashboard'),
+('en', 'within_range', 'Within Range'),
+('en', 'range_width', 'Range Width'),
+('en', 'mape', 'Mean Absolute Percentage Error (MAPE)'),
+('en', 'accuracy_rate_global', 'Accuracy Rate (Global KPI)'),
+('en', 'last_30_days_mape_trend', 'Last 30 Days - MAPE Trend'),
+('en', 'last_30_days_hit_rate', 'Last 30 Days - Hit Rate'),
+('en', 'error_distribution_absolute', 'Error Distribution (Absolute Error)'),
+('en', 'within_range_weekly_cumulative', 'Within Range - Weekly Cumulative'),
+('en', 'week', 'Week'),
+
+-- Arabic
+('ar', 'area_trend', 'اتجاه مساحي'),
+('ar', 'hit_rate_trend', 'اتجاه نسبة النجاح'),
+('ar', 'line_trend', 'اتجاه خطي'),
+('ar', 'radar', 'مخطط رادار'),
+('ar', 'radial', 'مخطط دائري'),
+('ar', 'scatter', 'مخطط التشتت'),
+('ar', 'stacked', 'أعمدة مكدسة'),
+('ar', 'composed', 'مخطط مركب'),
+('ar', 'top_stocks', 'أفضل الأسهم'),
+('ar', 'funnel', 'مخطط قمعي'),
+('ar', 'reliability', 'الموثوقية'),
+('ar', 'coverage', 'التغطية'),
+('ar', 'avg_error', 'متوسط الخطأ'),
+('ar', 'hits', 'التوقعات الصحيحة'),
+('ar', 'high_confidence_hits', 'التوقعات الصحيحة عالية الثقة'),
+('ar', 'candlestick_with_forecast_range', 'الشموع مع نطاق التوقع'),
+('ar', 'predicted_high', 'الحد الأعلى المتوقع'),
+('ar', 'predicted_low', 'الحد الأدنى المتوقع'),
+('ar', 'actual_high', 'الحد الأعلى الفعلي'),
+('ar', 'actual_low', 'الحد الأدنى الفعلي'),
+('ar', 'predicted', 'متوقع'),
+('ar', 'actual', 'فعلي'),
+('ar', 'waterfall_daily_change', 'تحليل التغيير اليومي'),
+('ar', 'hit_map', 'خريطة نجاح التوقعات'),
+('ar', 'top_10_stocks', 'أفضل 10 أسهم'),
+('ar', 'range_size_vs_hit_rate', 'نطاق التوقع مقابل نسبة النجاح'),
+('ar', 'range_size', 'حجم النطاق'),
+('ar', 'overall_hit_rate', 'نسبة النجاح الإجمالية'),
+('ar', 'total_hits', 'التوقعات الصحيحة'),
+('ar', 'total_misses', 'التوقعات الخاطئة'),
+('ar', 'successful_forecasts', 'توقعات ناجحة'),
+('ar', 'failed_forecasts', 'توقعات فاشلة'),
+('ar', 'forecast_accuracy_indicators_dashboard', 'لوحة مؤشرات دقة التوقعات'),
+('ar', 'within_range', 'داخل النطاق'),
+('ar', 'range_width', 'اتساع النطاق'),
+('ar', 'mape', 'الخطأ المتوسط (MAPE)'),
+('ar', 'accuracy_rate_global', 'نسبة الدقة (KPI Global)'),
+('ar', 'last_30_days_mape_trend', 'آخر 30 يوم - MAPE Trend'),
+('ar', 'last_30_days_hit_rate', 'آخر 30 يوم - Hit Rate'),
+('ar', 'error_distribution_absolute', 'توزيع الخطأ (Absolute Error)'),
+('ar', 'within_range_weekly_cumulative', 'داخل النطاق - تجميعي أسبوعي'),
+('ar', 'week', 'أسبوع')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+

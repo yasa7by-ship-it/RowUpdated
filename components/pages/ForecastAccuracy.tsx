@@ -4,7 +4,18 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
 import { SpinnerIcon, ChartBarIcon, CheckCircleIcon, XCircleIcon, ArrowUpIcon, ArrowDownIcon, StarIcon, SparklesIcon, TrendingUpIcon } from '../icons';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, AreaChart, Area, ComposedChart, ScatterChart, Scatter, Cell, PieChart, Pie, RadialBarChart, RadialBar } from 'recharts';
+import { 
+  hitRate, 
+  insideRangeRatio, 
+  averageRangeWidth, 
+  mapeMid, 
+  dailyHitRate, 
+  weeklyAggregateFromDailyRate,
+  absoluteErrors,
+  histogram,
+  ForecastRow
+} from '../../utils/forecastMetrics';
 
 // --- Types ---
 interface ForecastAccuracyStats {
@@ -609,23 +620,289 @@ const ForecastAccuracy: React.FC = () => {
   // Prepare chart data - MUST be before any conditional returns (Rules of Hooks)
   const dateChartData = useMemo(() => {
     if (!stats?.by_date || stats.by_date.length === 0) return [];
-    return stats.by_date.slice(-10).map(item => ({
+    return stats.by_date.slice(-15).map(item => ({
       date: formatDate(item.forecast_date, t).split('-').slice(1).join('/'),
       hitRate: parseFloat(item.hit_rate.toFixed(1)),
       forecasts: item.total_forecasts,
+      hits: item.hit_count,
+      misses: item.total_forecasts - item.hit_count,
     }));
   }, [stats?.by_date, t]);
 
-  const confidenceChartData = useMemo(() => {
-    if (!stats?.by_confidence) return [];
-    return [
-      { name: t('high_confidence'), value: stats.by_confidence.high_confidence.count, hitRate: stats.by_confidence.high_confidence.hit_rate },
-      { name: t('medium_confidence'), value: stats.by_confidence.medium_confidence.count, hitRate: stats.by_confidence.medium_confidence.hit_rate },
-      { name: t('low_confidence'), value: stats.by_confidence.low_confidence.count, hitRate: stats.by_confidence.low_confidence.hit_rate },
-    ].filter(item => item.value > 0);
-  }, [stats?.by_confidence, t]);
+  // Candlestick Chart Data with Forecast Range Overlay
+  const candlestickData = useMemo(() => {
+    if (!stats?.recent_forecasts || stats.recent_forecasts.length === 0) return [];
+    return stats.recent_forecasts.slice(-20).map(forecast => {
+      const date = formatDate(forecast.forecast_date, t).split('-').slice(1).join('/');
+      const actualOpen = forecast.actual_low;
+      const actualClose = forecast.actual_high;
+      const actualHigh = Math.max(forecast.actual_low, forecast.actual_high, forecast.actual_close || 0);
+      const actualLow = Math.min(forecast.actual_low, forecast.actual_high, forecast.actual_close || forecast.actual_low);
+      const predictedHigh = forecast.predicted_hi;
+      const predictedLow = forecast.predicted_lo;
+      const rangeSize = ((predictedHigh - predictedLow) / predictedLow) * 100;
+      
+      return {
+        date,
+        stock: forecast.stock_symbol,
+        actualOpen,
+        actualClose,
+        actualHigh,
+        actualLow,
+        predictedHigh,
+        predictedLow,
+        hitRange: forecast.hit_range,
+        rangeSize,
+        hitRate: forecast.hit_range ? 100 : 0,
+      };
+    });
+  }, [stats?.recent_forecasts, t]);
 
-  const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
+  // Waterfall Chart Data - Daily Hit Rate Change
+  const waterfallData = useMemo(() => {
+    if (!stats?.by_date || stats.by_date.length === 0) return [];
+    const sortedDates = [...stats.by_date].sort((a, b) => 
+      new Date(a.forecast_date).getTime() - new Date(b.forecast_date).getTime()
+    );
+    
+    let cumulative = 0;
+    return sortedDates.slice(-20).map((item, index) => {
+      const change = index === 0 ? item.hit_rate : item.hit_rate - sortedDates[index - 1].hit_rate;
+      cumulative += change;
+      return {
+        date: formatDate(item.forecast_date, t).split('-').slice(1).join('/'),
+        value: item.hit_rate,
+        change: index === 0 ? item.hit_rate : change,
+        cumulative: item.hit_rate,
+        isPositive: change >= 0,
+      };
+    });
+  }, [stats?.by_date, t]);
+
+  // Hit Map Data - Grid of stocks with hit/miss status
+  const hitMapData = useMemo(() => {
+    if (!stats?.by_stock || stats.by_stock.length === 0) return [];
+    return stats.by_stock.slice(0, 50).map(stock => ({
+      symbol: stock.stock_symbol,
+      hitRate: stock.hit_rate,
+      isHit: stock.hit_rate >= 50,
+      totalForecasts: stock.total_forecasts,
+    }));
+  }, [stats?.by_stock]);
+
+  // Enhanced Scatter Plot - Forecast Range Size vs Hit Rate
+  const scatterData = useMemo(() => {
+    if (!stats?.recent_forecasts || stats.recent_forecasts.length === 0) return [];
+    return stats.recent_forecasts.slice(0, 100).map(forecast => {
+      const rangeSize = forecast.predicted_hi && forecast.predicted_lo 
+        ? ((forecast.predicted_hi - forecast.predicted_lo) / forecast.predicted_lo) * 100
+        : 0;
+      return {
+        x: rangeSize,
+        y: forecast.hit_range ? 100 : 0,
+        z: forecast.confidence || 50,
+        symbol: forecast.stock_symbol,
+        hitRange: forecast.hit_range,
+      };
+    });
+  }, [stats?.recent_forecasts]);
+
+  // KPI Indicators Data - Radial Charts (using professional forecast metrics)
+  const kpiIndicators = useMemo(() => {
+    if (!stats?.overall || !stats?.recent_forecasts || stats.recent_forecasts.length === 0) {
+      return {
+        withinRange: 0,
+        rangeWidth: 0,
+        mape: 0,
+        accuracyRate: 0,
+      };
+    }
+
+    // Convert to ForecastRow format
+    const forecastRows: ForecastRow[] = stats.recent_forecasts.map(f => ({
+      symbol: f.stock_symbol,
+      forecast_date: f.forecast_date,
+      predicted_lo: f.predicted_lo,
+      predicted_hi: f.predicted_hi,
+      actual_low: f.actual_low,
+      actual_high: f.actual_high,
+      is_hit: f.hit_range,
+      confidence: f.confidence || undefined,
+    }));
+
+    // Within Range Percentage (using insideRangeRatio)
+    const insideRange = insideRangeRatio(forecastRows);
+    const withinRange = insideRange.rate * 100;
+
+    // Average Range Width (as percentage)
+    const avgRangeWidth = averageRangeWidth(forecastRows);
+    // Convert to percentage of average predicted low
+    const avgPredictedLow = forecastRows.reduce((sum, r) => sum + r.predicted_lo, 0) / forecastRows.length;
+    const rangeWidth = avgPredictedLow > 0 ? (avgRangeWidth / avgPredictedLow) * 100 : 0;
+
+    // MAPE (Mean Absolute Percentage Error) - using mapeMid
+    const mape = mapeMid(forecastRows) * 100;
+
+    // Accuracy Rate (Global KPI) - same as hit rate
+    const accuracy = hitRate(forecastRows);
+    const accuracyRate = accuracy.rate * 100;
+
+    return {
+      withinRange: parseFloat(withinRange.toFixed(1)),
+      rangeWidth: parseFloat(rangeWidth.toFixed(1)),
+      mape: parseFloat(mape.toFixed(1)),
+      accuracyRate: parseFloat(accuracyRate.toFixed(1)),
+    };
+  }, [stats?.overall, stats?.recent_forecasts]);
+
+  // 30-Day Trend Data - MAPE and Hit Rate (using professional metrics)
+  const trend30DaysData = useMemo(() => {
+    if (!stats?.recent_forecasts || stats.recent_forecasts.length === 0) return { mape: [], hitRate: [] };
+    
+    // Convert to ForecastRow format
+    const forecastRows: ForecastRow[] = stats.recent_forecasts.map(f => ({
+      symbol: f.stock_symbol,
+      forecast_date: f.forecast_date,
+      predicted_lo: f.predicted_lo,
+      predicted_hi: f.predicted_hi,
+      actual_low: f.actual_low,
+      actual_high: f.actual_high,
+      is_hit: f.hit_range,
+      confidence: f.confidence || undefined,
+    }));
+
+    // Get daily hit rate series
+    const dailySeries = dailyHitRate(forecastRows);
+    const last30Days = dailySeries.slice(-30);
+
+    // Hit Rate Trend
+    const hitRateTrend = last30Days.map(item => ({
+      date: formatDate(item.date, t).split('-').slice(1).join('/'),
+      value: parseFloat((item.rate * 100).toFixed(1)),
+    }));
+
+    // MAPE Trend - calculate MAPE per day
+    const mapeTrend = last30Days.map(item => {
+      const forecastsForDate = forecastRows.filter(f => {
+        const fDate = f.forecast_date instanceof Date 
+          ? f.forecast_date.toISOString().split('T')[0]
+          : f.forecast_date;
+        return fDate === item.date;
+      });
+      const mapeForDate = forecastsForDate.length > 0 
+        ? mapeMid(forecastsForDate) * 100 
+        : 0;
+      return {
+        date: formatDate(item.date, t).split('-').slice(1).join('/'),
+        value: parseFloat(mapeForDate.toFixed(2)),
+      };
+    });
+
+    return { mape: mapeTrend, hitRate: hitRateTrend };
+  }, [stats?.recent_forecasts, t]);
+
+  // Absolute Error Distribution (using professional histogram)
+  const errorDistributionData = useMemo(() => {
+    if (!stats?.recent_forecasts || stats.recent_forecasts.length === 0) return [];
+    
+    // Convert to ForecastRow format
+    const forecastRows: ForecastRow[] = stats.recent_forecasts.map(f => ({
+      symbol: f.stock_symbol,
+      forecast_date: f.forecast_date,
+      predicted_lo: f.predicted_lo,
+      predicted_hi: f.predicted_hi,
+      actual_low: f.actual_low,
+      actual_high: f.actual_high,
+      is_hit: f.hit_range,
+      confidence: f.confidence || undefined,
+    }));
+
+    // Get absolute errors (mid)
+    const errors = absoluteErrors.mid(forecastRows);
+    if (errors.length === 0) return [];
+
+    // Create histogram
+    const maxError = Math.max(...errors);
+    const hist = histogram(errors, 0.5, Math.ceil(maxError) || 6);
+
+    return hist.labels.map((label, index) => ({
+      range: label,
+      count: hist.bins[index],
+    })).reverse(); // Reverse to show from smallest to largest
+  }, [stats?.recent_forecasts]);
+
+  // Weekly Cumulative Within Range (using professional weekly aggregation)
+  const weeklyCumulativeData = useMemo(() => {
+    if (!stats?.recent_forecasts || stats.recent_forecasts.length === 0) return [];
+    
+    // Convert to ForecastRow format
+    const forecastRows: ForecastRow[] = stats.recent_forecasts.map(f => ({
+      symbol: f.stock_symbol,
+      forecast_date: f.forecast_date,
+      predicted_lo: f.predicted_lo,
+      predicted_hi: f.predicted_hi,
+      actual_low: f.actual_low,
+      actual_high: f.actual_high,
+      is_hit: f.hit_range,
+      confidence: f.confidence || undefined,
+    }));
+
+    // Get daily hit rate series
+    const dailySeries = dailyHitRate(forecastRows);
+    
+    // Convert to format expected by weeklyAggregateFromDailyRate
+    const dailyRateSeries = dailySeries.map(d => ({ date: d.date, rate: d.rate }));
+    
+    // Get weekly aggregation
+    const weekly = weeklyAggregateFromDailyRate(dailyRateSeries);
+
+    // Return last 5 weeks
+    return weekly.slice(-5).map((week, index) => ({
+      week: t('week') + ' ' + (index + 1),
+      percentage: week.rate * 100,
+    }));
+  }, [stats?.recent_forecasts, t]);
+
+  // Bias Analysis Horizontal Bar Chart Data
+  const biasBarData = useMemo(() => {
+    if (!advancedStats?.biasAnalysis) return [];
+    return [
+      { 
+        name: t('overestimated'), 
+        value: advancedStats.biasAnalysis.overestimated?.percentage || 0,
+        count: advancedStats.biasAnalysis.overestimated?.count || 0,
+        color: '#ef4444'
+      },
+      { 
+        name: t('underestimated'), 
+        value: advancedStats.biasAnalysis.underestimated?.percentage || 0,
+        count: advancedStats.biasAnalysis.underestimated?.count || 0,
+        color: '#f59e0b'
+      },
+      { 
+        name: t('within_range'), 
+        value: advancedStats.biasAnalysis.within_range?.percentage || 0,
+        count: advancedStats.biasAnalysis.within_range?.count || 0,
+        color: '#10b981'
+      },
+    ];
+  }, [advancedStats?.biasAnalysis, t]);
+
+  // Top Stocks Performance Data - Ranked Bar Chart (Top 10)
+  const topStocksData = useMemo(() => {
+    if (!stats?.by_stock || stats.by_stock.length === 0) return [];
+    return stats.by_stock
+      .slice()
+      .sort((a, b) => b.hit_rate - a.hit_rate)
+      .slice(0, 10)
+      .map(stock => ({
+        name: stock.stock_symbol,
+        hitRate: parseFloat(stock.hit_rate.toFixed(1)),
+        forecasts: stock.total_forecasts,
+        hits: stock.hit_count,
+        misses: stock.miss_count,
+      }));
+  }, [stats?.by_stock]);
 
   // Check permission
   if (!hasPermission('view:forecast_accuracy')) {
@@ -668,178 +945,250 @@ const ForecastAccuracy: React.FC = () => {
   const adv = advancedStats;
 
   return (
-    <div className="space-y-6">
+    <div className="bg-gray-50 dark:bg-gray-900 min-h-screen p-3">
       {/* Page Title */}
-      <div className="flex justify-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-          <ChartBarIcon className="w-6 h-6 text-nextrow-primary" />
+      <div className="mb-3">
+        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <ChartBarIcon className="w-5 h-5 text-nextrow-primary" />
           {t('forecast_accuracy_analysis')}
         </h1>
       </div>
 
-      {/* Main Layout: Left Sidebar (Tools) + Right Side (Table) */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Sidebar - All Tools */}
-        <div className="w-full lg:w-1/3 space-y-4">
-          {/* Overall KPIs - Modern Cards */}
-          <div className="grid grid-cols-2 gap-3">
-            <MiniKPICard
-              title={t('total_forecasts')}
-              value={overall.total_forecasts}
-              color="blue"
-              icon={<ChartBarIcon className="w-5 h-5" />}
-            />
-            <MiniKPICard
-              title={t('hit_rate')}
-              value={formatPercent(overall.hit_rate, t)}
-              color="green"
-              icon={<TrendingUpIcon className="w-5 h-5" />}
-            />
-            <MiniKPICard
-              title={t('avg_error')}
-              value={formatPercent(overall.avg_pct_error, t)}
-              color="yellow"
-              icon={<XCircleIcon className="w-5 h-5" />}
-            />
-            <MiniKPICard
-              title={t('avg_confidence')}
-              value={formatPercent(overall.avg_confidence, t)}
-              color="blue"
-              icon={<SparklesIcon className="w-5 h-5" />}
-            />
-          </div>
-
-          {/* Confidence Level */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-            <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{t('by_confidence_level')}</h2>
-            
-            {/* Pie Chart */}
-            {confidenceChartData.length > 0 && (
-              <div className="mb-4">
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie
-                      data={confidenceChartData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={70}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {confidenceChartData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-green-700 dark:text-green-400">{t('high_confidence')}</span>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {by_confidence.high_confidence.count} {t('forecasts')}
-                  </span>
-                </div>
-                <ProgressBar 
-                  value={by_confidence.high_confidence.hit_rate} 
-                  max={100} 
-                  label={formatPercent(by_confidence.high_confidence.hit_rate, t)}
-                  color="bg-green-500"
-                  t={t}
-                />
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-yellow-700 dark:text-yellow-400">{t('medium_confidence')}</span>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {by_confidence.medium_confidence.count} {t('forecasts')}
-                  </span>
-                </div>
-                <ProgressBar 
-                  value={by_confidence.medium_confidence.hit_rate} 
-                  max={100} 
-                  label={formatPercent(by_confidence.medium_confidence.hit_rate, t)}
-                  color="bg-yellow-500"
-                  t={t}
-                />
-              </div>
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-red-700 dark:text-red-400">{t('low_confidence')}</span>
-                  <span className="text-xs text-gray-600 dark:text-gray-400">
-                    {by_confidence.low_confidence.count} {t('forecasts')}
-                  </span>
-                </div>
-                <ProgressBar 
-                  value={by_confidence.low_confidence.hit_rate} 
-                  max={100} 
-                  label={formatPercent(by_confidence.low_confidence.hit_rate, t)}
-                  color="bg-red-500"
-                  t={t}
-                />
-              </div>
+      {/* Top Section: KPI Indicators Dashboard - Radial Charts */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+          {t('forecast_accuracy_indicators_dashboard') || 'لوحة مؤشرات دقة التوقعات'}
+        </h2>
+        
+        {/* 4 Radial KPI Charts */}
+        <div className="grid grid-cols-4 gap-4 mb-6">
+          {/* Within Range */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
+            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
+              {t('within_range') || 'داخل النطاق'}
+            </h3>
+            <ResponsiveContainer width="100%" height={120}>
+              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.withinRange, fill: '#10b981' }]} startAngle={180} endAngle={0}>
+                <RadialBar dataKey="value" cornerRadius={5} fill="#10b981" />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
+              <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                {kpiIndicators.withinRange.toFixed(1)}%
+              </span>
             </div>
           </div>
 
-          {/* Hit Rate Trend Chart */}
-          {dateChartData.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{t('hit_rate_trend') || 'Hit Rate Trend'}</h2>
+          {/* Range Width */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
+            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
+              {t('range_width') || 'اتساع النطاق'}
+            </h3>
+            <ResponsiveContainer width="100%" height={120}>
+              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.rangeWidth, fill: '#3b82f6' }]} startAngle={180} endAngle={0}>
+                <RadialBar dataKey="value" cornerRadius={5} fill="#3b82f6" />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
+              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                {kpiIndicators.rangeWidth.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* MAPE */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
+            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
+              {t('mape') || 'الخطأ المتوسط (MAPE)'}
+            </h3>
+            <ResponsiveContainer width="100%" height={120}>
+              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.mape, fill: '#f59e0b' }]} startAngle={180} endAngle={0}>
+                <RadialBar dataKey="value" cornerRadius={5} fill="#f59e0b" />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
+              <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                {kpiIndicators.mape.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+
+          {/* Accuracy Rate (Global KPI) */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
+            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
+              {t('accuracy_rate_global') || 'نسبة الدقة (KPI Global)'}
+            </h3>
+            <ResponsiveContainer width="100%" height={120}>
+              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.accuracyRate, fill: '#10b981' }]} startAngle={180} endAngle={0}>
+                <RadialBar dataKey="value" cornerRadius={5} fill="#10b981" />
+              </RadialBarChart>
+            </ResponsiveContainer>
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
+              <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                {kpiIndicators.accuracyRate.toFixed(1)}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 30-Day Trend Charts */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* MAPE Trend */}
+          {trend30DaysData.mape.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
+                {t('last_30_days_mape_trend') || 'آخر 30 يوم - MAPE Trend'}
+              </h3>
               <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={dateChartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
+                <LineChart data={trend30DaysData.mape} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
+                  <YAxis domain={[0, 'dataMax + 0.5']} tick={{ fontSize: 9 }} />
                   <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px'
-                    }}
+                    formatter={(value: number) => `${value.toFixed(2)}%`}
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
                   />
-                  <Bar dataKey="hitRate" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Line type="monotone" dataKey="value" stroke="#a855f7" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Hit Rate Trend */}
+          {trend30DaysData.hitRate.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
+                {t('last_30_days_hit_rate') || 'آخر 30 يوم - Hit Rate'}
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trend30DaysData.hitRate} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+                  <Tooltip 
+                    formatter={(value: number) => `${value.toFixed(1)}%`}
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  />
+                  <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* Error Distribution and Weekly Cumulative */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {/* Error Distribution */}
+          {errorDistributionData.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
+                {t('error_distribution_absolute') || 'توزيع الخطأ (Absolute Error)'}
+              </h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={errorDistributionData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="range" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
+                  <YAxis tick={{ fontSize: 9 }} />
+                  <Tooltip 
+                    formatter={(value: number) => value.toLocaleString()}
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  />
+                  <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* Bias Analysis */}
-          {adv?.biasAnalysis && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
-              <h2 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{t('bias_analysis')}</h2>
-              <div className="grid grid-cols-1 gap-3">
-                <KPICard
-                  title={t('overestimated')}
-                  value={adv.biasAnalysis.overestimated?.count || 0}
-                  subtitle={formatPercent(adv.biasAnalysis.overestimated?.percentage || 0, t)}
-                  color="red"
-                />
-                <KPICard
-                  title={t('underestimated')}
-                  value={adv.biasAnalysis.underestimated?.count || 0}
-                  subtitle={formatPercent(adv.biasAnalysis.underestimated?.percentage || 0, t)}
-                  color="yellow"
-                />
-                <KPICard
-                  title={t('within_range')}
-                  value={adv.biasAnalysis.within_range?.count || 0}
-                  subtitle={formatPercent(adv.biasAnalysis.within_range?.percentage || 0, t)}
-                  color="green"
-                />
-              </div>
+          {/* Weekly Cumulative */}
+          {weeklyCumulativeData.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
+                {t('within_range_weekly_cumulative') || 'داخل النطاق - تجميعي أسبوعي'}
+              </h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={weeklyCumulativeData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="week" tick={{ fontSize: 9 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+                  <Tooltip 
+                    formatter={(value: number) => `${value.toFixed(1)}%`}
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  />
+                  <Bar dataKey="percentage" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
             </div>
           )}
         </div>
+      </div>
 
-        {/* Right Side - Table with Tools Above */}
-        <div className="w-full lg:w-2/3">
-          {/* Stock Performance Table with Search/Filter Tools Above */}
+      {/* Original KPI Cards Section */}
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        {/* Hit Rate - Large Clear Display */}
+        <div className={`rounded-lg shadow-sm border-2 p-3 flex flex-col justify-center items-center ${
+          overall.hit_rate >= 80 
+            ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/20 border-green-300 dark:border-green-700' 
+            : overall.hit_rate >= 60 
+            ? 'bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/20 border-yellow-300 dark:border-yellow-700'
+            : 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/30 dark:to-orange-900/20 border-red-300 dark:border-red-700'
+        }`}>
+          <h3 className={`text-xs font-bold mb-2 ${
+            overall.hit_rate >= 80 ? 'text-green-800 dark:text-green-200' 
+            : overall.hit_rate >= 60 ? 'text-yellow-800 dark:text-yellow-200'
+            : 'text-red-800 dark:text-red-200'
+          }`}>
+            {t('overall_hit_rate') || 'نسبة النجاح الإجمالية'}
+          </h3>
+          <div className={`text-4xl font-black mb-1 ${
+            overall.hit_rate >= 80 ? 'text-green-700 dark:text-green-300' 
+            : overall.hit_rate >= 60 ? 'text-yellow-700 dark:text-yellow-300'
+            : 'text-red-700 dark:text-red-300'
+          }`}>
+            {formatPercent(overall.hit_rate, t)}
+          </div>
+          <div className={`text-[10px] font-medium ${
+            overall.hit_rate >= 80 ? 'text-green-600 dark:text-green-400' 
+            : overall.hit_rate >= 60 ? 'text-yellow-600 dark:text-yellow-400'
+            : 'text-red-600 dark:text-red-400'
+          }`}>
+            {overall.hit_range_count.toLocaleString()} / {overall.total_forecasts.toLocaleString()}
+          </div>
+        </div>
+
+        {/* Total Hits - KPI Card */}
+        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg shadow-sm border-2 border-green-300 dark:border-green-700 p-3 flex flex-col justify-center items-center">
+          <div className="flex items-center gap-1 mb-1 justify-center">
+            <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
+            <span className="text-[9px] font-semibold text-green-700 dark:text-green-300 uppercase">{t('total_hits') || 'التوقعات الصحيحة'}</span>
+          </div>
+          <div className="text-center text-3xl font-black text-green-700 dark:text-green-300 mb-1">
+            {overall.hit_range_count.toLocaleString()}
+          </div>
+          <div className="text-[9px] text-green-600 dark:text-green-400">
+            {t('successful_forecasts') || 'توقعات ناجحة'}
+          </div>
+        </div>
+
+        {/* Total Misses - KPI Card */}
+        <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg shadow-sm border-2 border-red-300 dark:border-red-700 p-3 flex flex-col justify-center items-center">
+          <div className="flex items-center gap-1 mb-1 justify-center">
+            <XCircleIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
+            <span className="text-[9px] font-semibold text-red-700 dark:text-red-300 uppercase">{t('total_misses') || 'التوقعات الخاطئة'}</span>
+          </div>
+          <div className="text-center text-3xl font-black text-red-700 dark:text-red-300 mb-1">
+            {overall.miss_range_count.toLocaleString()}
+          </div>
+          <div className="text-[9px] text-red-600 dark:text-red-400">
+            {t('failed_forecasts') || 'توقعات فاشلة'}
+          </div>
+        </div>
+      </div>
+
+      {/* Main Layout: Left (Table) + Right (Charts) */}
+      <div className="flex flex-col lg:flex-row gap-3">
+        {/* Left Side - Table */}
+        <div className="w-full lg:w-3/5">
+          {/* Stock Performance Table */}
           {filteredByStockData.length > 0 ? (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
               {/* Search and Filters Tools - Inside Table Card */}
@@ -880,7 +1229,7 @@ const ForecastAccuracy: React.FC = () => {
                           : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                       }`}
                     >
-                      {t('all') || 'الكل'}
+                      {t('all')}
                     </button>
                     <button
                       onClick={() => setHitFilter('hit')}
@@ -890,7 +1239,7 @@ const ForecastAccuracy: React.FC = () => {
                           : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                       }`}
                     >
-                      {t('hit') || 'صحيحة'}
+                      {t('hit')}
                     </button>
                     <button
                       onClick={() => setHitFilter('miss')}
@@ -900,7 +1249,7 @@ const ForecastAccuracy: React.FC = () => {
                           : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                       }`}
                     >
-                      {t('miss') || 'غير صحيحة'}
+                      {t('miss')}
                     </button>
                   </div>
                 </div>
@@ -1031,7 +1380,7 @@ const ForecastAccuracy: React.FC = () => {
                 <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center justify-between">
                     <div className="text-sm text-gray-600 dark:text-gray-400">
-                      <span className="font-semibold">{((byStockPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(byStockPage * itemsPerPage, filteredByStockData.length)}</span> {t('of') || 'of'} <span className="font-semibold">{filteredByStockData.length}</span>
+                      <span className="font-semibold">{((byStockPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(byStockPage * itemsPerPage, filteredByStockData.length)}</span> {t('of')} <span className="font-semibold">{filteredByStockData.length}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -1087,6 +1436,197 @@ const ForecastAccuracy: React.FC = () => {
               <p className="text-gray-500 dark:text-gray-400">{t('no_data_available')}</p>
             </div>
           )}
+        </div>
+
+        {/* Right Side - Professional Financial Charts */}
+        <div className="w-full lg:w-2/5 space-y-3">
+          {/* Professional Charts Grid */}
+          <div className="space-y-3">
+            {/* Candlestick Chart with Forecast Range Overlay */}
+            {candlestickData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('candlestick_with_forecast_range') || 'الشموع مع نطاق التوقع'}</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <ComposedChart data={candlestickData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="forecastRange" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 9 }} />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                      formatter={(value: any, name: string, props: any) => {
+                        if (name === 'predictedHigh' || name === 'predictedLow') return [formatNumber(value, t), t('predicted') || 'متوقع'];
+                        if (name === 'actualHigh' || name === 'actualLow') return [formatNumber(value, t), t('actual') || 'فعلي'];
+                        return [value, name];
+                      }}
+                    />
+                    <Legend />
+                    {/* Forecast Range Area */}
+                    <Area 
+                      type="monotone" 
+                      dataKey="predictedHigh" 
+                      fill="url(#forecastRange)" 
+                      stroke="#3b82f6" 
+                      strokeWidth={1}
+                      strokeDasharray="5 5"
+                      name={t('predicted_high') || 'الحد الأعلى المتوقع'}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="predictedLow" 
+                      fill="url(#forecastRange)" 
+                      stroke="#3b82f6" 
+                      strokeWidth={1}
+                      strokeDasharray="5 5"
+                      name={t('predicted_low') || 'الحد الأدنى المتوقع'}
+                    />
+                    {/* Actual Price Range */}
+                    <Bar dataKey="actualHigh" fill="#10b981" name={t('actual_high') || 'الحد الأعلى الفعلي'} />
+                    <Bar dataKey="actualLow" fill="#ef4444" name={t('actual_low') || 'الحد الأدنى الفعلي'} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Waterfall Chart - Daily Hit Rate Change */}
+            {waterfallData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('waterfall_daily_change') || 'تحليل التغيير اليومي'}</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={waterfallData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+                    <Tooltip 
+                      formatter={(value: number) => `${value.toFixed(1)}%`}
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                    />
+                    <Bar dataKey="cumulative" radius={[4, 4, 0, 0]}>
+                      {waterfallData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.isPositive ? '#10b981' : '#ef4444'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Hit Map - Grid of Stocks */}
+            {hitMapData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('hit_map') || 'خريطة نجاح التوقعات'}</h3>
+                <div className="grid grid-cols-10 gap-1">
+                  {hitMapData.map((stock, index) => (
+                    <div
+                      key={index}
+                      className={`aspect-square rounded flex items-center justify-center text-[8px] font-bold transition-all hover:scale-110 ${
+                        stock.isHit 
+                          ? 'bg-green-500 text-white' 
+                          : 'bg-red-500 text-white'
+                      }`}
+                      title={`${stock.symbol}: ${stock.hitRate.toFixed(1)}%`}
+                    >
+                      {stock.symbol.substring(0, 2)}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-center gap-4 mt-3 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-green-500 rounded"></div>
+                    <span className="text-gray-600 dark:text-gray-400">{t('hit')}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-4 h-4 bg-red-500 rounded"></div>
+                    <span className="text-gray-600 dark:text-gray-400">{t('miss')}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Top 10 Stocks - Ranked Bar Chart */}
+            {topStocksData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('top_10_stocks') || 'أفضل 10 أسهم'}</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={topStocksData} layout="vertical" margin={{ top: 5, right: 10, left: 50, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={45} />
+                    <Tooltip 
+                      formatter={(value: number) => `${value.toFixed(1)}%`}
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                    />
+                    <Bar dataKey="hitRate" radius={[0, 4, 4, 0]} fill="#10b981" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Scatter Plot - Range Size vs Hit Rate */}
+            {scatterData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('range_size_vs_hit_rate') || 'نطاق التوقع مقابل نسبة النجاح'}</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis 
+                      type="number" 
+                      dataKey="x" 
+                      name={t('range_size') || 'حجم النطاق'}
+                      unit="%"
+                      tick={{ fontSize: 9 }}
+                    />
+                    <YAxis 
+                      type="number" 
+                      dataKey="y" 
+                      name={t('hit_rate') || 'نسبة النجاح'}
+                      unit="%"
+                      tick={{ fontSize: 9 }}
+                    />
+                    <Tooltip 
+                      cursor={{ strokeDasharray: '3 3' }}
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                      formatter={(value: number, name: string, props: any) => {
+                        if (name === 'x') return [`${value.toFixed(2)}%`, t('range_size') || 'حجم النطاق'];
+                        if (name === 'y') return [`${value}%`, t('hit_rate') || 'نسبة النجاح'];
+                        return [value, name];
+                      }}
+                      labelFormatter={(label) => `Symbol: ${scatterData.find(d => d.x === label)?.symbol || ''}`}
+                    />
+                    <Scatter data={scatterData} fill="#3b82f6">
+                      {scatterData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.hitRange ? '#10b981' : '#ef4444'} />
+                      ))}
+                    </Scatter>
+                  </ScatterChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+
+            {/* Bias Analysis */}
+            {biasBarData.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
+                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('bias_analysis')}</h3>
+                <ResponsiveContainer width="100%" height={150}>
+                  <BarChart data={biasBarData} layout="vertical" margin={{ top: 5, right: 10, left: 60, bottom: 5 }}>
+                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={55} />
+                    <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {biasBarData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -32,3 +32,5 @@ COMMIT;
 
 RAISE NOTICE 'SUCCESS: Missing forecast accuracy translations added.';
 
+
+

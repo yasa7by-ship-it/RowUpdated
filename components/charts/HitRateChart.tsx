@@ -46,3 +46,5 @@ export const HitRateChart: React.FC<HitRateChartProps> = ({ data, title = 'Hit R
   );
 };
 
+
+

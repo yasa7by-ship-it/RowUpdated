@@ -1,0 +1,870 @@
+-- #############################################################################
+-- #
+-- # COMPREHENSIVE FORECAST ACCURACY KPIs DOCUMENTATION
+-- #
+-- # Purpose: Define comprehensive KPIs for measuring forecast accuracy
+-- #          focusing on success rates and prediction quality metrics
+-- #
+-- # IMPORTANT: Date Range Configuration
+-- #   All queries use: CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+-- #   To change the date range, replace this with your desired dates:
+-- #   Example: BETWEEN '2025-01-01'::date AND '2025-12-31'::date
+-- #   Or use: BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE (for 30 days)
+-- #
+-- # Data Sources:
+-- #   - forecast_check_history: Forecast predictions vs actual results
+-- #   - technical_indicators: Technical analysis indicators (RSI, MACD, etc.)
+-- #   - candle_patterns: Candlestick patterns with bullish/bearish signals
+-- #   - historical_data: Historical price data (OHLCV)
+-- #
+-- # Total KPIs: 37 comprehensive metrics
+-- #
+-- #############################################################################
+
+/*
+================================================================================
+SECTION 1: CORE ACCURACY KPIs (مؤشرات الدقة الأساسية)
+================================================================================
+*/
+
+-- 1.1 Overall Hit Rate (نسبة النجاح الإجمالية)
+-- Purpose: Percentage of forecasts where actual price range falls within predicted range
+-- Formula: (COUNT(hit_range = true) / COUNT(*)) * 100
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS overall_hit_rate,
+    COUNT(*) FILTER (WHERE hit_range = true) AS total_hits,
+    COUNT(*) FILTER (WHERE hit_range = false) AS total_misses,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE;
+
+-- 1.2 Weighted Hit Rate by Confidence (نسبة النجاح المرجحة بالثقة)
+-- Purpose: Hit rate weighted by forecast confidence level
+-- Formula: SUM(hit_rate * confidence) / SUM(confidence)
+SELECT 
+    SUM(CASE WHEN hit_range THEN 1 ELSE 0 END::numeric * confidence) / 
+    NULLIF(SUM(confidence), 0) * 100 AS weighted_hit_rate
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND confidence IS NOT NULL;
+
+-- 1.3 Hit Rate by Confidence Level (نسبة النجاح حسب مستوى الثقة)
+-- Purpose: Success rate breakdown by confidence tiers
+SELECT 
+    CASE 
+        WHEN confidence >= 0.8 THEN 'high_confidence'
+        WHEN confidence >= 0.6 THEN 'medium_confidence'
+        WHEN confidence >= 0.4 THEN 'low_confidence'
+        ELSE 'very_low_confidence'
+    END AS confidence_level,
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND confidence IS NOT NULL
+GROUP BY confidence_level;
+
+-- 1.4 Exact Hit Rate (نسبة التوقع الدقيق)
+-- Purpose: Percentage where predicted_price matches actual_close within 1%
+-- Formula: COUNT(|predicted_price - actual_close| / actual_close <= 0.01) / COUNT(*)
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN 
+            COUNT(*) FILTER (WHERE ABS(predicted_price - actual_close) / NULLIF(actual_close, 0) <= 0.01)::numeric / 
+            COUNT(*)::numeric * 100
+        ELSE 0
+    END AS exact_hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_close IS NOT NULL;
+
+/*
+================================================================================
+SECTION 2: ERROR METRICS KPIs (مؤشرات الأخطاء)
+================================================================================
+*/
+
+-- 2.1 Mean Absolute Percentage Error - MAPE (متوسط الخطأ النسبي المطلق)
+-- Purpose: Average percentage error across all forecasts
+-- Formula: AVG(ABS(predicted_price - actual_close) / actual_close)
+SELECT 
+    AVG(ABS(predicted_price - actual_close) / NULLIF(actual_close, 0)) * 100 AS mape,
+    AVG(ABS(predicted_price - actual_close)) AS mean_absolute_error,
+    STDDEV(ABS(predicted_price - actual_close) / NULLIF(actual_close, 0)) * 100 AS mape_stddev
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_close IS NOT NULL;
+
+-- 2.2 MAPE by Forecast Range Size (MAPE حسب حجم نطاق التوقع)
+-- Purpose: Error correlation with forecast range width
+SELECT 
+    CASE 
+        WHEN (predicted_hi - predicted_lo) / NULLIF(predicted_lo, 0) <= 0.05 THEN 'narrow_range'
+        WHEN (predicted_hi - predicted_lo) / NULLIF(predicted_lo, 0) <= 0.10 THEN 'medium_range'
+        ELSE 'wide_range'
+    END AS range_category,
+    AVG(ABS(predicted_price - actual_close) / NULLIF(actual_close, 0)) * 100 AS avg_mape,
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_close IS NOT NULL
+GROUP BY range_category;
+
+-- 2.3 Directional Accuracy (دقة الاتجاه)
+-- Purpose: Percentage of forecasts where predicted direction matches actual movement
+-- Formula: COUNT(predicted_direction = actual_direction) / COUNT(*)
+WITH forecast_directions AS (
+    SELECT 
+        *,
+        CASE 
+            WHEN predicted_price > LAG(predicted_price) OVER (PARTITION BY stock_symbol ORDER BY forecast_date) THEN 'up'
+            WHEN predicted_price < LAG(predicted_price) OVER (PARTITION BY stock_symbol ORDER BY forecast_date) THEN 'down'
+            ELSE 'neutral'
+        END AS predicted_direction,
+        CASE 
+            WHEN actual_close > LAG(actual_close) OVER (PARTITION BY stock_symbol ORDER BY forecast_date) THEN 'up'
+            WHEN actual_close < LAG(actual_close) OVER (PARTITION BY stock_symbol ORDER BY forecast_date) THEN 'down'
+            ELSE 'neutral'
+        END AS actual_direction
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+      AND actual_close IS NOT NULL
+)
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE predicted_direction = actual_direction)::numeric / 
+            NULLIF(COUNT(*) FILTER (WHERE predicted_direction != 'neutral' AND actual_direction != 'neutral'), 0)::numeric * 100
+        ELSE 0
+    END AS directional_accuracy
+FROM forecast_directions
+WHERE predicted_direction != 'neutral' AND actual_direction != 'neutral';
+
+/*
+================================================================================
+SECTION 3: PRECISION METRICS KPIs (مؤشرات الدقة التفصيلية)
+================================================================================
+*/
+
+-- 3.1 Range Coverage Ratio (نسبة تغطية النطاق)
+-- Purpose: Average percentage of predicted range that actual price covered
+-- Formula: AVG((actual_high - actual_low) / (predicted_hi - predicted_lo))
+SELECT 
+    AVG((actual_high - actual_low) / NULLIF(predicted_hi - predicted_lo, 0)) * 100 AS range_coverage_ratio,
+    AVG(predicted_hi - predicted_lo) AS avg_predicted_range,
+    AVG(actual_high - actual_low) AS avg_actual_range
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND predicted_hi > predicted_lo
+  AND actual_high > actual_low;
+
+-- 3.2 Range Positioning Accuracy (دقة موضع النطاق)
+-- Purpose: How well predicted range centers around actual range
+-- Formula: AVG(ABS((predicted_mid - actual_mid) / actual_mid))
+SELECT 
+    AVG(ABS(((predicted_lo + predicted_hi) / 2 - (actual_low + actual_high) / 2) / 
+    NULLIF((actual_low + actual_high) / 2, 0))) * 100 AS range_positioning_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_low IS NOT NULL AND actual_high IS NOT NULL;
+
+-- 3.3 High/Low Boundary Accuracy (دقة الحدود العليا والسفلى)
+-- Purpose: Accuracy of predicted high and low boundaries separately
+SELECT 
+    -- High boundary accuracy
+    AVG(ABS(predicted_hi - actual_high) / NULLIF(actual_high, 0)) * 100 AS high_boundary_mape,
+    COUNT(*) FILTER (WHERE actual_high <= predicted_hi)::numeric / COUNT(*)::numeric * 100 AS high_boundary_coverage,
+    -- Low boundary accuracy
+    AVG(ABS(predicted_lo - actual_low) / NULLIF(actual_low, 0)) * 100 AS low_boundary_mape,
+    COUNT(*) FILTER (WHERE actual_low >= predicted_lo)::numeric / COUNT(*)::numeric * 100 AS low_boundary_coverage
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_low IS NOT NULL AND actual_high IS NOT NULL;
+
+/*
+================================================================================
+SECTION 4: TEMPORAL KPIs (مؤشرات زمنية)
+================================================================================
+*/
+
+-- 4.1 Daily Hit Rate Trend (اتجاه نسبة النجاح اليومية)
+-- Purpose: Track hit rate progression over time
+SELECT 
+    forecast_date,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS daily_hit_rate,
+    COUNT(*) AS daily_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY forecast_date
+ORDER BY forecast_date;
+
+-- 4.2 Weekly Aggregated Hit Rate (نسبة النجاح الأسبوعية)
+-- Purpose: Weekly performance summary
+SELECT 
+    DATE_TRUNC('week', forecast_date)::date AS week_start,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS weekly_hit_rate,
+    COUNT(*) AS weekly_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY DATE_TRUNC('week', forecast_date)
+ORDER BY week_start;
+
+-- 4.3 Monthly Aggregated Hit Rate (نسبة النجاح الشهرية)
+-- Purpose: Monthly performance summary
+SELECT 
+    DATE_TRUNC('month', forecast_date)::date AS month_start,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS monthly_hit_rate,
+    COUNT(*) AS monthly_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY DATE_TRUNC('month', forecast_date)
+ORDER BY month_start;
+
+-- 4.4 Performance Trend (اتجاه الأداء)
+-- Purpose: Compare recent performance vs historical average
+WITH recent_performance AS (
+    SELECT 
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+            ELSE 0
+        END AS recent_hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date >= CURRENT_DATE - INTERVAL '30 days'
+),
+historical_performance AS (
+    SELECT 
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+            ELSE 0
+        END AS historical_hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date < CURRENT_DATE - INTERVAL '30 days'
+      AND forecast_date >= CURRENT_DATE - INTERVAL '180 days'
+)
+SELECT 
+    r.recent_hit_rate,
+    h.historical_hit_rate,
+    r.recent_hit_rate - h.historical_hit_rate AS trend_change,
+    CASE 
+        WHEN r.recent_hit_rate > h.historical_hit_rate THEN 'improving'
+        WHEN r.recent_hit_rate < h.historical_hit_rate THEN 'declining'
+        ELSE 'stable'
+    END AS trend_direction
+FROM recent_performance r, historical_performance h;
+
+/*
+================================================================================
+SECTION 5: STOCK-SPECIFIC KPIs (مؤشرات خاصة بالأسهم)
+================================================================================
+*/
+
+-- 5.1 Hit Rate by Stock (نسبة النجاح حسب السهم)
+-- Purpose: Individual stock performance ranking
+SELECT 
+    stock_symbol,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS stock_hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error,
+    AVG(ABS(predicted_price - actual_close)) AS avg_absolute_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY stock_symbol
+HAVING COUNT(*) >= 5  -- Minimum forecasts required
+ORDER BY stock_hit_rate DESC;
+
+-- 5.2 Top Performers (أفضل أداء)
+-- Purpose: Identify stocks with highest success rates
+SELECT 
+    stock_symbol,
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY stock_symbol
+HAVING COUNT(*) >= 10
+  AND COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 >= 80
+ORDER BY hit_rate DESC
+LIMIT 20;
+
+-- 5.3 Underperformers (أدنى أداء)
+-- Purpose: Identify stocks needing improvement
+SELECT 
+    stock_symbol,
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY stock_symbol
+HAVING COUNT(*) >= 10
+  AND COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 < 50
+ORDER BY hit_rate ASC
+LIMIT 20;
+
+/*
+================================================================================
+SECTION 6: TECHNICAL INDICATOR-BASED KPIs (مؤشرات قائمة على المؤشرات التقنية)
+================================================================================
+*/
+
+-- 6.1 Hit Rate by RSI Zone (نسبة النجاح حسب منطقة RSI)
+-- Purpose: Success rate correlation with RSI levels
+SELECT 
+    ti.rsi_zone,
+    CASE 
+        WHEN ti.rsi_zone = 0 THEN 'oversold'
+        WHEN ti.rsi_zone = 1 THEN 'neutral'
+        WHEN ti.rsi_zone = 2 THEN 'overbought'
+        ELSE 'unknown'
+    END AS rsi_zone_name,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(fch.confidence) AS avg_confidence
+FROM forecast_check_history fch
+JOIN technical_indicators ti ON fch.stock_symbol = ti.stock_symbol 
+    AND fch.forecast_date = ti.date
+WHERE fch.forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND ti.rsi_zone IS NOT NULL
+GROUP BY ti.rsi_zone
+ORDER BY ti.rsi_zone;
+
+-- 6.2 Hit Rate by MACD Signal (نسبة النجاح حسب إشارة MACD)
+-- Purpose: Success rate correlation with MACD crossovers
+SELECT 
+    ti.macd_cross,
+    CASE 
+        WHEN ti.macd_cross = 1 THEN 'bullish_cross'
+        WHEN ti.macd_cross = -1 THEN 'bearish_cross'
+        WHEN ti.macd_cross = 0 THEN 'no_cross'
+        ELSE 'unknown'
+    END AS macd_signal,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history fch
+JOIN technical_indicators ti ON fch.stock_symbol = ti.stock_symbol 
+    AND fch.forecast_date = ti.date
+WHERE fch.forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND ti.macd_cross IS NOT NULL
+GROUP BY ti.macd_cross
+ORDER BY ti.macd_cross;
+
+-- 6.3 Hit Rate by Volatility Level (نسبة النجاح حسب مستوى التقلب)
+-- Purpose: Success rate correlation with market volatility
+SELECT 
+    CASE 
+        WHEN ti.volatility_20 < 0.02 THEN 'low_volatility'
+        WHEN ti.volatility_20 < 0.04 THEN 'medium_volatility'
+        ELSE 'high_volatility'
+    END AS volatility_level,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(fch.pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history fch
+JOIN technical_indicators ti ON fch.stock_symbol = ti.stock_symbol 
+    AND fch.forecast_date = ti.date
+WHERE fch.forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND ti.volatility_20 IS NOT NULL
+GROUP BY volatility_level
+ORDER BY volatility_level;
+
+/*
+================================================================================
+SECTION 7: CANDLESTICK PATTERN-BASED KPIs (مؤشرات قائمة على أنماط الشموع)
+================================================================================
+*/
+
+-- 7.1 Hit Rate by Candlestick Pattern (نسبة النجاح حسب نمط الشمعة)
+-- Purpose: Success rate correlation with candlestick patterns
+SELECT 
+    cp.pattern_name,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(cp.confidence) AS avg_pattern_confidence,
+    AVG(fch.confidence) AS avg_forecast_confidence
+FROM forecast_check_history fch
+JOIN candle_patterns cp ON fch.stock_symbol = cp.stock_symbol 
+    AND fch.forecast_date = cp.date
+WHERE fch.forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND cp.pattern_name IS NOT NULL
+GROUP BY cp.pattern_name
+HAVING COUNT(*) >= 5
+ORDER BY hit_rate DESC;
+
+-- 7.2 Hit Rate by Pattern Direction (نسبة النجاح حسب اتجاه النمط)
+-- Purpose: Success rate for bullish vs bearish patterns
+SELECT 
+    CASE 
+        WHEN cp.bullish = true THEN 'bullish'
+        WHEN cp.bullish = false THEN 'bearish'
+        ELSE 'neutral'
+    END AS pattern_direction,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history fch
+JOIN candle_patterns cp ON fch.stock_symbol = cp.stock_symbol 
+    AND fch.forecast_date = cp.date
+WHERE fch.forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND cp.bullish IS NOT NULL
+GROUP BY pattern_direction
+ORDER BY hit_rate DESC;
+
+-- 7.3 High Confidence Pattern Accuracy (دقة الأنماط عالية الثقة)
+-- Purpose: Success rate for patterns with high confidence
+SELECT 
+    cp.pattern_name,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE fch.hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history fch
+JOIN candle_patterns cp ON fch.stock_symbol = cp.stock_symbol 
+    AND fch.forecast_date = cp.date
+WHERE fch.forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND cp.confidence >= 0.8
+GROUP BY cp.pattern_name
+HAVING COUNT(*) >= 3
+ORDER BY hit_rate DESC;
+
+/*
+================================================================================
+SECTION 8: CONFIDENCE CALIBRATION KPIs (مؤشرات معايرة الثقة)
+================================================================================
+*/
+
+-- 8.1 Confidence vs Actual Performance (الثقة مقابل الأداء الفعلي)
+-- Purpose: Verify if confidence levels accurately reflect success rates
+SELECT 
+    ROUND(confidence * 10) / 10 AS confidence_bucket,
+    COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS actual_hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(confidence) * 100 AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND confidence IS NOT NULL
+GROUP BY confidence_bucket
+ORDER BY confidence_bucket DESC;
+
+-- 8.2 Confidence Calibration Score (نتيجة معايرة الثقة)
+-- Purpose: Measure how well confidence matches actual performance
+-- Formula: 1 - ABS(confidence - actual_hit_rate)
+WITH calibration AS (
+    SELECT 
+        ROUND(confidence * 10) / 10 AS confidence_bucket,
+        COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric AS actual_hit_rate,
+        AVG(confidence) AS avg_confidence
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+      AND confidence IS NOT NULL
+    GROUP BY confidence_bucket
+)
+SELECT 
+    AVG(1 - ABS(avg_confidence - actual_hit_rate)) * 100 AS calibration_score,
+    COUNT(*) AS confidence_buckets
+FROM calibration;
+
+-- 8.3 Overconfidence Detection (كشف الثقة المفرطة)
+-- Purpose: Identify cases where confidence exceeds actual performance
+SELECT 
+    COUNT(*) FILTER (WHERE confidence > 0.8 AND hit_range = false) AS overconfident_misses,
+    COUNT(*) FILTER (WHERE confidence > 0.8) AS total_high_confidence,
+    COUNT(*) FILTER (WHERE confidence > 0.8 AND hit_range = false)::numeric / 
+    NULLIF(COUNT(*) FILTER (WHERE confidence > 0.8), 0)::numeric * 100 AS overconfidence_rate
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND confidence IS NOT NULL;
+
+/*
+================================================================================
+SECTION 9: ERROR DISTRIBUTION KPIs (مؤشرات توزيع الأخطاء)
+================================================================================
+*/
+
+-- 9.1 Error Distribution Bins (توزيع الأخطاء)
+-- Purpose: Histogram of forecast errors
+SELECT 
+    CASE 
+        WHEN pct_error * 100 <= 1 THEN '0-1%'
+        WHEN pct_error * 100 <= 2 THEN '1-2%'
+        WHEN pct_error * 100 <= 5 THEN '2-5%'
+        WHEN pct_error * 100 <= 10 THEN '5-10%'
+        WHEN pct_error * 100 <= 20 THEN '10-20%'
+        ELSE '>20%'
+    END AS error_range,
+    COUNT(*) AS forecast_count,
+    CASE 
+        WHEN SUM(COUNT(*)) OVER () > 0 THEN COUNT(*)::numeric / SUM(COUNT(*)) OVER () * 100
+        ELSE 0
+    END AS percentage_distribution
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND pct_error IS NOT NULL
+GROUP BY error_range
+ORDER BY MIN(pct_error);
+
+-- 9.2 Extreme Error Analysis (تحليل الأخطاء الشديدة)
+-- Purpose: Identify forecasts with extreme errors
+SELECT 
+    stock_symbol,
+    forecast_date,
+    predicted_price,
+    actual_close,
+    ABS(predicted_price - actual_close) / NULLIF(actual_close, 0) * 100 AS pct_error,
+    confidence,
+    hit_range
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND ABS(predicted_price - actual_close) / NULLIF(actual_close, 0) > 0.15  -- >15% error
+ORDER BY ABS(predicted_price - actual_close) / NULLIF(actual_close, 0) DESC
+LIMIT 50;
+
+-- 9.3 Bias Analysis (تحليل التحيز)
+-- Purpose: Detect systematic overestimation or underestimation
+SELECT 
+    CASE 
+        WHEN predicted_price > actual_close THEN 'overestimated'
+        WHEN predicted_price < actual_close THEN 'underestimated'
+        ELSE 'accurate'
+    END AS bias_direction,
+    COUNT(*) AS forecast_count,
+    CASE 
+        WHEN SUM(COUNT(*)) OVER () > 0 THEN COUNT(*)::numeric / SUM(COUNT(*)) OVER () * 100
+        ELSE 0
+    END AS percentage,
+    AVG(predicted_price - actual_close) AS avg_error,
+    AVG(ABS(predicted_price - actual_close)) AS avg_absolute_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_close IS NOT NULL
+GROUP BY bias_direction;
+
+/*
+================================================================================
+SECTION 10: COMPOSITE SCORE KPIs (مؤشرات النقاط المركبة)
+================================================================================
+*/
+
+-- 10.1 Overall Forecast Quality Score (نقاط جودة التوقعات الإجمالية)
+-- Purpose: Composite score combining multiple accuracy metrics
+-- Formula: (hit_rate * 0.4) + ((1 - mape) * 0.3) + (confidence_match * 0.3)
+WITH metrics AS (
+    SELECT 
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric
+            ELSE 0
+        END AS hit_rate,
+        AVG(pct_error) AS avg_mape,
+        AVG(confidence) AS avg_confidence
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+),
+calibration AS (
+    SELECT 
+        AVG(1 - ABS(confidence - actual_hit_rate)) AS calibration_score
+    FROM (
+        SELECT 
+            ROUND(confidence * 10) / 10 AS confidence_bucket,
+            COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric AS actual_hit_rate,
+            AVG(confidence) AS avg_confidence
+        FROM forecast_check_history
+        WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+          AND confidence IS NOT NULL
+        GROUP BY confidence_bucket
+    ) cal
+)
+SELECT 
+    (m.hit_rate * 0.4 + (1 - COALESCE(m.avg_mape, 0)) * 0.3 + COALESCE(c.calibration_score, 0) * 0.3) * 100 AS quality_score,
+    m.hit_rate * 100 AS hit_rate_component,
+    (1 - COALESCE(m.avg_mape, 0)) * 100 AS accuracy_component,
+    COALESCE(c.calibration_score, 0) * 100 AS confidence_component
+FROM metrics m
+CROSS JOIN calibration c;
+
+-- 10.2 Reliability Index (مؤشر الموثوقية)
+-- Purpose: Measure forecast consistency and reliability
+-- Formula: (hit_rate * stability_factor) where stability = 1 - stddev(hit_rate)
+WITH daily_rates AS (
+    SELECT 
+        forecast_date,
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric
+            ELSE 0
+        END AS daily_hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+    GROUP BY forecast_date
+)
+SELECT 
+    AVG(daily_hit_rate) * 100 AS avg_daily_hit_rate,
+    STDDEV(daily_hit_rate) * 100 AS hit_rate_volatility,
+    (AVG(daily_hit_rate) * (1 - COALESCE(STDDEV(daily_hit_rate), 0))) * 100 AS reliability_index
+FROM daily_rates;
+
+/*
+================================================================================
+SECTION 11: ADVANCED ANALYTICAL KPIs (مؤشرات تحليلية متقدمة)
+================================================================================
+*/
+
+-- 11.1 Forecast Efficiency Ratio (نسبة كفاءة التوقعات)
+-- Purpose: Ratio of useful forecasts (hits) to total forecasts weighted by confidence
+SELECT 
+    SUM(CASE WHEN hit_range THEN confidence ELSE 0 END) / 
+    NULLIF(SUM(confidence), 0) * 100 AS efficiency_ratio,
+    COUNT(*) FILTER (WHERE hit_range = true) AS efficient_forecasts,
+    SUM(confidence) AS total_confidence_points
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND confidence IS NOT NULL;
+
+-- 11.2 Range Utilization Score (نقاط استخدام النطاق)
+-- Purpose: How efficiently predicted ranges are used
+-- Formula: AVG((actual_range / predicted_range) * hit_range)
+SELECT 
+    AVG(
+        CASE 
+            WHEN hit_range THEN 
+                (actual_high - actual_low) / NULLIF(predicted_hi - predicted_lo, 0)
+            ELSE 0
+        END
+    ) * 100 AS range_utilization_score,
+    AVG((actual_high - actual_low) / NULLIF(predicted_hi - predicted_lo, 0)) * 100 AS avg_range_ratio
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND predicted_hi > predicted_lo
+  AND actual_high > actual_low;
+
+-- 11.3 Predictive Power Index (مؤشر القوة التنبؤية)
+-- Purpose: Composite measure of forecast predictive strength
+-- Components: Hit rate, accuracy, confidence alignment, consistency
+WITH base_metrics AS (
+    SELECT 
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric
+            ELSE 0
+        END AS hit_rate,
+        AVG(pct_error) AS avg_mape,
+        AVG(confidence) AS avg_confidence,
+        STDDEV(pct_error) AS mape_stddev
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+),
+calibration_metrics AS (
+    SELECT 
+        AVG(1 - ABS(confidence - actual_hit_rate)) AS calibration_score
+    FROM (
+        SELECT 
+            ROUND(confidence * 10) / 10 AS confidence_bucket,
+            COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric AS actual_hit_rate,
+            AVG(confidence) AS avg_confidence
+        FROM forecast_check_history
+        WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+          AND confidence IS NOT NULL
+        GROUP BY confidence_bucket
+    ) cal
+)
+SELECT 
+    (
+        bm.hit_rate * 0.35 +
+        (1 - COALESCE(bm.avg_mape, 0)) * 0.25 +
+        COALESCE(cm.calibration_score, 0) * 0.25 +
+        (1 - COALESCE(bm.mape_stddev, 0) / NULLIF(COALESCE(bm.avg_mape, 0.01), 0)) * 0.15
+    ) * 100 AS predictive_power_index
+FROM base_metrics bm
+CROSS JOIN calibration_metrics cm;
+
+/*
+================================================================================
+SECTION 12: TIME-SERIES ANALYSIS KPIs (مؤشرات تحليل السلاسل الزمنية)
+================================================================================
+*/
+
+-- 12.1 Hit Rate Moving Average (المتوسط المتحرك لنسبة النجاح)
+-- Purpose: Smoothed trend of hit rate over time
+WITH daily_hit_rates AS (
+    SELECT 
+        forecast_date,
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+            ELSE 0
+        END AS daily_hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+    GROUP BY forecast_date
+)
+SELECT 
+    forecast_date,
+    daily_hit_rate,
+    AVG(daily_hit_rate) OVER (ORDER BY forecast_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) AS ma7_hit_rate,
+    AVG(daily_hit_rate) OVER (ORDER BY forecast_date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) AS ma14_hit_rate,
+    AVG(daily_hit_rate) OVER (ORDER BY forecast_date ROWS BETWEEN 29 PRECEDING AND CURRENT ROW) AS ma30_hit_rate
+FROM daily_hit_rates
+ORDER BY forecast_date;
+
+-- 12.2 Performance Momentum (زخم الأداء)
+-- Purpose: Rate of change in hit rate
+WITH daily_rates AS (
+    SELECT 
+        forecast_date,
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric
+            ELSE 0
+        END AS hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+    GROUP BY forecast_date
+)
+SELECT 
+    forecast_date,
+    hit_rate * 100 AS current_hit_rate,
+    LAG(hit_rate) OVER (ORDER BY forecast_date) * 100 AS previous_hit_rate,
+    (hit_rate - LAG(hit_rate) OVER (ORDER BY forecast_date)) * 100 AS momentum,
+    AVG(hit_rate) OVER (ORDER BY forecast_date ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) * 100 AS ma7_hit_rate
+FROM daily_rates
+ORDER BY forecast_date;
+
+-- 12.3 Consistency Score (نقاط الثبات)
+-- Purpose: Measure of forecast consistency over time
+WITH daily_rates AS (
+    SELECT 
+        forecast_date,
+        CASE 
+            WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric
+            ELSE 0
+        END AS hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+    GROUP BY forecast_date
+)
+SELECT 
+    AVG(hit_rate) * 100 AS avg_hit_rate,
+    STDDEV(hit_rate) * 100 AS hit_rate_stddev,
+    (1 - STDDEV(hit_rate) / NULLIF(AVG(hit_rate), 0)) * 100 AS consistency_score
+FROM daily_rates;
+
+/*
+================================================================================
+SUMMARY: All KPIs Organized by Category
+================================================================================
+
+CORE ACCURACY KPIs (4):
+  1. Overall Hit Rate
+  2. Weighted Hit Rate by Confidence
+  3. Hit Rate by Confidence Level
+  4. Exact Hit Rate
+
+ERROR METRICS KPIs (3):
+  5. Mean Absolute Percentage Error (MAPE)
+  6. MAPE by Forecast Range Size
+  7. Directional Accuracy
+
+PRECISION METRICS KPIs (3):
+  8. Range Coverage Ratio
+  9. Range Positioning Accuracy
+  10. High/Low Boundary Accuracy
+
+TEMPORAL KPIs (4):
+  11. Daily Hit Rate Trend
+  12. Weekly Aggregated Hit Rate
+  13. Monthly Aggregated Hit Rate
+  14. Performance Trend
+
+STOCK-SPECIFIC KPIs (3):
+  15. Hit Rate by Stock
+  16. Top Performers
+  17. Underperformers
+
+TECHNICAL INDICATOR-BASED KPIs (3):
+  18. Hit Rate by RSI Zone
+  19. Hit Rate by MACD Signal
+  20. Hit Rate by Volatility Level
+
+CANDLESTICK PATTERN-BASED KPIs (3):
+  21. Hit Rate by Candlestick Pattern
+  22. Hit Rate by Pattern Direction
+  23. High Confidence Pattern Accuracy
+
+CONFIDENCE CALIBRATION KPIs (3):
+  24. Confidence vs Actual Performance
+  25. Confidence Calibration Score
+  26. Overconfidence Detection
+
+ERROR DISTRIBUTION KPIs (3):
+  27. Error Distribution Bins
+  28. Extreme Error Analysis
+  29. Bias Analysis
+
+COMPOSITE SCORE KPIs (2):
+  30. Overall Forecast Quality Score
+  31. Reliability Index
+
+ADVANCED ANALYTICAL KPIs (3):
+  32. Forecast Efficiency Ratio
+  33. Range Utilization Score
+  34. Predictive Power Index
+
+TIME-SERIES ANALYSIS KPIs (3):
+  35. Hit Rate Moving Average
+  36. Performance Momentum
+  37. Consistency Score
+
+TOTAL: 37 Comprehensive KPIs for Forecast Accuracy Measurement
+
+================================================================================
+*/
+

@@ -1,0 +1,171 @@
+-- #############################################################################
+-- #
+-- # QUICK START: Basic Forecast Accuracy KPIs
+-- #
+-- # This file contains ready-to-use queries for the most important KPIs
+-- # All queries are tested and ready to run in Supabase SQL Editor
+-- #
+-- #############################################################################
+
+-- ============================================================================
+-- KPI 1: Overall Hit Rate (نسبة النجاح الإجمالية)
+-- ============================================================================
+SELECT 
+    COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS overall_hit_rate,
+    COUNT(*) FILTER (WHERE hit_range = true) AS total_hits,
+    COUNT(*) FILTER (WHERE hit_range = false) AS total_misses,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE;
+
+-- ============================================================================
+-- KPI 2: MAPE - Mean Absolute Percentage Error
+-- ============================================================================
+SELECT 
+    AVG(ABS(predicted_price - actual_close) / NULLIF(actual_close, 0)) * 100 AS mape,
+    AVG(ABS(predicted_price - actual_close)) AS mean_absolute_error,
+    STDDEV(ABS(predicted_price - actual_close) / NULLIF(actual_close, 0)) * 100 AS mape_stddev
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_close IS NOT NULL;
+
+-- ============================================================================
+-- KPI 3: Hit Rate by Confidence Level
+-- ============================================================================
+SELECT 
+    CASE 
+        WHEN confidence >= 0.8 THEN 'high_confidence'
+        WHEN confidence >= 0.6 THEN 'medium_confidence'
+        WHEN confidence >= 0.4 THEN 'low_confidence'
+        ELSE 'very_low_confidence'
+    END AS confidence_level,
+    COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS hit_rate,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND confidence IS NOT NULL
+GROUP BY confidence_level
+ORDER BY confidence_level;
+
+-- ============================================================================
+-- KPI 4: Daily Hit Rate Trend (Last 30 Days)
+-- ============================================================================
+SELECT 
+    forecast_date,
+    COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS daily_hit_rate,
+    COUNT(*) AS daily_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE
+GROUP BY forecast_date
+ORDER BY forecast_date;
+
+-- ============================================================================
+-- KPI 5: Top 10 Stocks by Hit Rate
+-- ============================================================================
+SELECT 
+    stock_symbol,
+    COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS stock_hit_rate,
+    COUNT(*) AS total_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY stock_symbol
+HAVING COUNT(*) >= 5
+ORDER BY stock_hit_rate DESC
+LIMIT 10;
+
+-- ============================================================================
+-- KPI 6: Bias Analysis (تحليل التحيز)
+-- ============================================================================
+SELECT 
+    CASE 
+        WHEN predicted_price > actual_close THEN 'overestimated'
+        WHEN predicted_price < actual_close THEN 'underestimated'
+        ELSE 'accurate'
+    END AS bias_direction,
+    COUNT(*) AS forecast_count,
+    COUNT(*)::numeric / SUM(COUNT(*)) OVER () * 100 AS percentage,
+    AVG(predicted_price - actual_close) AS avg_error,
+    AVG(ABS(predicted_price - actual_close)) AS avg_absolute_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND actual_close IS NOT NULL
+GROUP BY bias_direction;
+
+-- ============================================================================
+-- KPI 7: Error Distribution
+-- ============================================================================
+SELECT 
+    CASE 
+        WHEN pct_error * 100 <= 1 THEN '0-1%'
+        WHEN pct_error * 100 <= 2 THEN '1-2%'
+        WHEN pct_error * 100 <= 5 THEN '2-5%'
+        WHEN pct_error * 100 <= 10 THEN '5-10%'
+        WHEN pct_error * 100 <= 20 THEN '10-20%'
+        ELSE '>20%'
+    END AS error_range,
+    COUNT(*) AS forecast_count,
+    COUNT(*)::numeric / SUM(COUNT(*)) OVER () * 100 AS percentage_distribution
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND pct_error IS NOT NULL
+GROUP BY error_range
+ORDER BY MIN(pct_error);
+
+-- ============================================================================
+-- KPI 8: Weekly Aggregated Hit Rate
+-- ============================================================================
+SELECT 
+    DATE_TRUNC('week', forecast_date)::date AS week_start,
+    COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS weekly_hit_rate,
+    COUNT(*) AS weekly_forecasts,
+    AVG(confidence) AS avg_confidence,
+    AVG(pct_error) * 100 AS avg_pct_error
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY DATE_TRUNC('week', forecast_date)
+ORDER BY week_start;
+
+-- ============================================================================
+-- KPI 9: Average Range Width
+-- ============================================================================
+SELECT 
+    AVG((predicted_hi - predicted_lo) / NULLIF(predicted_lo, 0)) * 100 AS avg_range_width_percentage,
+    AVG(predicted_hi - predicted_lo) AS avg_range_width_absolute,
+    AVG(predicted_lo) AS avg_predicted_low
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+  AND predicted_hi > predicted_lo;
+
+-- ============================================================================
+-- KPI 10: Performance Trend (Recent vs Historical)
+-- ============================================================================
+WITH recent_performance AS (
+    SELECT 
+        COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS recent_hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date >= CURRENT_DATE - INTERVAL '30 days'
+),
+historical_performance AS (
+    SELECT 
+        COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100 AS historical_hit_rate
+    FROM forecast_check_history
+    WHERE forecast_date < CURRENT_DATE - INTERVAL '30 days'
+      AND forecast_date >= CURRENT_DATE - INTERVAL '180 days'
+)
+SELECT 
+    r.recent_hit_rate,
+    h.historical_hit_rate,
+    r.recent_hit_rate - h.historical_hit_rate AS trend_change,
+    CASE 
+        WHEN r.recent_hit_rate > h.historical_hit_rate THEN 'improving'
+        WHEN r.recent_hit_rate < h.historical_hit_rate THEN 'declining'
+        ELSE 'stable'
+    END AS trend_direction
+FROM recent_performance r, historical_performance h;
+
+
+

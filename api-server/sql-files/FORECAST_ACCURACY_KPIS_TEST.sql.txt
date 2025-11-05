@@ -1,0 +1,47 @@
+-- #############################################################################
+-- #
+-- # TEST: Basic Hit Rate Query (للاختبار)
+-- #
+-- # This query tests the division by zero protection
+-- # Run this first to verify the fix works
+-- #
+-- #############################################################################
+
+-- Test Query 1: Overall Hit Rate (should return 0 if no data, not error)
+SELECT 
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS overall_hit_rate,
+    COUNT(*) FILTER (WHERE hit_range = true) AS total_hits,
+    COUNT(*) FILTER (WHERE hit_range = false) AS total_misses,
+    COUNT(*) AS total_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE;
+
+-- Test Query 2: Daily Hit Rate (should return rows with 0 hit_rate if no data for that day)
+SELECT 
+    forecast_date,
+    CASE 
+        WHEN COUNT(*) > 0 THEN COUNT(*) FILTER (WHERE hit_range = true)::numeric / COUNT(*)::numeric * 100
+        ELSE 0
+    END AS daily_hit_rate,
+    COUNT(*) AS daily_forecasts
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE
+GROUP BY forecast_date
+ORDER BY forecast_date DESC
+LIMIT 10;
+
+-- Test Query 3: Weighted Hit Rate (should handle NULL confidence)
+SELECT 
+    CASE 
+        WHEN NULLIF(SUM(confidence), 0) IS NOT NULL THEN 
+            SUM(CASE WHEN hit_range THEN 1 ELSE 0 END::numeric * confidence) / NULLIF(SUM(confidence), 0) * 100
+        ELSE 0
+    END AS weighted_hit_rate,
+    COUNT(*) AS total_forecasts,
+    COUNT(*) FILTER (WHERE confidence IS NOT NULL) AS forecasts_with_confidence
+FROM forecast_check_history
+WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE;
+

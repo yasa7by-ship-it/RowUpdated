@@ -74,3 +74,5 @@ has_permission,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has
 is_first_user,sql,SECURITY_DEFINER,"auth, public, pg_temp",true,Already has search_path - CORRECT,OK
 log_activity,plpgsql,SECURITY_DEFINER,"public, auth, pg_temp",true,Already has search_path - CORRECT,OK
 
+
+
