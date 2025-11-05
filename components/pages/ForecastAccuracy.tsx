@@ -408,6 +408,276 @@ const HitMissBadge: React.FC<{ hit: boolean; t: (key: string) => string }> = mem
 });
 HitMissBadge.displayName = 'HitMissBadge';
 
+// --- Gauge Chart Component (مثل Recommendation Gauge في الصورة) ---
+const GaugeChart: React.FC<{
+  value: number;
+  min?: number;
+  max?: number;
+  segments?: Array<{ label: string; color: string; range: [number, number] }>;
+  size?: number;
+  label?: string;
+}> = memo(({ value, min = 0, max = 100, segments, size = 200, label }) => {
+  const normalizedValue = Math.max(min, Math.min(max, value));
+  const percentage = ((normalizedValue - min) / (max - min)) * 100;
+  
+  // Default segments if not provided
+  const defaultSegments = segments || [
+    { label: 'Strong Sell', color: '#ef4444', range: [0, 20] },
+    { label: 'Sell', color: '#f97316', range: [20, 40] },
+    { label: 'Neutral', color: '#eab308', range: [40, 60] },
+    { label: 'Buy', color: '#3b82f6', range: [60, 80] },
+    { label: 'Strong Buy', color: '#10b981', range: [80, 100] },
+  ];
+  
+  // Calculate angle for needle (180 degrees arc, from -90 to 90)
+  const angle = (percentage / 100) * 180 - 90;
+  const centerX = size / 2;
+  const centerY = size * 0.85; // Bottom of gauge
+  const radius = size * 0.35;
+  const needleLength = radius * 0.85;
+  
+  // Find current segment
+  const currentSegment = defaultSegments.find(seg => 
+    percentage >= seg.range[0] && percentage < seg.range[1]
+  ) || defaultSegments[defaultSegments.length - 1];
+  
+  return (
+    <div className="flex flex-col items-center">
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-auto">
+        <defs>
+          {defaultSegments.map((seg, idx) => (
+            <linearGradient key={idx} id={`gaugeGrad-${idx}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor={seg.color} stopOpacity="0.8" />
+              <stop offset="100%" stopColor={seg.color} stopOpacity="1" />
+            </linearGradient>
+          ))}
+        </defs>
+        
+        {/* Gauge Arc Background */}
+        <path
+          d={`M ${size * 0.15} ${centerY} A ${radius} ${radius} 0 0 1 ${size * 0.85} ${centerY}`}
+          fill="none"
+          stroke="#e5e7eb"
+          strokeWidth={size * 0.04}
+          className="dark:stroke-gray-700"
+        />
+        
+        {/* Colored Segments */}
+        {defaultSegments.map((seg, idx) => {
+          const startAngle = (seg.range[0] / 100) * 180 - 90;
+          const endAngle = (seg.range[1] / 100) * 180 - 90;
+          const startX = centerX + radius * Math.cos((startAngle * Math.PI) / 180);
+          const startY = centerY + radius * Math.sin((startAngle * Math.PI) / 180);
+          const endX = centerX + radius * Math.cos((endAngle * Math.PI) / 180);
+          const endY = centerY + radius * Math.sin((endAngle * Math.PI) / 180);
+          const largeArcFlag = seg.range[1] - seg.range[0] > 50 ? 1 : 0;
+          
+          return (
+            <path
+              key={idx}
+              d={`M ${startX} ${startY} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${endX} ${endY}`}
+              fill="none"
+              stroke={seg.color}
+              strokeWidth={size * 0.04}
+            />
+          );
+        })}
+        
+        {/* Needle */}
+        <g transform={`rotate(${angle} ${centerX} ${centerY})`}>
+          <line
+            x1={centerX}
+            y1={centerY}
+            x2={centerX}
+            y2={centerY - needleLength}
+            stroke="#1f2937"
+            strokeWidth={size * 0.015}
+            strokeLinecap="round"
+            className="dark:stroke-gray-100"
+          />
+          <circle
+            cx={centerX}
+            cy={centerY}
+            r={size * 0.03}
+            fill="#1f2937"
+            className="dark:fill-gray-100"
+          />
+        </g>
+        
+        {/* Center circle */}
+        <circle
+          cx={centerX}
+          cy={centerY}
+          r={size * 0.04}
+          fill="#ffffff"
+          className="dark:fill-gray-800 dark:stroke-gray-100"
+          stroke="#1f2937"
+          strokeWidth={size * 0.01}
+        />
+      </svg>
+      
+      {/* Value Display */}
+      <div className="mt-2 text-center">
+        <div className={`text-2xl font-bold ${currentSegment ? `text-[${currentSegment.color}]` : 'text-gray-900 dark:text-white'}`}>
+          {normalizedValue.toFixed(1)}%
+        </div>
+        {currentSegment && (
+          <div className={`text-sm font-semibold mt-1`} style={{ color: currentSegment.color }}>
+            {currentSegment.label}
+          </div>
+        )}
+        {label && (
+          <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">{label}</div>
+        )}
+      </div>
+    </div>
+  );
+});
+GaugeChart.displayName = 'GaugeChart';
+
+// --- Recommendation Breakdown Component (أشرطة أفقية مع أرقام) ---
+const RecommendationBreakdown: React.FC<{
+  data: Array<{ label: string; value: number; color: string }>;
+  title?: string;
+}> = memo(({ data, title }) => {
+  const maxValue = Math.max(...data.map(d => d.value), 1);
+  
+  return (
+    <div className="space-y-3">
+      {title && (
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+      )}
+      {data.map((item, index) => (
+        <div key={index} className="space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{item.label}</span>
+            <span className="text-sm font-bold text-gray-900 dark:text-white">{item.value}</span>
+          </div>
+          <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${(item.value / maxValue) * 100}%`,
+                backgroundColor: item.color,
+              }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+RecommendationBreakdown.displayName = 'RecommendationBreakdown';
+
+// --- Multi-Bar Chart Component (مثل Assets & Liabilities chart) ---
+const MultiBarChart: React.FC<{
+  data: Array<{ period: string; [key: string]: number | string }>;
+  bars: Array<{ key: string; label: string; color: string }>;
+  title?: string;
+  height?: number;
+}> = memo(({ data, bars, title, height = 250 }) => {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+      {title && (
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{title}</h3>
+      )}
+      <ResponsiveContainer width="100%" height={height}>
+        <BarChart data={data} margin={{ top: 10, right: 10, left: 10, bottom: 40 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" className="dark:stroke-gray-700" />
+          <XAxis 
+            dataKey="period" 
+            tick={{ fontSize: 11 }} 
+            angle={-45} 
+            textAnchor="end" 
+            height={60}
+            stroke="#6b7280"
+            className="dark:stroke-gray-400"
+          />
+          <YAxis 
+            tick={{ fontSize: 11 }}
+            stroke="#6b7280"
+            className="dark:stroke-gray-400"
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'rgba(255, 255, 255, 0.98)',
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+            }}
+            className="dark:bg-gray-800 dark:border-gray-700"
+          />
+          <Legend />
+          {bars.map((bar, index) => (
+            <Bar
+              key={index}
+              dataKey={bar.key}
+              name={bar.label}
+              fill={bar.color}
+              radius={[4, 4, 0, 0]}
+            />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+MultiBarChart.displayName = 'MultiBarChart';
+
+// --- Multi-Line Chart Component (مثل TradingView chart) ---
+const MultiLineChart: React.FC<{
+  data: Array<{ [key: string]: number | string }>;
+  lines: Array<{ key: string; label: string; color: string; strokeWidth?: number }>;
+  title?: string;
+  height?: number;
+  xAxisKey?: string;
+}> = memo(({ data, lines, title, height = 350, xAxisKey = 'date' }) => {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+      {title && (
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{title}</h3>
+      )}
+      <ResponsiveContainer width="100%" height={height}>
+        <LineChart data={data} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+          <XAxis 
+            dataKey={xAxisKey}
+            tick={{ fontSize: 10 }}
+            stroke="#6b7280"
+            className="dark:stroke-gray-400"
+          />
+          <YAxis 
+            tick={{ fontSize: 10 }}
+            stroke="#6b7280"
+            className="dark:stroke-gray-400"
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'rgba(17, 24, 39, 0.95)',
+              border: '1px solid #374151',
+              borderRadius: '8px',
+              color: '#fff',
+            }}
+          />
+          <Legend />
+          {lines.map((line, index) => (
+            <Line
+              key={index}
+              type="monotone"
+              dataKey={line.key}
+              name={line.label}
+              stroke={line.color}
+              strokeWidth={line.strokeWidth || 2}
+              dot={false}
+              activeDot={{ r: 4 }}
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+});
+MultiLineChart.displayName = 'MultiLineChart';
+
 // --- Main Component ---
 const ForecastAccuracy: React.FC = () => {
   const { t } = useLanguage();
@@ -1120,6 +1390,114 @@ const ForecastAccuracy: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
+
+      {/* New Visual Components Section (مثل الصورة) */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+          {t('forecast_performance_analysis') || 'تحليل أداء التوقعات'}
+        </h2>
+        
+        {/* Gauge Chart and Recommendation Breakdown */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          {/* Gauge Chart - Overall Performance */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
+              {t('overall_performance_gauge') || 'مقياس الأداء الإجمالي'}
+            </h3>
+            <GaugeChart
+              value={overall.hit_rate}
+              min={0}
+              max={100}
+              segments={[
+                { label: t('very_low') || 'منخفض جداً', color: '#ef4444', range: [0, 30] },
+                { label: t('low') || 'منخفض', color: '#f97316', range: [30, 50] },
+                { label: t('medium') || 'متوسط', color: '#eab308', range: [50, 70] },
+                { label: t('good') || 'جيد', color: '#3b82f6', range: [70, 85] },
+                { label: t('excellent') || 'ممتاز', color: '#10b981', range: [85, 100] },
+              ]}
+              size={250}
+              label={t('hit_rate') || 'نسبة النجاح'}
+            />
+          </div>
+
+          {/* Recommendation Breakdown */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
+              {t('forecast_breakdown') || 'تفاصيل التوقعات'}
+            </h3>
+            <RecommendationBreakdown
+              data={[
+                {
+                  label: t('correct_forecasts') || 'التوقعات الصحيحة',
+                  value: overall.hit_range_count,
+                  color: '#10b981',
+                },
+                {
+                  label: t('incorrect_forecasts') || 'التوقعات الخاطئة',
+                  value: overall.miss_range_count,
+                  color: '#ef4444',
+                },
+                {
+                  label: t('high_confidence') || 'ثقة عالية',
+                  value: by_confidence.high_confidence.count,
+                  color: '#3b82f6',
+                },
+                {
+                  label: t('medium_confidence') || 'ثقة متوسطة',
+                  value: by_confidence.medium_confidence.count,
+                  color: '#eab308',
+                },
+                {
+                  label: t('low_confidence') || 'ثقة منخفضة',
+                  value: by_confidence.low_confidence.count,
+                  color: '#f97316',
+                },
+              ]}
+            />
+          </div>
+        </div>
+
+        {/* Multi-Bar Chart - Performance by Period */}
+        {dateChartData.length > 0 && (
+          <div className="mb-6">
+            <MultiBarChart
+              data={dateChartData.slice(-8).map(item => ({
+                period: item.date,
+                hits: item.hits,
+                misses: item.misses,
+                total: item.forecasts,
+              }))}
+              bars={[
+                { key: 'hits', label: t('hits') || 'صحيحة', color: '#10b981' },
+                { key: 'misses', label: t('misses') || 'خاطئة', color: '#ef4444' },
+                { key: 'total', label: t('total') || 'إجمالي', color: '#3b82f6' },
+              ]}
+              title={t('performance_by_period') || 'الأداء حسب الفترة'}
+              height={280}
+            />
+          </div>
+        )}
+
+        {/* Multi-Line Chart - Trends */}
+        {trend30DaysData.mape.length > 0 && trend30DaysData.hitRate.length > 0 && (
+          <div className="mb-6">
+            <MultiLineChart
+              data={trend30DaysData.hitRate.map((item, index) => ({
+                date: item.date,
+                hitRate: item.value,
+                mape: trend30DaysData.mape[index]?.value || 0,
+              }))}
+              lines={[
+                { key: 'hitRate', label: t('hit_rate') || 'نسبة النجاح', color: '#10b981', strokeWidth: 3 },
+                { key: 'mape', label: t('mape') || 'الخطأ المتوسط', color: '#f59e0b', strokeWidth: 2 },
+              ]}
+              title={t('performance_trends') || 'اتجاهات الأداء - آخر 30 يوم'}
+              height={400}
+              xAxisKey="date"
+            />
+          </div>
+        )}
       </div>
 
       {/* Original KPI Cards Section */}

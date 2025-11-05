@@ -37,3 +37,4 @@ RAISE NOTICE 'SUCCESS: Advanced visual indicators translations added.';
 
 
 
+
