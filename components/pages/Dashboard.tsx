@@ -429,21 +429,77 @@ const ManualTriggers: React.FC = () => {
     
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState<{ title: string; isLoading: boolean; result: string | number | null; error: string | null; }>({ title: '', isLoading: false, result: null, error: null });
+    
+    // إحصائيات آخر تشغيل
+    const [lastRunStats, setLastRunStats] = useState<{
+        forecastsProcessed: number | null;
+        stocksProcessed: number | null;
+        lastRunTime: string | null;
+    }>(() => {
+        // تحميل من localStorage عند التهيئة
+        const saved = localStorage.getItem('forecast_evaluation_stats');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch {
+                return { forecastsProcessed: null, stocksProcessed: null, lastRunTime: null };
+            }
+        }
+        return { forecastsProcessed: null, stocksProcessed: null, lastRunTime: null };
+    });
 
     const handleEvaluateForecasts = async () => {
         setModalContent({ title: t('run_forecast_evaluation'), isLoading: true, result: null, error: null });
         setIsModalOpen(true);
-        const { error } = await supabase.rpc('evaluate_and_save_forecasts');
-        if (error) {
-            setModalContent(prev => ({ ...prev, isLoading: false, error: error.message }));
-        } else {
-            setModalContent(prev => ({ ...prev, isLoading: false, result: 'PROCESS_STARTED' }));
+        
+        try {
+            const { data, error } = await supabase.rpc('evaluate_and_save_forecasts');
+            
+            if (error) {
+                setModalContent(prev => ({ ...prev, isLoading: false, error: error.message }));
+            } else {
+                // حفظ الإحصائيات
+                const stats = {
+                    forecastsProcessed: data?.forecasts_processed || 0,
+                    stocksProcessed: data?.stocks_processed || 0,
+                    lastRunTime: new Date().toISOString()
+                };
+                
+                setLastRunStats(stats);
+                localStorage.setItem('forecast_evaluation_stats', JSON.stringify(stats));
+                
+                setModalContent(prev => ({ 
+                    ...prev, 
+                    isLoading: false, 
+                    result: `تم فحص ${stats.forecastsProcessed} توقع لـ ${stats.stocksProcessed} سهم` 
+                }));
+            }
+        } catch (err: any) {
+            setModalContent(prev => ({ ...prev, isLoading: false, error: err.message || 'حدث خطأ غير متوقع' }));
         }
     };
 
     const closeModal = () => {
         setIsModalOpen(false);
         setTimeout(() => setModalContent({ title: '', isLoading: false, result: null, error: null }), 300);
+    };
+    
+    // تنسيق الوقت
+    const formatLastRunTime = (timeString: string | null) => {
+        if (!timeString) return '-';
+        try {
+            const date = new Date(timeString);
+            return new Intl.DateTimeFormat('ar-SA', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            }).format(date);
+        } catch {
+            return timeString;
+        }
     };
     
     if (!hasPermission('manage:settings')) return null;
@@ -461,15 +517,66 @@ const ManualTriggers: React.FC = () => {
                     {t('manual_system_triggers')}
                 </h2>
                 <div className="grid grid-cols-1 gap-6">
-                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex flex-col justify-between">
-                        <div>
-                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">{t('run_forecast_evaluation')}</h3>
-                            <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{t('run_forecast_evaluation_desc')}</p>
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+                        <div className="flex flex-col gap-4">
+                            <div>
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white">{t('run_forecast_evaluation')}</h3>
+                                <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{t('run_forecast_evaluation_desc')}</p>
+                            </div>
+                            
+                            {/* إحصائيات آخر تشغيل */}
+                            {(lastRunStats.forecastsProcessed !== null || lastRunStats.lastRunTime) && (
+                                <div className="mt-4 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                                        {t('last_run_stats') || 'إحصائيات آخر تشغيل'}
+                                    </h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                {t('forecasts_processed') || 'عدد التوقعات المفحوصة'}
+                                            </p>
+                                            <p className="text-lg font-bold text-nextrow-primary dark:text-nextrow-primary">
+                                                {lastRunStats.forecastsProcessed ?? '-'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                {t('stocks_processed') || 'عدد الأسهم المفحوصة'}
+                                            </p>
+                                            <p className="text-lg font-bold text-nextrow-primary dark:text-nextrow-primary">
+                                                {lastRunStats.stocksProcessed ?? '-'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                                {t('last_run_time') || 'آخر مرة تم التشغيل'}
+                                            </p>
+                                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                                {formatLastRunTime(lastRunStats.lastRunTime)}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            <button 
+                                onClick={handleEvaluateForecasts} 
+                                disabled={modalContent.isLoading} 
+                                className="mt-2 w-full sm:w-auto self-end flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-nextrow-primary hover:bg-nextrow-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nextrow-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {modalContent.isLoading ? (
+                                    <>
+                                        <SpinnerIcon className="w-5 h-5 mr-2 rtl:ml-2 animate-spin" />
+                                        {t('running') || 'جاري التشغيل...'}
+                                    </>
+                                ) : (
+                                    <>
+                                        <PlayIcon className="w-5 h-5 mr-2 rtl:ml-2" />
+                                        {t('run_now')}
+                                    </>
+                                )}
+                            </button>
                         </div>
-                         <button onClick={handleEvaluateForecasts} disabled={modalContent.isLoading} className="mt-4 w-full sm:w-auto self-end flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-nextrow-primary hover:bg-nextrow-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-nextrow-primary disabled:opacity-50">
-                            <PlayIcon className="w-5 h-5 mr-2 rtl:ml-2" />
-                            {t('run_now')}
-                        </button>
                     </div>
                 </div>
             </div>
