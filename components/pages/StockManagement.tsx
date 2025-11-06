@@ -86,10 +86,65 @@ const StockManagement: React.FC = () => {
     setIsSaving(true);
     setFormError(null);
     
+    const trimmedSymbol = symbol.trim().toUpperCase();
+    const trimmedName = name.trim();
+    
+    // Validation 1: Symbol
+    if (!trimmedSymbol) {
+      setFormError(t('symbol_required') || 'الرمز مطلوب');
+      setIsSaving(false);
+      return;
+    }
+    
+    // Validate symbol format (1-10 uppercase letters/numbers only)
+    if (trimmedSymbol.length < 1 || trimmedSymbol.length > 10 || !/^[A-Z0-9]+$/.test(trimmedSymbol)) {
+      setFormError(t('invalid_symbol_format') || 'الرمز يجب أن يكون من 1-10 أحرف/أرقام فقط');
+      setIsSaving(false);
+      return;
+    }
+
+    // Check if symbol already exists (only for new stocks)
+    if (!editingStock) {
+      try {
+        const { data, error: checkError } = await supabase
+          .from('stocks')
+          .select('symbol')
+          .eq('symbol', trimmedSymbol)
+          .maybeSingle();
+        
+        if (!checkError && data) {
+          setFormError(t('symbol_already_exists') || 'الرمز موجود بالفعل');
+          setIsSaving(false);
+          return;
+        }
+      } catch (checkErr) {
+        // Continue if check fails
+      }
+    }
+
+    // Validation 2: Name
+    if (!trimmedName) {
+      setFormError(t('name_required') || 'الاسم مطلوب');
+      setIsSaving(false);
+      return;
+    }
+    
+    if (trimmedName.length < 2) {
+      setFormError(t('name_too_short') || 'الاسم يجب أن يكون حرفين على الأقل');
+      setIsSaving(false);
+      return;
+    }
+    
+    if (trimmedName.length > 200) {
+      setFormError(t('name_too_long') || 'الاسم طويل جداً (الحد الأقصى 200 حرف)');
+      setIsSaving(false);
+      return;
+    }
+    
     try {
       const stockData = {
-        symbol: symbol.toUpperCase().trim(),
-        name: name.trim(),
+        symbol: trimmedSymbol,
+        name: trimmedName,
         is_tracked: isTracked,
       };
       
@@ -107,7 +162,16 @@ const StockManagement: React.FC = () => {
       fetchData(); // Refresh data
       setCurrentPage(1); // Go to first page to see changes
     } catch (err: any) {
-      setFormError(err.message);
+      // Handle specific error messages
+      let errorMessage = err.message || t('save_failed') || 'فشل الحفظ';
+      
+      if (err.message?.includes('duplicate') || err.message?.includes('already exists') || err.message?.includes('unique')) {
+        errorMessage = t('symbol_already_exists') || 'الرمز موجود بالفعل';
+      } else if (err.message?.includes('symbol')) {
+        errorMessage = t('invalid_symbol_format') || 'الرمز غير صحيح';
+      }
+      
+      setFormError(errorMessage);
     } finally {
       setIsSaving(false);
     }

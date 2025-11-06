@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Stock } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { supabase } from '../../services/supabaseClient';
 
 interface StockEditModalProps {
   stock: Stock | null;
@@ -29,22 +30,116 @@ const StockEditModal: React.FC<StockEditModalProps> = ({ stock, onClose, onSave 
       setName('');
       setIsTracked(true);
     }
+    // Always clear error when modal opens
+    setError(null);
   }, [stock]);
+
+  // Validate stock symbol format (1-10 uppercase letters/numbers only)
+  const validateSymbol = (sym: string): boolean => {
+    const trimmed = sym.trim().toUpperCase();
+    if (!trimmed || trimmed.length < 1 || trimmed.length > 10) {
+      return false;
+    }
+    // Only letters and numbers allowed
+    return /^[A-Z0-9]+$/.test(trimmed);
+  };
+
+  // Check if symbol already exists
+  const checkSymbolExists = async (sym: string): Promise<boolean> => {
+    try {
+      const trimmedSym = sym.trim().toUpperCase();
+      const { data, error: fetchError } = await supabase
+        .from('stocks')
+        .select('symbol')
+        .eq('symbol', trimmedSym)
+        .maybeSingle();
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error checking symbol:', fetchError);
+        return false;
+      }
+      
+      // If editing existing stock, ignore if it's the same symbol
+      if (stock && stock.symbol === trimmedSym) {
+        return false;
+      }
+      
+      return data !== null;
+    } catch (err) {
+      console.error('Error checking symbol:', err);
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     setError(null);
+    
+    const trimmedSymbol = symbol.trim().toUpperCase();
+    const trimmedName = name.trim();
+    
+    // Validation 1: Symbol
+    if (!trimmedSymbol) {
+      setError(t('symbol_required') || 'الرمز مطلوب');
+      setIsSaving(false);
+      return;
+    }
+    
+    if (!validateSymbol(trimmedSymbol)) {
+      setError(t('invalid_symbol_format') || 'الرمز يجب أن يكون من 1-10 أحرف/أرقام فقط');
+      setIsSaving(false);
+      return;
+    }
+
+    // Check if symbol already exists (only for new stocks)
+    if (!stock) {
+      const symbolExists = await checkSymbolExists(trimmedSymbol);
+      if (symbolExists) {
+        setError(t('symbol_already_exists') || 'الرمز موجود بالفعل');
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    // Validation 2: Name
+    if (!trimmedName) {
+      setError(t('name_required') || 'الاسم مطلوب');
+      setIsSaving(false);
+      return;
+    }
+    
+    if (trimmedName.length < 2) {
+      setError(t('name_too_short') || 'الاسم يجب أن يكون حرفين على الأقل');
+      setIsSaving(false);
+      return;
+    }
+    
+    if (trimmedName.length > 200) {
+      setError(t('name_too_long') || 'الاسم طويل جداً (الحد الأقصى 200 حرف)');
+      setIsSaving(false);
+      return;
+    }
+
     try {
       const dataToSave = {
-        symbol: symbol.toUpperCase().trim(),
-        name: name.trim(),
+        symbol: trimmedSymbol,
+        name: trimmedName,
         is_tracked: isTracked,
       };
       await onSave(dataToSave);
       onClose();
     } catch (err: any) {
-      setError(err.message);
+      // Handle specific error messages
+      let errorMessage = err.message || t('save_failed') || 'فشل الحفظ';
+      
+      if (err.message?.includes('duplicate') || err.message?.includes('already exists') || err.message?.includes('unique')) {
+        errorMessage = t('symbol_already_exists') || 'الرمز موجود بالفعل';
+      } else if (err.message?.includes('symbol')) {
+        errorMessage = t('invalid_symbol_format') || 'الرمز غير صحيح';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
