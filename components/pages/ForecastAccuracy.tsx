@@ -98,6 +98,72 @@ const formatDate = (dateString: string, t?: (key: string) => string) => {
   }
 };
 
+// Actual Range Display Component - matches StockDetails page format
+const ActualRangeDisplay: React.FC<{ low: number | null; high: number | null; t?: (key: string) => string }> = memo(({ low, high, t }) => {
+  if ((low === null || low === undefined) && (high === null || high === undefined)) {
+    return <span className="text-gray-400 text-xs font-medium">{t ? t('not_available') : 'N/A'}</span>;
+  }
+  
+  if (low === null || low === undefined) {
+    return (
+      <div className="flex items-center justify-center gap-1">
+        <span className="text-xs font-medium text-gray-400">{t ? t('not_available') : 'N/A'}</span>
+        <span className="text-[10px] text-gray-400">-</span>
+        <span className="text-xs font-bold text-green-600 dark:text-green-400">{formatNumber(high!, t)}</span>
+      </div>
+    );
+  }
+  
+  if (high === null || high === undefined) {
+    return (
+      <div className="flex items-center justify-center gap-1">
+        <span className="text-xs font-bold text-red-600 dark:text-red-400">{formatNumber(low, t)}</span>
+        <span className="text-[10px] text-gray-400">-</span>
+        <span className="text-xs font-medium text-gray-400">{t ? t('not_available') : 'N/A'}</span>
+      </div>
+    );
+  }
+  
+  const actualLow = Math.min(low, high);
+  const actualHigh = Math.max(low, high);
+  
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <span className="text-xs font-bold text-red-600 dark:text-red-400">
+        {formatNumber(actualLow, t)}
+      </span>
+      <span className="text-[10px] text-gray-500 font-medium">-</span>
+      <span className="text-xs font-bold text-green-600 dark:text-green-400">
+        {formatNumber(actualHigh, t)}
+      </span>
+    </div>
+  );
+});
+ActualRangeDisplay.displayName = 'ActualRangeDisplay';
+
+// Expected Range Display Component - matches StockDetails page format
+const ExpectedRangeDisplay: React.FC<{ low: number | null; high: number | null; t?: (key: string) => string }> = memo(({ low, high, t }) => {
+  if (low === null || high === null) {
+    return <span className="text-gray-400 text-xs font-medium">{t ? t('not_available') : 'N/A'}</span>;
+  }
+  
+  const expectedLow = Math.min(low, high);
+  const expectedHigh = Math.max(low, high);
+  
+  return (
+    <div className="flex items-center justify-center gap-1">
+      <span className="text-xs font-bold text-red-600 dark:text-red-400">
+        {formatNumber(expectedLow, t)}
+      </span>
+      <span className="text-[10px] text-gray-500 font-medium">-</span>
+      <span className="text-xs font-bold text-green-600 dark:text-green-400">
+        {formatNumber(expectedHigh, t)}
+      </span>
+    </div>
+  );
+});
+ExpectedRangeDisplay.displayName = 'ExpectedRangeDisplay';
+
 // --- Circular Progress Component ---
 const CircularProgress: React.FC<{
   value: number;
@@ -416,17 +482,18 @@ const GaugeChart: React.FC<{
   segments?: Array<{ label: string; color: string; range: [number, number] }>;
   size?: number;
   label?: string;
-}> = memo(({ value, min = 0, max = 100, segments, size = 200, label }) => {
+  t?: (key: string) => string;
+}> = memo(({ value, min = 0, max = 100, segments, size = 200, label, t }) => {
   const normalizedValue = Math.max(min, Math.min(max, value));
   const percentage = ((normalizedValue - min) / (max - min)) * 100;
   
-  // Default segments if not provided
+  // Default segments if not provided - use translations if available
   const defaultSegments = segments || [
-    { label: 'Strong Sell', color: '#ef4444', range: [0, 20] },
-    { label: 'Sell', color: '#f97316', range: [20, 40] },
-    { label: 'Neutral', color: '#eab308', range: [40, 60] },
-    { label: 'Buy', color: '#3b82f6', range: [60, 80] },
-    { label: 'Strong Buy', color: '#10b981', range: [80, 100] },
+    { label: t ? t('strong_sell') : 'بيع قوي', color: '#ef4444', range: [0, 20] },
+    { label: t ? t('sell') : 'بيع', color: '#f97316', range: [20, 40] },
+    { label: t ? t('neutral') : 'محايد', color: '#eab308', range: [40, 60] },
+    { label: t ? t('buy') : 'شراء', color: '#3b82f6', range: [60, 80] },
+    { label: t ? t('strong_buy') : 'شراء قوي', color: '#10b981', range: [80, 100] },
   ];
   
   // Calculate angle for needle (180 degrees arc, from -90 to 90)
@@ -717,7 +784,7 @@ const ForecastAccuracy: React.FC = () => {
       
       try {
         // Fetch basic stats
-        const [overallResult, byStockResult, byDateResult, byConfidenceResult] = await Promise.all([
+        const [overallResult, byStockResult, byDateResult, byConfidenceResult, recentForecastsResult] = await Promise.all([
           supabase.rpc('get_forecast_accuracy_overall', {
             p_start_date: defaultStartDate,
             p_end_date: defaultEndDate,
@@ -731,6 +798,10 @@ const ForecastAccuracy: React.FC = () => {
             p_end_date: defaultEndDate,
           }),
           supabase.rpc('get_forecast_accuracy_by_confidence', {
+            p_start_date: defaultStartDate,
+            p_end_date: defaultEndDate,
+          }),
+          supabase.rpc('get_forecast_accuracy_recent', {
             p_start_date: defaultStartDate,
             p_end_date: defaultEndDate,
           }),
@@ -827,7 +898,7 @@ const ForecastAccuracy: React.FC = () => {
             medium_confidence: { count: 0, hit_rate: 0 },
             low_confidence: { count: 0, hit_rate: 0 },
           },
-          recent_forecasts: [],
+          recent_forecasts: recentForecastsResult.data || [],
           date_range: {
             start_date: defaultStartDate,
             end_date: defaultEndDate,
@@ -857,7 +928,112 @@ const ForecastAccuracy: React.FC = () => {
     fetchData();
   }, [selectedStock, defaultStartDate, defaultEndDate]);
 
-  // Filter by stock data
+  // State for latest ranges per stock
+  const [latestRanges, setLatestRanges] = useState<Record<string, { 
+    actualLow: number | null; 
+    actualHigh: number | null; 
+    predictedLow: number | null; 
+    predictedHigh: number | null;
+  }>>({});
+
+  // Fetch latest ranges for each stock from forecast_check_history
+  useEffect(() => {
+    const fetchLatestRanges = async () => {
+      try {
+        // Try to use the new RPC function that gets latest ranges directly from forecast_check_history
+        const { data, error } = await supabase.rpc('get_latest_ranges_from_history');
+
+        if (!error && data && Array.isArray(data)) {
+          const ranges: Record<string, { 
+            actualLow: number | null; 
+            actualHigh: number | null; 
+            predictedLow: number | null; 
+            predictedHigh: number | null;
+          }> = {};
+          data.forEach((item: any) => {
+            if (item.stock_symbol && item.actual_low != null && item.actual_high != null && 
+                item.predicted_lo != null && item.predicted_hi != null) {
+              ranges[item.stock_symbol] = {
+                actualLow: item.actual_low,
+                actualHigh: item.actual_high,
+                predictedLow: item.predicted_lo,
+                predictedHigh: item.predicted_hi,
+              };
+            }
+          });
+          setLatestRanges(ranges);
+          return;
+        }
+
+        // Fallback 1: Try get_latest_ranges_per_stock (old function)
+        const { data: oldData, error: oldError } = await supabase.rpc('get_latest_ranges_per_stock', {
+          p_start_date: defaultStartDate,
+          p_end_date: defaultEndDate,
+        });
+
+        if (!oldError && oldData && Array.isArray(oldData)) {
+          const ranges: Record<string, { 
+            actualLow: number | null; 
+            actualHigh: number | null; 
+            predictedLow: number | null; 
+            predictedHigh: number | null;
+          }> = {};
+          oldData.forEach((item: any) => {
+            if (item.stock_symbol && item.actual_low != null && item.actual_high != null && 
+                item.predicted_lo != null && item.predicted_hi != null) {
+              ranges[item.stock_symbol] = {
+                actualLow: item.actual_low,
+                actualHigh: item.actual_high,
+                predictedLow: item.predicted_lo,
+                predictedHigh: item.predicted_hi,
+              };
+            }
+          });
+          setLatestRanges(ranges);
+          return;
+        }
+
+        // Fallback 2: Use recent_forecasts if RPC functions are not available
+        if (stats?.recent_forecasts && stats.recent_forecasts.length > 0) {
+          const ranges: Record<string, { 
+            actualLow: number | null; 
+            actualHigh: number | null; 
+            predictedLow: number | null; 
+            predictedHigh: number | null;
+          }> = {};
+          const processedSymbols = new Set<string>();
+          
+          stats.recent_forecasts.forEach((forecast) => {
+            if (!forecast.stock_symbol || processedSymbols.has(forecast.stock_symbol)) return;
+            
+            const stockForecasts = stats.recent_forecasts
+              .filter(f => f.stock_symbol === forecast.stock_symbol && 
+                           f.actual_low != null && f.actual_high != null &&
+                           f.predicted_lo != null && f.predicted_hi != null)
+              .sort((a, b) => new Date(b.forecast_date).getTime() - new Date(a.forecast_date).getTime());
+            
+            if (stockForecasts.length > 0) {
+              const latest = stockForecasts[0];
+              ranges[forecast.stock_symbol] = {
+                actualLow: latest.actual_low,
+                actualHigh: latest.actual_high,
+                predictedLow: latest.predicted_lo,
+                predictedHigh: latest.predicted_hi,
+              };
+              processedSymbols.add(forecast.stock_symbol);
+            }
+          });
+          setLatestRanges(ranges);
+        }
+      } catch (err: any) {
+        console.error('Error fetching latest ranges:', err);
+      }
+    };
+
+    fetchLatestRanges();
+  }, [stats?.recent_forecasts, defaultStartDate, defaultEndDate, t]);
+
+  // Filter by stock data and add ranges
   const filteredByStockData = useMemo(() => {
     if (!stats?.by_stock) return [];
     let filtered = stats.by_stock.filter((stock) => {
@@ -868,9 +1044,15 @@ const ForecastAccuracy: React.FC = () => {
                                (hitFilter === 'hit' && stock.hit_count > 0 && stock.miss_count === 0) ||
                                (hitFilter === 'miss' && stock.miss_count > 0);
       return matchesSearch && matchesFavorites && matchesHitFilter;
-    });
+    }).map((stock) => ({
+      ...stock,
+      actualLow: latestRanges[stock.stock_symbol]?.actualLow ?? null,
+      actualHigh: latestRanges[stock.stock_symbol]?.actualHigh ?? null,
+      predictedLow: latestRanges[stock.stock_symbol]?.predictedLow ?? null,
+      predictedHigh: latestRanges[stock.stock_symbol]?.predictedHigh ?? null,
+    }));
     return filtered;
-  }, [stats?.by_stock, searchTerm, showFavorites, hitFilter, isFavorite]);
+  }, [stats?.by_stock, searchTerm, showFavorites, hitFilter, isFavorite, latestRanges, t]);
 
   // Pagination calculations - MUST be before any conditional returns (React Hooks rule)
   const byStockTotalPages = useMemo(() => {
@@ -1224,14 +1406,14 @@ const ForecastAccuracy: React.FC = () => {
         </h1>
       </div>
 
-      {/* Top Section: KPI Indicators Dashboard - Radial Charts */}
+      {/* ============================================
+          SECTION 1: KPI Indicators (Small - Radial Charts)
+          ============================================ */}
       <div className="mb-6">
         <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
           {t('forecast_accuracy_indicators_dashboard') || 'لوحة مؤشرات دقة التوقعات'}
         </h2>
-        
-        {/* 4 Radial KPI Charts */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-4 gap-4">
           {/* Within Range */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
             <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
@@ -1300,9 +1482,84 @@ const ForecastAccuracy: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* 30-Day Trend Charts */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+      {/* ============================================
+          SECTION 2: Performance Overview (Medium - Gauge + Breakdown)
+          ============================================ */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+          {t('forecast_performance_analysis') || 'تحليل أداء التوقعات'}
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Gauge Chart - Overall Performance */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
+              {t('overall_performance_gauge') || 'مقياس الأداء الإجمالي'}
+            </h3>
+            <GaugeChart
+              value={overall.hit_rate}
+              min={0}
+              max={100}
+              segments={[
+                { label: t('very_low') || 'منخفض جداً', color: '#ef4444', range: [0, 30] },
+                { label: t('low') || 'منخفض', color: '#f97316', range: [30, 50] },
+                { label: t('medium') || 'متوسط', color: '#eab308', range: [50, 70] },
+                { label: t('good') || 'جيد', color: '#3b82f6', range: [70, 85] },
+                { label: t('excellent') || 'ممتاز', color: '#10b981', range: [85, 100] },
+              ]}
+              size={250}
+              label={t('hit_rate') || 'نسبة النجاح'}
+              t={t}
+            />
+          </div>
+
+          {/* Recommendation Breakdown */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
+              {t('forecast_breakdown') || 'تفاصيل التوقعات'}
+            </h3>
+            <RecommendationBreakdown
+              data={[
+                {
+                  label: t('correct_forecasts') || 'التوقعات الصحيحة',
+                  value: overall.hit_range_count,
+                  color: '#10b981',
+                },
+                {
+                  label: t('incorrect_forecasts') || 'التوقعات الخاطئة',
+                  value: overall.miss_range_count,
+                  color: '#ef4444',
+                },
+                {
+                  label: t('high_confidence') || 'ثقة عالية',
+                  value: by_confidence.high_confidence.count,
+                  color: '#3b82f6',
+                },
+                {
+                  label: t('medium_confidence') || 'ثقة متوسطة',
+                  value: by_confidence.medium_confidence.count,
+                  color: '#eab308',
+                },
+                {
+                  label: t('low_confidence') || 'ثقة منخفضة',
+                  value: by_confidence.low_confidence.count,
+                  color: '#f97316',
+                },
+              ]}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ============================================
+          SECTION 3: Trend Analysis (Medium - 30-Day Trends)
+          ============================================ */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+          {t('performance_trends') || 'اتجاهات الأداء - آخر 30 يوم'}
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* MAPE Trend */}
           {trend30DaysData.mape.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
@@ -1345,9 +1602,16 @@ const ForecastAccuracy: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
 
-        {/* Error Distribution and Weekly Cumulative */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+      {/* ============================================
+          SECTION 4: Distribution Analysis (Medium - Error & Weekly)
+          ============================================ */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+          {t('error_distribution_absolute') || 'تحليل التوزيع'}
+        </h2>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Error Distribution */}
           {errorDistributionData.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
@@ -1392,75 +1656,15 @@ const ForecastAccuracy: React.FC = () => {
         </div>
       </div>
 
-      {/* New Visual Components Section (مثل الصورة) - Updated: TradingView-style charts */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-          {t('forecast_performance_analysis') || 'تحليل أداء التوقعات'}
-        </h2>
-        
-        {/* Gauge Chart and Recommendation Breakdown */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          {/* Gauge Chart - Overall Performance */}
+      {/* ============================================
+          SECTION 5: Period Performance (Large - Multi-Bar Chart)
+          ============================================ */}
+      {dateChartData.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+            {t('performance_by_period') || 'الأداء حسب الفترة'}
+          </h2>
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
-              {t('overall_performance_gauge') || 'مقياس الأداء الإجمالي'}
-            </h3>
-            <GaugeChart
-              value={overall.hit_rate}
-              min={0}
-              max={100}
-              segments={[
-                { label: t('very_low') || 'منخفض جداً', color: '#ef4444', range: [0, 30] },
-                { label: t('low') || 'منخفض', color: '#f97316', range: [30, 50] },
-                { label: t('medium') || 'متوسط', color: '#eab308', range: [50, 70] },
-                { label: t('good') || 'جيد', color: '#3b82f6', range: [70, 85] },
-                { label: t('excellent') || 'ممتاز', color: '#10b981', range: [85, 100] },
-              ]}
-              size={250}
-              label={t('hit_rate') || 'نسبة النجاح'}
-            />
-          </div>
-
-          {/* Recommendation Breakdown */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
-              {t('forecast_breakdown') || 'تفاصيل التوقعات'}
-            </h3>
-            <RecommendationBreakdown
-              data={[
-                {
-                  label: t('correct_forecasts') || 'التوقعات الصحيحة',
-                  value: overall.hit_range_count,
-                  color: '#10b981',
-                },
-                {
-                  label: t('incorrect_forecasts') || 'التوقعات الخاطئة',
-                  value: overall.miss_range_count,
-                  color: '#ef4444',
-                },
-                {
-                  label: t('high_confidence') || 'ثقة عالية',
-                  value: by_confidence.high_confidence.count,
-                  color: '#3b82f6',
-                },
-                {
-                  label: t('medium_confidence') || 'ثقة متوسطة',
-                  value: by_confidence.medium_confidence.count,
-                  color: '#eab308',
-                },
-                {
-                  label: t('low_confidence') || 'ثقة منخفضة',
-                  value: by_confidence.low_confidence.count,
-                  color: '#f97316',
-                },
-              ]}
-            />
-          </div>
-        </div>
-
-        {/* Multi-Bar Chart - Performance by Period */}
-        {dateChartData.length > 0 && (
-          <div className="mb-6">
             <MultiBarChart
               data={dateChartData.slice(-8).map(item => ({
                 period: item.date,
@@ -1477,11 +1681,18 @@ const ForecastAccuracy: React.FC = () => {
               height={280}
             />
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Multi-Line Chart - Trends */}
-        {trend30DaysData.mape.length > 0 && trend30DaysData.hitRate.length > 0 && (
-          <div className="mb-6">
+      {/* ============================================
+          SECTION 6: Combined Trends Analysis (Large - Multi-Line Chart)
+          ============================================ */}
+      {trend30DaysData.mape.length > 0 && trend30DaysData.hitRate.length > 0 && (
+        <div className="mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+            {t('performance_trends') || 'تحليل الاتجاهات المركبة'}
+          </h2>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
             <MultiLineChart
               data={trend30DaysData.hitRate.map((item, index) => ({
                 date: item.date,
@@ -1497,143 +1708,83 @@ const ForecastAccuracy: React.FC = () => {
               xAxisKey="date"
             />
           </div>
-        )}
-      </div>
-
-      {/* Original KPI Cards Section */}
-      <div className="grid grid-cols-3 gap-3 mb-3">
-        {/* Hit Rate - Large Clear Display */}
-        <div className={`rounded-lg shadow-sm border-2 p-3 flex flex-col justify-center items-center ${
-          overall.hit_rate >= 80 
-            ? 'bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/30 dark:to-emerald-900/20 border-green-300 dark:border-green-700' 
-            : overall.hit_rate >= 60 
-            ? 'bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/30 dark:to-amber-900/20 border-yellow-300 dark:border-yellow-700'
-            : 'bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/30 dark:to-orange-900/20 border-red-300 dark:border-red-700'
-        }`}>
-          <h3 className={`text-xs font-bold mb-2 ${
-            overall.hit_rate >= 80 ? 'text-green-800 dark:text-green-200' 
-            : overall.hit_rate >= 60 ? 'text-yellow-800 dark:text-yellow-200'
-            : 'text-red-800 dark:text-red-200'
-          }`}>
-            {t('overall_hit_rate') || 'نسبة النجاح الإجمالية'}
-          </h3>
-          <div className={`text-4xl font-black mb-1 ${
-            overall.hit_rate >= 80 ? 'text-green-700 dark:text-green-300' 
-            : overall.hit_rate >= 60 ? 'text-yellow-700 dark:text-yellow-300'
-            : 'text-red-700 dark:text-red-300'
-          }`}>
-            {formatPercent(overall.hit_rate, t)}
-          </div>
-          <div className={`text-[10px] font-medium ${
-            overall.hit_rate >= 80 ? 'text-green-600 dark:text-green-400' 
-            : overall.hit_rate >= 60 ? 'text-yellow-600 dark:text-yellow-400'
-            : 'text-red-600 dark:text-red-400'
-          }`}>
-            {overall.hit_range_count.toLocaleString()} / {overall.total_forecasts.toLocaleString()}
-          </div>
         </div>
+      )}
 
-        {/* Total Hits - KPI Card */}
-        <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg shadow-sm border-2 border-green-300 dark:border-green-700 p-3 flex flex-col justify-center items-center">
-          <div className="flex items-center gap-1 mb-1 justify-center">
-            <CheckCircleIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
-            <span className="text-[9px] font-semibold text-green-700 dark:text-green-300 uppercase">{t('total_hits') || 'التوقعات الصحيحة'}</span>
-          </div>
-          <div className="text-center text-3xl font-black text-green-700 dark:text-green-300 mb-1">
-            {overall.hit_range_count.toLocaleString()}
-          </div>
-          <div className="text-[9px] text-green-600 dark:text-green-400">
-            {t('successful_forecasts') || 'توقعات ناجحة'}
-          </div>
-        </div>
 
-        {/* Total Misses - KPI Card */}
-        <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-lg shadow-sm border-2 border-red-300 dark:border-red-700 p-3 flex flex-col justify-center items-center">
-          <div className="flex items-center gap-1 mb-1 justify-center">
-            <XCircleIcon className="w-4 h-4 text-red-600 dark:text-red-400" />
-            <span className="text-[9px] font-semibold text-red-700 dark:text-red-300 uppercase">{t('total_misses') || 'التوقعات الخاطئة'}</span>
-          </div>
-          <div className="text-center text-3xl font-black text-red-700 dark:text-red-300 mb-1">
-            {overall.miss_range_count.toLocaleString()}
-          </div>
-          <div className="text-[9px] text-red-600 dark:text-red-400">
-            {t('failed_forecasts') || 'توقعات فاشلة'}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Layout: Left (Table) + Right (Charts) */}
-      <div className="flex flex-col lg:flex-row gap-3">
-        {/* Left Side - Table */}
-        <div className="w-full lg:w-3/5">
-          {/* Stock Performance Table */}
-          {filteredByStockData.length > 0 ? (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-              {/* Search and Filters Tools - Inside Table Card */}
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-                <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-                  {/* Search Input */}
-                  <div className="relative flex-1">
-                    <input 
-                      type="text"
-                      placeholder={t('search_by_symbol_or_name')}
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
-                    />
-                    <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  </div>
-                  
-                  {/* Favorites Filter */}
-                  <button
-                    onClick={() => setShowFavorites(!showFavorites)}
-                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center justify-center gap-2 ${
-                      showFavorites 
-                        ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
-                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
-                    {t('favorites')}
-                  </button>
-                  
-                  {/* Hit/Miss Filter Buttons */}
-                  <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-md p-1">
-                    <button
-                      onClick={() => setHitFilter('all')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                        hitFilter === 'all'
-                          ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                      }`}
-                    >
-                      {t('all')}
-                    </button>
-                    <button
-                      onClick={() => setHitFilter('hit')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                        hitFilter === 'hit'
-                          ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                      }`}
-                    >
-                      {t('hit')}
-                    </button>
-                    <button
-                      onClick={() => setHitFilter('miss')}
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                        hitFilter === 'miss'
-                          ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
-                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                      }`}
-                    >
-                      {t('miss')}
-                    </button>
-                  </div>
-                </div>
+      {/* ============================================
+          SECTION 7: Stock Performance Table (Large - Full Width)
+          ============================================ */}
+      <div className="mb-6">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+          {t('stock_performance_table')}
+        </h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+          {/* Search and Filters Tools - Always visible */}
+          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+              {/* Search Input */}
+              <div className="relative flex-1">
+                <input 
+                  type="text"
+                  placeholder={t('search_by_symbol_or_name')}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
+                />
+                <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               </div>
-              {/* Table */}
-              <div className="overflow-x-auto">
+              
+              {/* Favorites Filter */}
+              <button
+                onClick={() => setShowFavorites(!showFavorites)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center justify-center gap-2 ${
+                  showFavorites 
+                    ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
+                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                }`}
+              >
+                <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
+                {t('favorites')}
+              </button>
+              
+              {/* Hit/Miss Filter Buttons */}
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-md p-1">
+                <button
+                  onClick={() => setHitFilter('all')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    hitFilter === 'all'
+                      ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {t('all')}
+                </button>
+                <button
+                  onClick={() => setHitFilter('hit')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    hitFilter === 'hit'
+                      ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {t('hit')}
+                </button>
+                <button
+                  onClick={() => setHitFilter('miss')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                    hitFilter === 'miss'
+                      ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+                >
+                  {t('miss')}
+                </button>
+              </div>
+            </div>
+          </div>
+          {/* Table */}
+          <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
                     <tr>
@@ -1655,11 +1806,11 @@ const ForecastAccuracy: React.FC = () => {
                       <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[90px]">
                         {t('hit_rate')}
                       </th>
-                      <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[90px]">
-                        {t('average_error')}
+                      <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                        {t('actual_range')}
                       </th>
-                      <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[90px]">
-                        {t('average_confidence')}
+                      <th className="px-2 py-2 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                        {t('forecast_range')}
                       </th>
                     </tr>
                   </thead>
@@ -1725,20 +1876,10 @@ const ForecastAccuracy: React.FC = () => {
                           </span>
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap text-center">
-                          <span className={`text-sm font-bold ${
-                            stock.avg_pct_error <= 5 
-                              ? 'text-green-600 dark:text-green-400' 
-                              : stock.avg_pct_error <= 10 
-                              ? 'text-yellow-600 dark:text-yellow-400' 
-                              : 'text-red-600 dark:text-red-400'
-                          }`}>
-                            {formatPercent(stock.avg_pct_error, t)}
-                          </span>
+                          <ActualRangeDisplay low={stock.actualLow} high={stock.actualHigh} t={t} />
                         </td>
                         <td className="px-2 py-2 whitespace-nowrap text-center">
-                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                            {formatPercent(stock.avg_confidence, t)}
-                          </span>
+                          <ExpectedRangeDisplay low={stock.predictedLow} high={stock.predictedHigh} t={t} />
                         </td>
                       </tr>
                     ))}
@@ -1808,332 +1949,8 @@ const ForecastAccuracy: React.FC = () => {
                   </div>
                 </div>
               )}
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
-              <p className="text-gray-500 dark:text-gray-400">{t('no_data_available')}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right Side - Professional Financial Charts */}
-        <div className="w-full lg:w-2/5 space-y-3">
-          {/* Professional Charts Grid */}
-          <div className="space-y-3">
-            {/* Candlestick Chart with Forecast Range Overlay */}
-            {candlestickData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('candlestick_with_forecast_range') || 'الشموع مع نطاق التوقع'}</h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <ComposedChart data={candlestickData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                    <defs>
-                      <linearGradient id="forecastRange" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
-                    <YAxis tick={{ fontSize: 9 }} />
-                    <Tooltip 
-                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                      formatter={(value: any, name: string, props: any) => {
-                        if (name === 'predictedHigh' || name === 'predictedLow') return [formatNumber(value, t), t('predicted') || 'متوقع'];
-                        if (name === 'actualHigh' || name === 'actualLow') return [formatNumber(value, t), t('actual') || 'فعلي'];
-                        return [value, name];
-                      }}
-                    />
-                    <Legend />
-                    {/* Forecast Range Area */}
-                    <Area 
-                      type="monotone" 
-                      dataKey="predictedHigh" 
-                      fill="url(#forecastRange)" 
-                      stroke="#3b82f6" 
-                      strokeWidth={1}
-                      strokeDasharray="5 5"
-                      name={t('predicted_high') || 'الحد الأعلى المتوقع'}
-                    />
-                    <Area 
-                      type="monotone" 
-                      dataKey="predictedLow" 
-                      fill="url(#forecastRange)" 
-                      stroke="#3b82f6" 
-                      strokeWidth={1}
-                      strokeDasharray="5 5"
-                      name={t('predicted_low') || 'الحد الأدنى المتوقع'}
-                    />
-                    {/* Actual Price Range */}
-                    <Bar dataKey="actualHigh" fill="#10b981" name={t('actual_high') || 'الحد الأعلى الفعلي'} />
-                    <Bar dataKey="actualLow" fill="#ef4444" name={t('actual_low') || 'الحد الأدنى الفعلي'} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Waterfall Chart - Daily Hit Rate Change */}
-            {waterfallData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('waterfall_daily_change') || 'تحليل التغيير اليومي'}</h3>
-                <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={waterfallData} margin={{ top: 10, right: 10, left: 10, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
-                    <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
-                    <Tooltip 
-                      formatter={(value: number) => `${value.toFixed(1)}%`}
-                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                    />
-                    <Bar dataKey="cumulative" radius={[4, 4, 0, 0]}>
-                      {waterfallData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.isPositive ? '#10b981' : '#ef4444'} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Hit Map - Grid of Stocks */}
-            {hitMapData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('hit_map') || 'خريطة نجاح التوقعات'}</h3>
-                <div className="grid grid-cols-10 gap-1">
-                  {hitMapData.map((stock, index) => (
-                    <div
-                      key={index}
-                      className={`aspect-square rounded flex items-center justify-center text-[8px] font-bold transition-all hover:scale-110 ${
-                        stock.isHit 
-                          ? 'bg-green-500 text-white' 
-                          : 'bg-red-500 text-white'
-                      }`}
-                      title={`${stock.symbol}: ${stock.hitRate.toFixed(1)}%`}
-                    >
-                      {stock.symbol.substring(0, 2)}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center justify-center gap-4 mt-3 text-xs">
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 bg-green-500 rounded"></div>
-                    <span className="text-gray-600 dark:text-gray-400">{t('hit')}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-4 h-4 bg-red-500 rounded"></div>
-                    <span className="text-gray-600 dark:text-gray-400">{t('miss')}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Top 10 Stocks - Ranked Bar Chart */}
-            {topStocksData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('top_10_stocks') || 'أفضل 10 أسهم'}</h3>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={topStocksData} layout="vertical" margin={{ top: 5, right: 10, left: 50, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={45} />
-                    <Tooltip 
-                      formatter={(value: number) => `${value.toFixed(1)}%`}
-                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                    />
-                    <Bar dataKey="hitRate" radius={[0, 4, 4, 0]} fill="#10b981" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Scatter Plot - Range Size vs Hit Rate */}
-            {scatterData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('range_size_vs_hit_rate') || 'نطاق التوقع مقابل نسبة النجاح'}</h3>
-                <ResponsiveContainer width="100%" height={180}>
-                  <ScatterChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis 
-                      type="number" 
-                      dataKey="x" 
-                      name={t('range_size') || 'حجم النطاق'}
-                      unit="%"
-                      tick={{ fontSize: 9 }}
-                    />
-                    <YAxis 
-                      type="number" 
-                      dataKey="y" 
-                      name={t('hit_rate') || 'نسبة النجاح'}
-                      unit="%"
-                      tick={{ fontSize: 9 }}
-                    />
-                    <Tooltip 
-                      cursor={{ strokeDasharray: '3 3' }}
-                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                      formatter={(value: number, name: string, props: any) => {
-                        if (name === 'x') return [`${value.toFixed(2)}%`, t('range_size') || 'حجم النطاق'];
-                        if (name === 'y') return [`${value}%`, t('hit_rate') || 'نسبة النجاح'];
-                        return [value, name];
-                      }}
-                      labelFormatter={(label) => `Symbol: ${scatterData.find(d => d.x === label)?.symbol || ''}`}
-                    />
-                    <Scatter data={scatterData} fill="#3b82f6">
-                      {scatterData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.hitRange ? '#10b981' : '#ef4444'} />
-                      ))}
-                    </Scatter>
-                  </ScatterChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Bias Analysis */}
-            {biasBarData.length > 0 && (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-3">
-                <h3 className="text-xs font-bold text-gray-900 dark:text-white mb-2">{t('bias_analysis')}</h3>
-                <ResponsiveContainer width="100%" height={150}>
-                  <BarChart data={biasBarData} layout="vertical" margin={{ top: 5, right: 10, left: 60, bottom: 5 }}>
-                    <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 9 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 9 }} width={55} />
-                    <Tooltip formatter={(v: number) => `${v.toFixed(1)}%`} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {biasBarData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
           </div>
-        </div>
       </div>
-
-      {/* By Confidence Level & Bias Analysis Section - Bottom Section */}
-      {by_confidence && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
-          {/* By Confidence Level - Left Side */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{t('by_confidence_level') || 'حسب مستوى الثقة'}</h3>
-            <div className="space-y-4">
-              {/* High Confidence */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {t('high_confidence') || 'ثقة عالية'} (&gt;70%)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {by_confidence.high_confidence.count} {t('forecasts') || 'التوقعات'}
-                    </span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                      {formatPercent(by_confidence.high_confidence.hit_rate, t)}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-green-500 to-green-600 transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.min(100, by_confidence.high_confidence.hit_rate)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Medium Confidence */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {t('medium_confidence') || 'ثقة متوسطة'} (50-70%)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {by_confidence.medium_confidence.count} {t('forecasts') || 'التوقعات'}
-                    </span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                      {formatPercent(by_confidence.medium_confidence.hit_rate, t)}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-yellow-500 to-yellow-600 transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.min(100, by_confidence.medium_confidence.hit_rate)}%` }}
-                  />
-                </div>
-              </div>
-
-              {/* Low Confidence */}
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                    {t('low_confidence') || 'ثقة منخفضة'} (&lt;50%)
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-gray-600 dark:text-gray-400">
-                      {by_confidence.low_confidence.count} {t('forecasts') || 'التوقعات'}
-                    </span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">
-                      {formatPercent(by_confidence.low_confidence.hit_rate, t)}
-                    </span>
-                  </div>
-                </div>
-                <div className="w-full h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-500 rounded-full"
-                    style={{ width: `${Math.min(100, by_confidence.low_confidence.hit_rate)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bias Analysis - Right Side */}
-          {adv?.biasAnalysis && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{t('bias_analysis') || 'تحليل التحيز في التوقعات'}</h3>
-              <div className="grid grid-cols-1 gap-4">
-                {/* Within Range */}
-                <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
-                  <div className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">
-                    {t('within_range') || 'ضمن النطاق'}
-                  </div>
-                  <div className="text-2xl font-black text-green-700 dark:text-green-400 mb-1">
-                    {adv.biasAnalysis.within_range?.count || 0}
-                  </div>
-                  <div className="text-sm font-bold text-green-600 dark:text-green-400">
-                    ({formatPercent(adv.biasAnalysis.within_range?.percentage || 0, t)})
-                  </div>
-                </div>
-
-                {/* Underestimated */}
-                <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 rounded-lg p-4 border border-yellow-200 dark:border-yellow-700">
-                  <div className="text-xs font-semibold text-yellow-700 dark:text-yellow-300 mb-1">
-                    {t('underestimated') || 'مقدر بأقل'}
-                  </div>
-                  <div className="text-2xl font-black text-yellow-700 dark:text-yellow-400 mb-1">
-                    {adv.biasAnalysis.underestimated?.count || 0}
-                  </div>
-                  <div className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
-                    ({formatPercent(adv.biasAnalysis.underestimated?.percentage || 0, t)})
-                  </div>
-                </div>
-
-                {/* Overestimated */}
-                <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-lg p-4 border border-red-200 dark:border-red-700">
-                  <div className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
-                    {t('overestimated') || 'مبالغ فيه'}
-                  </div>
-                  <div className="text-2xl font-black text-red-700 dark:text-red-400 mb-1">
-                    {adv.biasAnalysis.overestimated?.count || 0}
-                  </div>
-                  <div className="text-sm font-bold text-red-600 dark:text-red-400">
-                    ({formatPercent(adv.biasAnalysis.overestimated?.percentage || 0, t)})
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 };

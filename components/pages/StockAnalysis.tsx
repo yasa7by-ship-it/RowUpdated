@@ -7,8 +7,8 @@ import { useFavorites } from '../../contexts/FavoritesContext';
 import { SpinnerIcon, BuildingOfficeIcon, CheckCircleIcon, XCircleIcon, ChartPieIcon, CalendarDaysIcon, StarIcon } from '../icons';
 
 // --- Caching Configuration ---
-const CACHE_KEY = 'stockAnalysisData-v2';
-const CACHE_TIMESTAMP_KEY = 'stockAnalysisTimestamp-v2';
+const CACHE_KEY = 'stockAnalysisData-v3'; // Updated to force cache refresh
+const CACHE_TIMESTAMP_KEY = 'stockAnalysisTimestamp-v3'; // Updated to force cache refresh
 const CACHE_DURATION_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 // --- Helper Functions & Formatting ---
