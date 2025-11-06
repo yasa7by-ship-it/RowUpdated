@@ -11,11 +11,12 @@
     <meta name="theme-color" content="#2d5aa0" />
     <meta name="mobile-web-app-capable" content="yes" />
 
-    <!-- Apple PWA specific tags -->
+    <!-- Apple PWA specific tags - Will be updated dynamically by JavaScript -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MRowDir">
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" sizes="512x512" href="/icons/icon-512.png" />
     
@@ -111,7 +112,48 @@
       * {
         -webkit-tap-highlight-color: transparent;
       }
+      
+      /* iOS PWA specific styles */
+      @supports (-webkit-touch-callout: none) {
+        body {
+          /* iOS Safari specific styles */
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+      }
     </style>
+    
+    <!-- Device Detection Script - Runs early to set PWA mode -->
+    <script>
+      (function() {
+        // Detect if device is mobile
+        function isMobileDevice() {
+          const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+          const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+          const isSmallScreen = window.innerWidth <= 768;
+          const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+          
+          return isMobile || (isSmallScreen && isTouchDevice);
+        }
+        
+        const isMobile = isMobileDevice();
+        
+        // Update apple-mobile-web-app-capable meta tag immediately
+        const appleCapableTag = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+        if (appleCapableTag) {
+          appleCapableTag.setAttribute('content', isMobile ? 'yes' : 'no');
+        }
+        
+        // For desktop, ensure it opens as regular website
+        if (!isMobile) {
+          // Remove standalone display mode preference for desktop
+          const viewportTag = document.querySelector('meta[name="viewport"]');
+          if (viewportTag) {
+            viewportTag.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes');
+          }
+        }
+      })();
+    </script>
   </head>
   <body class="bg-nextrow-bg dark:bg-nextrow-bg-dark text-nextrow-text dark:text-gray-200">
     <div id="root"></div>

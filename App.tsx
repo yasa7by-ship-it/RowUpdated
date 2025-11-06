@@ -25,6 +25,17 @@ const UserNotesManagement = lazy(() => import('./components/pages/UserNotesManag
 const ForecastAccuracy = lazy(() => import('./components/pages/ForecastAccuracy'));
 const ForecastHistoryAnalysis = lazy(() => import('./components/pages/ForecastHistoryAnalysis'));
 
+// Helper function to detect if device is mobile
+const isMobileDevice = (): boolean => {
+  const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+  const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+  const isSmallScreen = window.innerWidth <= 768;
+  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  
+  // Consider it mobile if it's a mobile user agent OR (small screen AND touch device)
+  return isMobileUA || (isSmallScreen && isTouchDevice);
+};
+
 const App: React.FC = () => {
   const { session, loading, hasPermission, profile } = useAuth();
   const [currentPage, setCurrentPage] = useState<PageState>('landing');
@@ -70,27 +81,38 @@ const App: React.FC = () => {
     // Don't run if translation isn't ready or it's the default key
     if (!siteTitle || siteTitle === 'site_title') return;
 
+    // Detect device type
+    const isMobile = isMobileDevice();
+    
     // Update apple-mobile-web-app-title meta tag
     const appleTitleTag = document.querySelector('meta[name="apple-mobile-web-app-title"]');
     if (appleTitleTag) {
       appleTitleTag.setAttribute('content', siteTitle);
     }
     
-    // Create a dynamic manifest
+    // Update apple-mobile-web-app-capable based on device type
+    const appleCapableTag = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
+    if (appleCapableTag) {
+      appleCapableTag.setAttribute('content', isMobile ? 'yes' : 'no');
+    }
+    
+    // Create a dynamic manifest with device-specific display mode
     const manifest = {
       "short_name": siteTitle,
       "name": siteTitle,
       "description": "Professional and visually engaging stock price predictions for the U.S. markets.",
       "icons": [
         { "src": "/favicon.ico", "sizes": "64x64 32x32 24x24 16x16", "type": "image/x-icon" },
-        { "src": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192" },
-        { "src": "/icons/icon-512.png", "type": "image/png", "sizes": "512x512" }
+        { "src": "/icons/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any maskable" },
+        { "src": "/icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any maskable" }
       ],
       "start_url": "/",
-      "display": "standalone",
+      "display": isMobile ? "standalone" : "browser", // standalone for mobile, browser for desktop
+      "orientation": isMobile ? "portrait-primary" : "any",
       "scope": "/",
-      "theme_color": "#4338ca",
-      "background_color": "#ffffff"
+      "theme_color": "#2d5aa0",
+      "background_color": "#ffffff",
+      "categories": ["finance", "business"]
     };
 
     const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
