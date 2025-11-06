@@ -80,18 +80,66 @@ const RoleManagement: React.FC = () => {
     refetchProfile();
   };
 
+  // Map permission action to page name for display
+  const getPageNameFromPermission = (action: string): string => {
+    // Map permissions to page names
+    const pageMap: Record<string, string> = {
+      'view:daily_watchlist': 'daily_watchlist',
+      'view:stock_analysis': 'stock_analysis',
+      'view:forecast_accuracy': 'forecast_accuracy',
+      'view:forecast_history_analysis': 'forecast_history_analysis',
+      'view:dashboard': 'dashboard',
+    };
+    
+    return pageMap[action] || action;
+  };
+
   // Filter and search permissions
   const filteredPermissions = useMemo(() => {
     if (!selectedRole) return [];
     
-    let filtered = permissions.filter(permission => {
-      // Search filter
-      const permissionKey = `perm_${permission.action.replace(':', '_')}`;
-      const permissionName = t(permissionKey) || permissionKey;
-      const permissionDesc = t(`${permissionKey}_desc`) || '';
+    // Remove duplicates by action (keep first occurrence)
+    const uniquePermissions = Array.from(
+      new Map(permissions.map(p => [p.action, p])).values()
+    );
+    
+    // Sort permissions: main pages first, then by display_order if available, then alphabetically
+    const sortedPermissions = [...uniquePermissions].sort((a, b) => {
+      // Main pages order
+      const mainPagesOrder: Record<string, number> = {
+        'view:daily_watchlist': 1,
+        'view:stock_analysis': 2,
+        'view:forecast_accuracy': 3,
+        'view:forecast_history_analysis': 4,
+        'view:dashboard': 5,
+      };
+      
+      const aOrder = mainPagesOrder[a.action] || ((a as any).display_order ?? 999);
+      const bOrder = mainPagesOrder[b.action] || ((b as any).display_order ?? 999);
+      
+      if (aOrder !== bOrder) {
+        return aOrder - bOrder;
+      }
+      
+      // If same order, sort alphabetically by translated name
+      const pageNameA = getPageNameFromPermission(a.action);
+      const pageNameB = getPageNameFromPermission(b.action);
+      const nameA = t(pageNameA) || a.action;
+      const nameB = t(pageNameB) || b.action;
+      return nameA.localeCompare(nameB);
+    });
+    
+    let filtered = sortedPermissions.filter(permission => {
+      // Get display name: use page name if it's a main page, otherwise use permission translation
+      const pageName = getPageNameFromPermission(permission.action);
+      const isMainPage = pageName !== permission.action;
+      const displayName = isMainPage 
+        ? (t(pageName) || permission.action)
+        : (t(`perm_${permission.action.replace(':', '_')}`) || permission.action);
+      const permissionDesc = t(`perm_${permission.action.replace(':', '_')}_desc`) || '';
       const searchLower = searchTerm.toLowerCase();
       
-      if (searchTerm && !permissionName.toLowerCase().includes(searchLower) && !permissionDesc.toLowerCase().includes(searchLower)) {
+      if (searchTerm && !displayName.toLowerCase().includes(searchLower) && !permissionDesc.toLowerCase().includes(searchLower)) {
         return false;
       }
       
@@ -248,6 +296,12 @@ const RoleManagement: React.FC = () => {
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {paginatedPermissions.map((permission, index) => {
                     const permissionKey = `perm_${permission.action.replace(':', '_')}`;
+                    const pageName = getPageNameFromPermission(permission.action);
+                    const isMainPage = pageName !== permission.action;
+                    // Use page name for main pages, otherwise use permission translation
+                    const displayName = isMainPage 
+                      ? (t(pageName) || permission.action)
+                      : (t(permissionKey) || permissionKey);
                     const isEnabled = rolePermissions.get(selectedRole.id)?.has(permission.id) || false;
                     const isDisabled = selectedRole.name === 'Admin';
                     
@@ -262,7 +316,7 @@ const RoleManagement: React.FC = () => {
                       >
                         <td className="px-3 py-3 whitespace-nowrap">
                           <div className="text-sm font-semibold text-gray-900 dark:text-white">
-                            {t(permissionKey) || permissionKey}
+                            {displayName}
                           </div>
                         </td>
                         <td className="px-3 py-3">

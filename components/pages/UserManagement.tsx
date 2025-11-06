@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import type { Profile, Role } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -18,6 +18,13 @@ const UserManagement: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Filters and search
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'confirmed' | 'pending'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<ProfileWithRole | null>(null);
@@ -51,6 +58,50 @@ const UserManagement: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Filter and search users
+  const filteredProfiles = useMemo(() => {
+    let filtered = profiles.filter(profile => {
+      // Search filter (name and email)
+      const searchLower = searchTerm.toLowerCase();
+      if (searchTerm && 
+          !profile.full_name?.toLowerCase().includes(searchLower) && 
+          !profile.email.toLowerCase().includes(searchLower)) {
+        return false;
+      }
+      
+      // Role filter
+      if (filterRole !== 'all' && profile.roles?.name !== filterRole) {
+        return false;
+      }
+      
+      // Status filter
+      if (filterStatus === 'confirmed' && !profile.email_confirmed_at) {
+        return false;
+      }
+      if (filterStatus === 'pending' && profile.email_confirmed_at) {
+        return false;
+      }
+      
+      return true;
+    });
+    
+    return filtered;
+  }, [profiles, searchTerm, filterRole, filterStatus]);
+
+  // Pagination
+  const paginatedProfiles = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredProfiles.slice(startIndex, endIndex);
+  }, [filteredProfiles, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(filteredProfiles.length / itemsPerPage);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterRole, filterStatus]);
 
   const handleAddNewUser = () => {
     setEditingUser(null);
@@ -184,9 +235,63 @@ const UserManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Add User Button - فوق الجدول */}
+      {/* Filters and Search */}
       <div className="flex justify-center">
-        <div className="w-full max-w-2xl">
+        <div className="w-full max-w-2xl space-y-4">
+          {/* Search Bar */}
+          <div className="relative">
+            <input
+              type="text"
+              placeholder={t('search') || 'بحث...'}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-4 py-2 pl-10 pr-4 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Filters Row */}
+          <div className="flex flex-wrap gap-3">
+            {/* Role Filter */}
+            <div className="flex-1 min-w-[150px]">
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">{t('all_roles') || 'جميع الصلاحيات'}</option>
+                {roles.map((role) => (
+                  <option key={role.id} value={role.name}>
+                    {t(`role_${role.name}`) || role.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex-1 min-w-[150px]">
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as 'all' | 'confirmed' | 'pending')}
+                className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="all">{t('all_statuses') || 'جميع الحالات'}</option>
+                <option value="confirmed">{t('confirmed') || 'مؤكد'}</option>
+                <option value="pending">{t('pending_confirmation') || 'في انتظار التأكيد'}</option>
+              </select>
+            </div>
+
+            {/* Results Count */}
+            <div className="flex items-center px-3 py-2 text-sm text-gray-600 dark:text-gray-400">
+              {t('results') || 'النتائج'}: {filteredProfiles.length}
+            </div>
+          </div>
+
+          {/* Add User Button */}
           <button
             onClick={handleAddNewUser}
             className="w-full flex items-center justify-center gap-2 py-3 px-6 border border-transparent rounded-lg shadow-md text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200 transform hover:scale-[1.02]"
@@ -222,7 +327,7 @@ const UserManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {profiles.map((profile, index) => (
+                {paginatedProfiles.map((profile, index) => (
                   <tr 
                     key={profile.id}
                     className={`group transition-all duration-200 ${
@@ -291,21 +396,52 @@ const UserManagement: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-                {profiles.length === 0 && (
+                {paginatedProfiles.length === 0 && (
                   <tr>
                     <td colSpan={5} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-                      {t('no_users_found') || 'لا توجد مستخدمين'}
+                      {filteredProfiles.length === 0 && profiles.length > 0
+                        ? (t('no_users_match_filters') || 'لا توجد مستخدمين يطابقون الفلاتر')
+                        : (t('no_users_found') || 'لا توجد مستخدمين')}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {t('previous') || 'السابق'}
+                </button>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('page') || 'صفحة'} {currentPage} {t('of') || 'من'} {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {t('next') || 'التالي'}
+                </button>
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                {((currentPage - 1) * itemsPerPage + 1)} - {Math.min(currentPage * itemsPerPage, filteredProfiles.length)} {t('of') || 'من'} {filteredProfiles.length}
+              </div>
+            </div>
+          )}
         </div>
       </div>
       
       {isModalOpen && (
         <UserEditModal
+          key={editingUser?.id || 'new-user'}
           user={editingUser}
           roles={roles}
           onClose={handleCloseModal}

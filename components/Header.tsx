@@ -31,9 +31,11 @@ const LoggedInView: React.FC<{
   setProfileOpen: (value: boolean) => void;
   profileMenuRef: React.RefObject<HTMLDivElement>;
   isSigningOut: boolean;
+  signOutError: string | null;
   handleSignOut: () => Promise<void>;
-}> = ({ profile, isProfileOpen, setProfileOpen, profileMenuRef, isSigningOut, handleSignOut }) => {
+}> = ({ profile, isProfileOpen, setProfileOpen, profileMenuRef, isSigningOut, signOutError, handleSignOut }) => {
   const { t } = useLanguage();
+  const { session } = useAuth();
   const displayName = profile?.full_name?.trim() ? profile.full_name : profile?.email;
   
   return (
@@ -48,18 +50,28 @@ const LoggedInView: React.FC<{
         {isProfileOpen && (
         <div className="absolute right-0 rtl:left-0 rtl:right-auto mt-2 w-64 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 z-10">
             <div className="p-4 border-b dark:border-gray-700 text-start">
-            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{displayName}</p>
+            <p className="font-semibold text-gray-800 dark:text-gray-200 truncate">{displayName || t('user')}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400 truncate">{profile?.roles?.name ? t(`role_${profile.roles.name}`) : t('no_role')}</p>
             </div>
             <ul className="py-1">
+            {!session && (
+              <li className="px-4 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+                {t('auth_session_missing') || '!Auth session missing'}
+              </li>
+            )}
+            {signOutError && (
+              <li className="px-4 py-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border-b border-red-200 dark:border-red-800">
+                {signOutError}
+              </li>
+            )}
             <li><button 
                 onClick={handleSignOut} 
-                className="w-full text-start flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-75"
+                className="w-full text-start flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-75 disabled:cursor-not-allowed"
                 disabled={isSigningOut}
             >
                 {isSigningOut ? (
                     <>
-                        <SpinnerIcon className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0" />
+                        <SpinnerIcon className="w-5 h-5 mr-3 rtl:ml-3 rtl:mr-0 animate-spin" />
                         {t('signing_out')}...
                     </>
                 ) : (
@@ -240,7 +252,7 @@ const Header: React.FC<{
 }> = ({ profile, setPage, currentPage }) => {
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
-  const { hasPermission } = useAuth();
+  const { session, hasPermission, refetchProfile } = useAuth();
   const { settings } = useAppSettings();
   
   const [isSignUpModalOpen, setSignUpModalOpen] = useState(false);
@@ -249,6 +261,7 @@ const Header: React.FC<{
   const [isSiteMgmtOpen, setSiteMgmtOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isMobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const languageMenuRef = useRef<HTMLDivElement>(null);
@@ -256,20 +269,61 @@ const Header: React.FC<{
   
   const handleSignOut = async () => {
     setIsSigningOut(true);
-    const { error } = await supabase.auth.signOut();
+    setSignOutError(null);
+    
+    try {
+      const { error } = await supabase.auth.signOut();
 
-    if (error) {
+      if (error) {
         console.error('Error signing out:', error);
-        // On error, reset state and close menu
+        setSignOutError(error.message || t('sign_out_failed') || 'فشل تسجيل الخروج');
         setIsSigningOut(false);
-        setProfileOpen(false);
-    } else {
+        // Keep menu open to show error
+        setTimeout(() => {
+          setSignOutError(null);
+          setProfileOpen(false);
+        }, 3000);
+      } else {
+        // Clear any cached data before reload
+        try {
+          localStorage.clear();
+          sessionStorage.clear();
+        } catch (e) {
+          // Ignore storage errors
+        }
+        
         // A full page reload is the most robust way to ensure all state,
         // including context and cached data, is completely cleared on sign-out.
         // This is especially reliable for OAuth sessions where state listeners might not fire immediately.
-        window.location.reload();
+        window.location.href = '/';
+      }
+    } catch (err: any) {
+      console.error('Unexpected error during sign out:', err);
+      setSignOutError(err.message || t('sign_out_failed') || 'فشل تسجيل الخروج');
+      setIsSigningOut(false);
+      setTimeout(() => {
+        setSignOutError(null);
+        setProfileOpen(false);
+      }, 3000);
     }
   };
+
+  // Check session when profile is open and session is missing
+  useEffect(() => {
+    if (isProfileOpen && profile && !session) {
+      // Try to refresh session
+      supabase.auth.getSession().then(({ data, error }) => {
+        if (error || !data.session) {
+          // Session is truly missing, force sign out
+          console.warn('Session missing, forcing sign out');
+          handleSignOut();
+        } else {
+          // Session refreshed, refetch profile
+          refetchProfile();
+        }
+      });
+    }
+  }, [isProfileOpen, profile, session, refetchProfile, handleSignOut]);
 
   // Close mobile menu on resize to desktop
   useEffect(() => {
@@ -380,13 +434,14 @@ const Header: React.FC<{
         </div>
 
         <div className="flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse rtl:md:space-x-reverse">
-            {profile ? (
+            {profile && session ? (
             <LoggedInView
                 profile={profile}
                 isProfileOpen={isProfileOpen}
                 setProfileOpen={setProfileOpen}
                 profileMenuRef={profileMenuRef}
                 isSigningOut={isSigningOut}
+                signOutError={signOutError}
                 handleSignOut={handleSignOut}
             />
             ) : (

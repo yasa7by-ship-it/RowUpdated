@@ -16,31 +16,62 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, roles, onClose, onS
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  // Form state
+  // Form state - initialize empty
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [roleId, setRoleId] = useState<string | null>(null);
-  
 
+  // Reset form when user changes (including when opening for new user)
   useEffect(() => {
+    // Always reset error when modal state changes
+    setError(null);
+    
     if (user) {
+      // Editing existing user - populate fields
       setFullName(user.full_name || '');
       setEmail(user.email || '');
-      setRoleId(user.role_id);
+      setRoleId(user.role_id || null);
+      // Always clear password fields for editing
+      setPassword('');
+      setConfirmPassword('');
     } else {
-      // Reset form for new user
+      // Adding new user - ensure all fields are empty
       setFullName('');
       setEmail('');
       setPassword('');
       setConfirmPassword('');
       setRoleId(null);
     }
-     // Always clear password fields when modal opens
-    setPassword('');
-    setConfirmPassword('');
   }, [user]);
+
+  // Email validation regex
+  const validateEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
+  // Check if email already exists
+  const checkEmailExists = async (email: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', email.toLowerCase().trim())
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error checking email:', error);
+        return false;
+      }
+      
+      return data !== null;
+    } catch (err) {
+      console.error('Error checking email:', err);
+      return false;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,28 +80,80 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, roles, onClose, onS
     
     const isNewUser = !user;
     
-    // Validation for new password
-    if (isNewUser || password) {
-        if (password.length < 6) {
-            setError(t('password_too_short'));
-            setIsSaving(false);
-            return;
-        }
-        if (password !== confirmPassword) {
-            setError(t('passwords_do_not_match'));
-            setIsSaving(false);
-            return;
-        }
+    // Validation 1: Full name
+    const trimmedFullName = fullName.trim();
+    if (!trimmedFullName || trimmedFullName.length < 2) {
+      setError(t('full_name_required') || 'الاسم الكامل مطلوب (على الأقل حرفان)');
+      setIsSaving(false);
+      return;
     }
 
+    // Validation 2: Email (for new users)
+    if (isNewUser) {
+      const trimmedEmail = email.trim().toLowerCase();
+      if (!trimmedEmail) {
+        setError(t('email_required') || 'البريد الإلكتروني مطلوب');
+        setIsSaving(false);
+        return;
+      }
+      
+      if (!validateEmail(trimmedEmail)) {
+        setError(t('invalid_email') || 'البريد الإلكتروني غير صحيح');
+        setIsSaving(false);
+        return;
+      }
+
+      // Check if email already exists
+      const emailExists = await checkEmailExists(trimmedEmail);
+      if (emailExists) {
+        setError(t('email_already_exists') || 'البريد الإلكتروني مستخدم بالفعل');
+        setIsSaving(false);
+        return;
+      }
+    }
+
+    // Validation 3: Role selection
+    if (!roleId) {
+      setError(t('role_required') || 'يجب اختيار صلاحية');
+      setIsSaving(false);
+      return;
+    }
+
+    // Validation 4: Password (for new users or when changing password)
+    if (isNewUser || password) {
+      if (password.length < 6) {
+        setError(t('password_too_short') || 'كلمة المرور يجب أن تكون 6 أحرف على الأقل');
+        setIsSaving(false);
+        return;
+      }
+      
+      if (password.length > 72) {
+        setError(t('password_too_long') || 'كلمة المرور طويلة جداً (الحد الأقصى 72 حرف)');
+        setIsSaving(false);
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        setError(t('passwords_do_not_match') || 'كلمات المرور غير متطابقة');
+        setIsSaving(false);
+        return;
+      }
+
+      // Optional: Password strength validation (at least one letter and one number)
+      if (isNewUser && !/(?=.*[a-zA-Z])(?=.*\d)/.test(password)) {
+        setError(t('password_weak') || 'كلمة المرور يجب أن تحتوي على حرف ورقم على الأقل');
+        setIsSaving(false);
+        return;
+      }
+    }
 
     try {
       const dataToSave: any = {
-        full_name: fullName,
+        full_name: trimmedFullName,
         role_id: roleId,
       };
       if (isNewUser) { // If new user
-        dataToSave.email = email;
+        dataToSave.email = email.trim().toLowerCase();
         dataToSave.password = password;
       } else if (password) { // If editing user and password is set
         dataToSave.password = password;
@@ -78,7 +161,18 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, roles, onClose, onS
       await onSave(dataToSave);
       onClose();
     } catch (err: any) {
-      setError(err.message);
+      // Handle specific error messages
+      let errorMessage = err.message || t('save_failed') || 'فشل الحفظ';
+      
+      if (err.message?.includes('User already registered') || err.message?.includes('already registered')) {
+        errorMessage = t('email_already_exists') || 'البريد الإلكتروني مستخدم بالفعل';
+      } else if (err.message?.includes('Invalid email')) {
+        errorMessage = t('invalid_email') || 'البريد الإلكتروني غير صحيح';
+      } else if (err.message?.includes('Password')) {
+        errorMessage = t('password_invalid') || 'كلمة المرور غير صحيحة';
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsSaving(false);
     }
