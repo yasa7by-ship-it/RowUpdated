@@ -1,0 +1,73 @@
+# ============================================
+# Project Requirements
+# ============================================
+# 
+# This file documents the requirements for running this project
+# For Node.js dependencies, see package.json
+# ============================================
+
+# Node.js Version
+node>=18.0.0
+
+# npm Version
+npm>=9.0.0
+
+# ============================================
+# Key Dependencies (from package.json)
+# ============================================
+
+# Core Framework
+react>=19.2.0
+react-dom>=19.2.0
+
+# Build Tools
+vite>=6.2.0
+typescript>=5.8.2
+
+# Database
+@supabase/supabase-js>=2.76.1
+
+# UI Libraries
+recharts>=2.10.0
+react-hot-toast>=2.4.1
+react-datepicker>=4.24.0
+react-select>=5.8.0
+
+# Utilities
+jspdf>=2.5.1
+jspdf-autotable>=3.8.0
+papaparse>=5.4.1
+
+# Development Tools
+@vitejs/plugin-react>=5.0.0
+@types/node>=22.14.0
+
+# ============================================
+# Installation Instructions
+# ============================================
+# 
+# 1. Install Node.js (version 18 or higher)
+# 2. Run: npm install --legacy-peer-deps
+# 3. Run: npm run dev (for development)
+# 4. Run: npm run build (for production)
+# 
+# Note: Use --legacy-peer-deps flag due to React 19 compatibility
+# with react-datepicker which supports up to React 18
+# ============================================
+
+# ============================================
+# Environment Variables Required
+# ============================================
+# 
+# SUPABASE_URL - Your Supabase project URL
+# SUPABASE_ANON_KEY - Your Supabase anonymous key
+# ============================================
+
+# ============================================
+# Build Configuration
+# ============================================
+# 
+# The project uses Vite as the build tool
+# Build output: ./dist
+# ============================================
+

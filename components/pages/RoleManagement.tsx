@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import type { Role, Permission, RolePermission } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { SparklesIcon } from '../icons';
 
 const RoleManagement: React.FC = () => {
   const { t } = useLanguage();
@@ -12,6 +13,10 @@ const RoleManagement: React.FC = () => {
   const [rolePermissions, setRolePermissions] = useState<Map<string, Set<string>>>(new Map());
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterEnabled, setFilterEnabled] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
 
   const fetchData = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
@@ -74,63 +79,285 @@ const RoleManagement: React.FC = () => {
 
     refetchProfile();
   };
+
+  // Filter and search permissions
+  const filteredPermissions = useMemo(() => {
+    if (!selectedRole) return [];
+    
+    let filtered = permissions.filter(permission => {
+      // Search filter
+      const permissionKey = `perm_${permission.action.replace(':', '_')}`;
+      const permissionName = t(permissionKey) || permissionKey;
+      const permissionDesc = t(`${permissionKey}_desc`) || '';
+      const searchLower = searchTerm.toLowerCase();
+      
+      if (searchTerm && !permissionName.toLowerCase().includes(searchLower) && !permissionDesc.toLowerCase().includes(searchLower)) {
+        return false;
+      }
+      
+      // Enabled/Disabled filter
+      const isEnabled = rolePermissions.get(selectedRole.id)?.has(permission.id) || false;
+      if (filterEnabled === 'enabled' && !isEnabled) return false;
+      if (filterEnabled === 'disabled' && isEnabled) return false;
+      
+      return true;
+    });
+    
+    return filtered;
+  }, [permissions, selectedRole, searchTerm, filterEnabled, rolePermissions, t]);
+
+  // Pagination
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredPermissions.length / itemsPerPage);
+  }, [filteredPermissions.length]);
+
+  const paginatedPermissions = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredPermissions.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredPermissions, currentPage]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterEnabled, selectedRole]);
+
+  // Get role name translation
+  const getRoleName = (roleName: string) => {
+    const roleKey = `role_${roleName.toLowerCase()}`;
+    return t(roleKey) || roleName;
+  };
+
+  // Get role description translation
+  const getRoleDescription = (role: Role) => {
+    const roleDescKey = `role_${role.name.toLowerCase()}_desc`;
+    const translatedDesc = t(roleDescKey);
+    if (translatedDesc && translatedDesc !== roleDescKey) {
+      return translatedDesc;
+    }
+    // Fallback to role.description if no translation found
+    return role.description || '';
+  };
   
-  if (loading) return <div>{t('loading')}...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">{t('loading')}...</div>;
 
   return (
     <div>
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">{t('role_management')}</h1>
-      <div className="flex flex-col md:flex-row gap-6">
-        <div className="md:w-1/3">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-4">
-            <h2 className="text-lg font-semibold mb-3">{t('roles')}</h2>
-            <ul>
-              {roles.map(role => (
-                <li key={role.id}>
-                  <button onClick={() => setSelectedRole(role)}
-                    className={`w-full text-left px-4 py-2 rounded-md text-sm ${selectedRole?.id === role.id ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200 font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                    {role.name}
-                  </button>
-                </li>
-              ))}
-            </ul>
+      
+      {/* Role Selection - Sidebar */}
+      <div className="mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
+          <h2 className="text-lg font-semibold mb-3">{t('roles')}</h2>
+          <div className="flex flex-wrap gap-2">
+            {roles.map(role => (
+              <button 
+                key={role.id}
+                onClick={() => setSelectedRole(role)}
+                className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  selectedRole?.id === role.id 
+                    ? 'bg-blue-600 text-white dark:bg-blue-500' 
+                    : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {getRoleName(role.name)}
+              </button>
+            ))}
           </div>
+          {selectedRole && (
+            <p className="mt-3 text-sm text-gray-600 dark:text-gray-400">
+              {getRoleDescription(selectedRole)}
+            </p>
+          )}
         </div>
-        <div className="md:w-2/3">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-            {selectedRole ? (
-              <>
-                <h2 className="text-xl font-semibold">
-                  {t('permissions_for_role').replace('{roleName}', selectedRole.name)}
-                </h2>
-                <p className="text-gray-500 dark:text-gray-400 mb-4 text-sm">{selectedRole.description}</p>
-                <div className="space-y-4">
-                  {permissions.map(permission => {
-                      const permissionKey = `perm_${permission.action.replace(':', '_')}`;
-                      return (
-                        <div key={permission.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-md">
-                          <div>
-                            <p className="font-medium text-gray-800 dark:text-gray-200">{t(permissionKey)}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">{t(`${permissionKey}_desc`)}</p>
+      </div>
+
+      {/* Permissions Table */}
+      {selectedRole ? (
+        <div className="mb-6">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+            {t('permissions_for_role').replace('{roleName}', getRoleName(selectedRole.name))}
+          </h2>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Search and Filters Tools - Always visible */}
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+                {/* Search Input */}
+                <div className="relative flex-1">
+                  <input 
+                    type="text"
+                    placeholder={t('search_by_key_or_value') || 'ابحث بالصلاحية...'}
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
+                  />
+                  <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                </div>
+                
+                {/* Enabled/Disabled Filter Buttons */}
+                <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-md p-1">
+                  <button
+                    onClick={() => setFilterEnabled('all')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      filterEnabled === 'all'
+                        ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {t('all')}
+                  </button>
+                  <button
+                    onClick={() => setFilterEnabled('enabled')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      filterEnabled === 'enabled'
+                        ? 'bg-gray-200 dark:bg-gray-600 text-green-600 dark:text-green-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {t('enabled') || 'مفعل'}
+                  </button>
+                  <button
+                    onClick={() => setFilterEnabled('disabled')}
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                      filterEnabled === 'disabled'
+                        ? 'bg-gray-200 dark:bg-gray-600 text-red-600 dark:text-red-400'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                  >
+                    {t('disabled') || 'معطل'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[300px]">
+                      {t('permission_name') || 'اسم الصلاحية'}
+                    </th>
+                    <th className="px-3 py-3 text-left text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[400px]">
+                      {t('description') || 'الوصف'}
+                    </th>
+                    <th className="px-3 py-3 text-center text-xs font-bold text-gray-700 dark:text-gray-200 uppercase tracking-widest min-w-[100px]">
+                      {t('status') || 'الحالة'}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  {paginatedPermissions.map((permission, index) => {
+                    const permissionKey = `perm_${permission.action.replace(':', '_')}`;
+                    const isEnabled = rolePermissions.get(selectedRole.id)?.has(permission.id) || false;
+                    const isDisabled = selectedRole.name === 'Admin';
+                    
+                    return (
+                      <tr 
+                        key={permission.id}
+                        className={`group transition-all duration-200 ${
+                          index % 2 === 0 
+                            ? 'bg-white dark:bg-gray-800' 
+                            : 'bg-gray-50/50 dark:bg-gray-800/50'
+                        } hover:bg-blue-50 dark:hover:bg-gray-700/70`}
+                      >
+                        <td className="px-3 py-3 whitespace-nowrap">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {t(permissionKey) || permissionKey}
                           </div>
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="text-sm text-gray-600 dark:text-gray-400">
+                            {t(`${permissionKey}_desc`) || permission.description || ''}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 whitespace-nowrap text-center">
                           <label className="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" className="sr-only peer"
-                              checked={rolePermissions.get(selectedRole.id)?.has(permission.id) || false}
+                            <input 
+                              type="checkbox" 
+                              className="sr-only peer"
+                              checked={isEnabled}
                               onChange={(e) => handlePermissionChange(permission.id, e.target.checked)}
-                              // Disable editing Admin role's core permissions
-                              disabled={selectedRole.name === 'Admin'}
+                              disabled={isDisabled}
                             />
                             <div className="w-11 h-6 bg-gray-200 dark:bg-gray-600 rounded-full peer peer-focus:ring-4 peer-focus:ring-blue-300 dark:peer-focus:ring-blue-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] rtl:after:left-auto rtl:after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-blue-600 peer-disabled:opacity-50"></div>
                           </label>
-                        </div>
-                      );
+                        </td>
+                      </tr>
+                    );
                   })}
+                  {paginatedPermissions.length === 0 && (
+                    <tr>
+                      <td colSpan={3} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
+                        {t('no_data_available')}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                    <span className="font-semibold">{((currentPage - 1) * itemsPerPage) + 1}</span> - <span className="font-semibold">{Math.min(currentPage * itemsPerPage, filteredPermissions.length)}</span> {t('of')} <span className="font-semibold">{filteredPermissions.length}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {t('previous')}
+                    </button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                        if (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1)
+                        ) {
+                          return (
+                            <button
+                              key={page}
+                              onClick={() => setCurrentPage(page)}
+                              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                                currentPage === page
+                                  ? 'bg-nextrow-primary text-white'
+                                  : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          );
+                        } else if (
+                          page === currentPage - 2 ||
+                          page === currentPage + 2
+                        ) {
+                          return <span key={page} className="text-gray-400 dark:text-gray-600">...</span>;
+                        }
+                        return null;
+                      })}
+                    </div>
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {t('next')}
+                    </button>
+                  </div>
                 </div>
-              </>
-            ) : <p>{t('select_role_to_manage')}</p>}
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-12 text-center">
+          <p className="text-gray-500 dark:text-gray-400">{t('select_role_to_manage')}</p>
+        </div>
+      )}
     </div>
   );
 };
