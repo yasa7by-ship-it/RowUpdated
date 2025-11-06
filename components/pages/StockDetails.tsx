@@ -317,19 +317,26 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
         return <div className="flex items-center justify-center h-full text-gray-500">{t('not_enough_data_for_chart')}</div>;
     }
 
+    // ترتيب البيانات من الأقدم إلى الأحدث (من اليسار لليمين)
+    const sortedData = [...data].sort((a, b) => {
+        const dateA = new Date(a.forecast_date);
+        const dateB = new Date(b.forecast_date);
+        return dateA.getTime() - dateB.getTime();
+    });
+
     const width = 800;
     const height = 400;
-    const padding = { top: 20, right: 20, bottom: 40, left: 60 };
+    const padding = { top: 20, right: 20, bottom: 50, left: 60 };
 
     const chartWidth = width - padding.left - padding.right;
     const chartHeight = height - padding.top - padding.bottom;
 
-    const allValues = data.flatMap(d => [d.actual_low, d.actual_high, d.predicted_lo, d.predicted_hi]);
+    const allValues = sortedData.flatMap(d => [d.actual_low, d.actual_high, d.predicted_lo, d.predicted_hi]);
     const minVal = Math.min(...allValues) * 0.99;
     const maxVal = Math.max(...allValues) * 1.01;
     const yRange = maxVal - minVal;
 
-    const scaleX = (index: number) => (index / (data.length - 1)) * chartWidth;
+    const scaleX = (index: number) => (index / (sortedData.length - 1)) * chartWidth;
     const scaleY = (value: number) => {
         if (yRange === 0) return chartHeight / 2;
         return chartHeight - ((value - minVal) / yRange) * chartHeight;
@@ -341,11 +348,11 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
         return { value, y: scaleY(value) };
     });
     
-    const xTicks = data.length > 5 
-        ? data.filter((_, i) => i % Math.ceil(data.length / 5) === 0 || i === data.length - 1)
-        : data;
+    const xTicks = sortedData.length > 5 
+        ? sortedData.filter((_, i) => i % Math.ceil(sortedData.length / 5) === 0 || i === sortedData.length - 1)
+        : sortedData;
 
-    const barGroupWidth = (chartWidth / (data.length > 1 ? data.length - 1 : 1)) * 0.7;
+    const barGroupWidth = (chartWidth / (sortedData.length > 1 ? sortedData.length - 1 : 1)) * 0.7;
     const barWidth = barGroupWidth / 2;
 
     return (
@@ -361,16 +368,31 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
                     ))}
 
                     {/* X-axis labels */}
-                     <g className="text-gray-500 dark:text-gray-400">
-                        {xTicks.map((d) => (
-                           <text key={d.forecast_date} x={scaleX(data.indexOf(d))} y={chartHeight + 25} textAnchor="middle" className="text-xs fill-current">
-                               {formatDate(d.forecast_date, { month: 'short', day: 'numeric' })}
-                           </text>
-                        ))}
+                     <g className="text-gray-700 dark:text-gray-300">
+                        {sortedData.map((d, i) => {
+                            const date = new Date(d.forecast_date + 'T00:00:00Z');
+                            const month = String(date.getMonth() + 1).padStart(2, '0');
+                            const day = String(date.getDate()).padStart(2, '0');
+                            const year = date.getFullYear();
+                            const dateStr = `${year}/${month}/${day}`;
+                            
+                            return (
+                                <text 
+                                    key={d.forecast_date} 
+                                    x={scaleX(i)} 
+                                    y={chartHeight + 30} 
+                                    textAnchor="middle" 
+                                    className="text-sm font-medium fill-current"
+                                    style={{ fontSize: '13px' }}
+                                >
+                                    {dateStr}
+                                </text>
+                            );
+                        })}
                     </g>
                     
                     {/* Data Bars */}
-                    {data.map((d, i) => {
+                    {sortedData.map((d, i) => {
                         const xCenter = scaleX(i);
                         
                         const actualX = xCenter - barGroupWidth / 2;
@@ -386,7 +408,7 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
                         const predictedY = scaleY(predictedTop);
                         const predictedHeight = scaleY(predictedBottom) - predictedY;
                         
-                        const hoverAreaWidth = chartWidth / (data.length > 1 ? data.length - 1 : 1);
+                        const hoverAreaWidth = chartWidth / (sortedData.length > 1 ? sortedData.length - 1 : 1);
 
                         return (
                             <g key={i} onMouseEnter={() => setHoveredIndex(i)} onMouseLeave={() => setHoveredIndex(null)}>
@@ -434,7 +456,7 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
                 </g>
             </svg>
             {hoveredIndex !== null && (
-                <Tooltip data={data[hoveredIndex]} x={scaleX(hoveredIndex) + padding.left} chartWidth={width} />
+                <Tooltip data={sortedData[hoveredIndex]} x={scaleX(hoveredIndex) + padding.left} chartWidth={width} />
             )}
             <div className="flex justify-center items-center gap-6 mt-4 text-sm text-gray-600 dark:text-gray-400">
                 <div className="flex items-center gap-2">
