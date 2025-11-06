@@ -48,3 +48,4 @@ WHERE forecast_date BETWEEN CURRENT_DATE - INTERVAL '90 days' AND CURRENT_DATE;
 
 
 
+
