@@ -1,0 +1,965 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import { supabase } from '../../services/supabaseClient';
+import { useLanguage } from '../../contexts/LanguageContext';
+import { useFavorites } from '../../contexts/FavoritesContext';
+import { SpinnerIcon, InformationCircleIcon, StarIcon, SparklesIcon, ArrowUpIcon, ArrowDownIcon } from '../icons';
+
+interface WhatHappenedSummaryItem {
+  stock_symbol: string;
+  stock_name: string;
+  trading_date: string;
+  open_price: number | null;
+  high_price: number | null;
+  low_price: number | null;
+  close_price: number | null;
+  volume: number | null;
+  price_change: number | null;
+  price_change_percent: number | null;
+  rsi: number | null;
+  macd: number | null;
+  macd_signal: number | null;
+  macd_histogram: number | null;
+  sma20: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  ema12: number | null;
+  ema26: number | null;
+  boll_upper: number | null;
+  boll_middle: number | null;
+  boll_lower: number | null;
+  stochastic_k: number | null;
+  stochastic_d: number | null;
+  williams_r: number | null;
+  atr14: number | null;
+  volatility_20: number | null;
+  pattern_name: string | null;
+  pattern_bullish: boolean | null;
+  next_forecast_price: number | null;
+  next_forecast_lo: number | null;
+  next_forecast_hi: number | null;
+  forecast_hit: boolean | null;
+}
+
+interface WhatHappenedDetails {
+  symbol: string;
+  trading_date: string;
+  historical: HistoricalRow | null;
+  indicators: IndicatorRow | null;
+  patterns: PatternRow[];
+  forecast_history: ForecastHistoryRow[];
+  forecasts: ForecastRow[];
+  historical_series: HistoricalRow[];
+}
+
+interface HistoricalRow {
+  stock_symbol: string;
+  date: string;
+  open: number | null;
+  high: number | null;
+  low: number | null;
+  close: number | null;
+  volume: number | null;
+}
+
+interface IndicatorRow {
+  stock_symbol: string;
+  date: string;
+  rsi: number | null;
+  macd: number | null;
+  macd_signal: number | null;
+  macd_histogram: number | null;
+  sma20: number | null;
+  sma50: number | null;
+  sma200: number | null;
+  ema12: number | null;
+  ema26: number | null;
+  boll_upper: number | null;
+  boll_middle: number | null;
+  boll_lower: number | null;
+  stochastic_k: number | null;
+  stochastic_d: number | null;
+  williams_r: number | null;
+  atr14: number | null;
+  volatility_20: number | null;
+}
+
+interface PatternRow {
+  stock_symbol: string;
+  date: string;
+  pattern_name: string;
+  bullish: boolean | null;
+  description?: string | null;
+  confidence?: number | null;
+}
+
+interface ForecastHistoryRow {
+  stock_symbol: string;
+  forecast_date: string;
+  predicted_lo: number | null;
+  predicted_hi: number | null;
+  actual_low: number | null;
+  actual_high: number | null;
+  predicted_price: number | null;
+  actual_close: number | null;
+  hit_range: boolean | null;
+}
+
+interface ForecastRow {
+  stock_symbol: string;
+  forecast_date: string;
+  predicted_lo: number | null;
+  predicted_hi: number | null;
+  predicted_price: number | null;
+  confidence: number | null;
+}
+
+const numberLocale = 'en-US';
+
+const formatNumberByLocale = (value: number | null | undefined, _language: string, fractionDigits = 2) => {
+  if (value === null || typeof value === 'undefined' || Number.isNaN(value)) return '-';
+  return new Intl.NumberFormat(numberLocale, {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(value);
+};
+
+const PriceChangeCell: React.FC<{ change: number | null; changePercent: number | null; language: string }> = ({ changePercent, language }) => {
+  if (changePercent === null || Number.isNaN(changePercent)) {
+    return <span className="text-gray-400 text-sm font-medium">-</span>;
+  }
+
+  const isPositive = changePercent >= 0;
+  return (
+    <div className={`flex items-center justify-end gap-1 text-[10px] font-semibold ${isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+      {isPositive ? <ArrowUpIcon className="w-3.5 h-3.5" /> : <ArrowDownIcon className="w-3.5 h-3.5" />}
+      <span>
+        {formatNumberByLocale(changePercent, language)}%
+      </span>
+    </div>
+  );
+};
+
+const RangeDisplay: React.FC<{ low: number | null; high: number | null; language: string }> = ({ low, high, language }) => {
+  if ((low === null || typeof low === 'undefined') && (high === null || typeof high === 'undefined')) {
+    return <span className="text-gray-400 text-xs font-medium">-</span>;
+  }
+
+  const minValue = low === null || typeof low === 'undefined' ? null : formatNumberByLocale(Math.min(low, high ?? low), language);
+  const maxValue = high === null || typeof high === 'undefined' ? null : formatNumberByLocale(Math.max(high, low ?? high), language);
+
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-700 dark:text-gray-200">
+      <span className="text-red-500 dark:text-red-300">{minValue ?? '-'}</span>
+      <span className="text-gray-400">→</span>
+      <span className="text-green-500 dark:text-green-300">{maxValue ?? '-'}</span>
+    </span>
+  );
+};
+
+const ForecastRangeDisplay: React.FC<{ low: number | null; high: number | null; language: string }> = ({ low, high, language }) => {
+  if (low === null || high === null) {
+    return <span className="text-gray-400 text-xs font-medium">-</span>;
+  }
+  const min = Math.min(low, high);
+  const max = Math.max(low, high);
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-gray-700 dark:text-gray-200">
+      <span className="text-red-500 dark:text-red-300">{formatNumberByLocale(min, language)}</span>
+      <span className="text-gray-400">→</span>
+      <span className="text-green-500 dark:text-green-300">{formatNumberByLocale(max, language)}</span>
+    </span>
+  );
+};
+
+const RsiDisplay: React.FC<{ value: number | null; language: string }> = ({ value, language }) => {
+  if (value === null || Number.isNaN(value)) {
+    return <span className="text-gray-400 text-sm font-medium">-</span>;
+  }
+
+  const status = value > 70 ? 'overbought' : value < 30 ? 'oversold' : 'neutral';
+  const theme =
+    status === 'overbought'
+      ? {
+          badge: 'bg-gradient-to-br from-rose-400 via-red-500 to-orange-400 text-white',
+          caption: 'text-red-600 dark:text-red-300',
+          label: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300',
+          text: 'Overbought',
+        }
+      : status === 'oversold'
+      ? {
+          badge: 'bg-gradient-to-br from-emerald-400 via-green-500 to-teal-400 text-white',
+          caption: 'text-green-600 dark:text-green-300',
+          label: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
+          text: 'Oversold',
+        }
+      : {
+          badge: 'bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-500 text-white',
+          caption: 'text-blue-600 dark:text-blue-300',
+          label: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+          text: 'Neutral',
+        };
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold shadow-sm ${theme.badge}`}>
+      <span>{formatNumberByLocale(value, language, 1)}</span>
+      <span className="uppercase tracking-wider text-[9px]">{theme.text}</span>
+    </span>
+  );
+};
+
+const PriceDisplay: React.FC<{ price: number | null; date?: string | null; language: string }> = ({ price, date, language }) => {
+  if (price === null || Number.isNaN(price)) {
+    return <span className="text-gray-400 text-xs font-medium">-</span>;
+  }
+  return (
+    <div className="text-center leading-tight text-[10px]">
+      <div className="font-semibold text-gray-900 dark:text-gray-100 text-[11px]">
+        {formatNumberByLocale(price, language, 2)}
+      </div>
+      {date && (
+        <div className="text-[9px] text-gray-500 dark:text-gray-400 mt-1">{date.split('-').join('/')}</div>
+      )}
+    </div>
+  );
+};
+
+const PatternBadge: React.FC<{ name: string | null; bullish: boolean | null }> = ({ name, bullish }) => {
+  if (!name) {
+    return <span className="text-gray-400 text-xs">-</span>;
+  }
+  const isBullish = bullish === null ? null : bullish;
+  const classes =
+    isBullish === null
+      ? 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300'
+      : isBullish
+      ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+      : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+
+  return <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold ${classes}`}>{name}</span>;
+};
+
+const getMetricBadgeClasses = (value: number | null) => {
+  if (value === null || Number.isNaN(value)) {
+    return 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300';
+  }
+  if (value > 0) {
+    return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+  }
+  if (value < 0) {
+    return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+  }
+  return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+};
+const WhatHappened: React.FC = () => {
+  const { t, language } = useLanguage();
+  const { isFavorite, toggleFavorite, favoriteSymbols } = useFavorites();
+  const [summary, setSummary] = useState<WhatHappenedSummaryItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showFavorites, setShowFavorites] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'hit' | 'miss'>('all');
+  const [sortBy, setSortBy] = useState<'symbol' | 'change' | 'rsi'>('symbol');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [details, setDetails] = useState<WhatHappenedDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSummary = async () => {
+      setLoadingSummary(true);
+      setSummaryError(null);
+      try {
+        const { data, error } = await supabase.rpc('get_what_happened_summary');
+        if (error) throw error;
+        const rows: WhatHappenedSummaryItem[] = (Array.isArray(data) ? data : []).map((item: any) => ({
+          ...item,
+          open_price: item.open_price === null ? null : Number(item.open_price),
+          high_price: item.high_price === null ? null : Number(item.high_price),
+          low_price: item.low_price === null ? null : Number(item.low_price),
+          close_price: item.close_price === null ? null : Number(item.close_price),
+          volume: item.volume === null ? null : Number(item.volume),
+          price_change: item.price_change === null ? null : Number(item.price_change),
+          price_change_percent: item.price_change_percent === null ? null : Number(item.price_change_percent),
+          rsi: item.rsi === null ? null : Number(item.rsi),
+          macd: item.macd === null ? null : Number(item.macd),
+          macd_signal: item.macd_signal === null ? null : Number(item.macd_signal),
+          macd_histogram: item.macd_histogram === null ? null : Number(item.macd_histogram),
+          sma20: item.sma20 === null ? null : Number(item.sma20),
+          sma50: item.sma50 === null ? null : Number(item.sma50),
+          sma200: item.sma200 === null ? null : Number(item.sma200),
+          ema12: item.ema12 === null ? null : Number(item.ema12),
+          ema26: item.ema26 === null ? null : Number(item.ema26),
+          boll_upper: item.boll_upper === null ? null : Number(item.boll_upper),
+          boll_middle: item.boll_middle === null ? null : Number(item.boll_middle),
+          boll_lower: item.boll_lower === null ? null : Number(item.boll_lower),
+          stochastic_k: item.stochastic_k === null ? null : Number(item.stochastic_k),
+          stochastic_d: item.stochastic_d === null ? null : Number(item.stochastic_d),
+          williams_r: item.williams_r === null ? null : Number(item.williams_r),
+          atr14: item.atr14 === null ? null : Number(item.atr14),
+          volatility_20: item.volatility_20 === null ? null : Number(item.volatility_20),
+          next_forecast_price: item.next_forecast_price === null ? null : Number(item.next_forecast_price),
+          next_forecast_lo: item.next_forecast_lo === null ? null : Number(item.next_forecast_lo),
+          next_forecast_hi: item.next_forecast_hi === null ? null : Number(item.next_forecast_hi),
+        }));
+        setSummary(rows);
+        if (rows.length > 0) {
+          setSelectedSymbol(rows[0].stock_symbol);
+        }
+      } catch (err: any) {
+        console.error('Failed to load What Happened summary', err);
+        setSummaryError(err.message || 'failed to load summary');
+      } finally {
+        setLoadingSummary(false);
+      }
+    };
+
+    fetchSummary();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSymbol) {
+      setDetails(null);
+      return;
+    }
+
+    const fetchDetails = async () => {
+      setLoadingDetails(true);
+      setDetailsError(null);
+      try {
+        const { data, error } = await supabase.rpc('get_what_happened_stock_details', { p_symbol: selectedSymbol });
+        if (error) throw error;
+        if (!data || data.error === 'no_data') {
+          setDetails(null);
+        } else {
+          setDetails(data as WhatHappenedDetails);
+        }
+      } catch (err: any) {
+        console.error('Failed to load What Happened details', err);
+        setDetailsError(err.message || 'failed to load details');
+      } finally {
+        setLoadingDetails(false);
+      }
+    };
+
+    fetchDetails();
+  }, [selectedSymbol]);
+
+  const latestDate = useMemo(() => {
+    if (!summary.length) return null;
+    return summary[0].trading_date;
+  }, [summary]);
+
+  const numberFormatter = useMemo(() => new Intl.NumberFormat(numberLocale, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }), []);
+
+  const currencyFormatter = useMemo(() => new Intl.NumberFormat(numberLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }), []);
+
+  const percentFormatter = useMemo(() => new Intl.NumberFormat(numberLocale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }), []);
+
+  const formatNumber = (value: number | null | undefined, fractionDigits = 2) =>
+    formatNumberByLocale(value, language, fractionDigits);
+
+  const totalHits = useMemo(() => summary.filter(item => item.forecast_hit === true).length, [summary]);
+  const totalMisses = useMemo(() => summary.filter(item => item.forecast_hit === false).length, [summary]);
+
+  const filteredSummary = useMemo(() => {
+    let result = summary.filter((item) => {
+      const matchesSearch =
+        searchTerm.trim() === '' ||
+        item.stock_symbol.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.stock_name || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesFavorites = !showFavorites || isFavorite(item.stock_symbol);
+      const matchesFilter =
+        activeFilter === 'all' ||
+        (activeFilter === 'hit' && item.forecast_hit === true) ||
+        (activeFilter === 'miss' && item.forecast_hit === false);
+
+      return matchesSearch && matchesFavorites && matchesFilter;
+    });
+
+    result = result.sort((a, b) => {
+      const direction = sortOrder === 'asc' ? 1 : -1;
+      switch (sortBy) {
+        case 'change': {
+          const aVal = a.price_change_percent ?? 0;
+          const bVal = b.price_change_percent ?? 0;
+          return (aVal - bVal) * direction;
+        }
+        case 'rsi': {
+          const aVal = a.rsi ?? 50;
+          const bVal = b.rsi ?? 50;
+          return (aVal - bVal) * direction;
+        }
+        case 'symbol':
+        default:
+          return a.stock_symbol.localeCompare(b.stock_symbol) * direction;
+      }
+    });
+
+    return result;
+  }, [summary, searchTerm, showFavorites, isFavorite, favoriteSymbols, activeFilter, sortBy, sortOrder]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSummary.length / itemsPerPage));
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedSummary = useMemo(
+    () => filteredSummary.slice(startIndex, startIndex + itemsPerPage),
+    [filteredSummary, startIndex, itemsPerPage]
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, showFavorites, activeFilter]);
+
+  useEffect(() => {
+    if (filteredSummary.length === 0) {
+      setSelectedSymbol(null);
+    } else if (!selectedSymbol || !filteredSummary.some(item => item.stock_symbol === selectedSymbol)) {
+      setSelectedSymbol(filteredSummary[0].stock_symbol);
+    }
+  }, [filteredSummary, selectedSymbol]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(filteredSummary.length / itemsPerPage));
+    if (currentPage > maxPage) {
+      setCurrentPage(maxPage);
+    }
+  }, [filteredSummary, currentPage, itemsPerPage]);
+
+  const indicatorGroups = useMemo(() => {
+    const data = details?.indicators;
+    if (!data) return [];
+    return [
+      {
+        title: t('what_happened_indicator_rsi'),
+        metrics: [
+          { label: 'RSI', value: data.rsi },
+        ],
+      },
+      {
+        title: t('what_happened_indicator_macd'),
+        metrics: [
+          { label: 'MACD', value: data.macd },
+          { label: 'Signal', value: data.macd_signal },
+          { label: 'Histogram', value: data.macd_histogram },
+        ],
+      },
+      {
+        title: t('what_happened_indicator_moving_averages'),
+        metrics: [
+          { label: 'SMA20', value: data.sma20 },
+          { label: 'SMA50', value: data.sma50 },
+          { label: 'SMA200', value: data.sma200 },
+          { label: 'EMA12', value: data.ema12 },
+          { label: 'EMA26', value: data.ema26 },
+        ],
+      },
+      {
+        title: t('what_happened_indicator_bollinger'),
+        metrics: [
+          { label: 'Upper', value: data.boll_upper },
+          { label: 'Middle', value: data.boll_middle },
+          { label: 'Lower', value: data.boll_lower },
+        ],
+      },
+      {
+        title: t('what_happened_indicator_stochastic'),
+        metrics: [
+          { label: '%K', value: data.stochastic_k },
+          { label: '%D', value: data.stochastic_d },
+        ],
+      },
+      {
+        title: t('what_happened_indicator_williams'),
+        metrics: [
+          { label: '%R', value: data.williams_r },
+        ],
+      },
+      {
+        title: t('what_happened_indicator_volatility'),
+        metrics: [
+          { label: 'Volatility 20', value: data.volatility_20 },
+          { label: 'ATR14', value: data.atr14 },
+        ],
+      },
+    ].filter(group => group.metrics.some(metric => metric.value !== null && typeof metric.value !== 'undefined'));
+  }, [details?.indicators, t]);
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('what_happened')}</h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400 max-w-3xl">{t('what_happened_description')}</p>
+        </div>
+        {latestDate && (
+          <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg px-4 py-2 text-blue-700 dark:text-blue-200">
+            <InformationCircleIcon className="w-5 h-5" />
+            <span className="text-sm font-medium">{t('what_happened_last_session')}: {latestDate}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-12">
+        <section className="xl:col-span-8 lg:col-span-12 bg-white dark:bg-gray-900 shadow-lg rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">{t('what_happened_last_session')}</h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">{t('what_happened_select_stock')}</p>
+              </div>
+              <div className="w-full sm:w-72 relative">
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder={t('what_happened_filters_placeholder') || 'Search...'}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary dark:bg-gray-800 dark:text-white text-sm"
+                />
+                <SparklesIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
+                <button
+                  onClick={() => setActiveFilter('all')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    activeFilter === 'all' ? 'bg-white dark:bg-gray-700 text-nextrow-primary' : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {t('all')} ({summary.length})
+                </button>
+                <button
+                  onClick={() => setActiveFilter('hit')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    activeFilter === 'hit' ? 'bg-white dark:bg-gray-700 text-green-600 dark:text-green-300' : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {t('hits')} ({totalHits})
+                </button>
+                <button
+                  onClick={() => setActiveFilter('miss')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    activeFilter === 'miss' ? 'bg-white dark:bg-gray-700 text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {t('misses')} ({totalMisses})
+                </button>
+              </div>
+
+              <button
+                onClick={() => setShowFavorites(!showFavorites)}
+                className={`flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-md transition-all border ${
+                  showFavorites
+                    ? 'bg-yellow-400 text-black border-yellow-500'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700'
+                }`}
+              >
+                <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : 'text-gray-400'}`} />
+                {t('favorites')}
+              </button>
+
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  onClick={() => {
+                    setSortBy('symbol');
+                    setSortOrder(sortBy === 'symbol' && sortOrder === 'asc' ? 'desc' : 'asc');
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md border ${sortBy === 'symbol' ? 'border-nextrow-primary text-nextrow-primary' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
+                >
+                  {t('symbol')}
+                </button>
+                <button
+                  onClick={() => {
+                    setSortBy('change');
+                    setSortOrder(sortBy === 'change' && sortOrder === 'asc' ? 'desc' : 'asc');
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md border ${sortBy === 'change' ? 'border-nextrow-primary text-nextrow-primary' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
+                >
+                  {t('column_change_percent')}
+                </button>
+                <button
+                  onClick={() => {
+                    setSortBy('rsi');
+                    setSortOrder(sortBy === 'rsi' && sortOrder === 'asc' ? 'desc' : 'asc');
+                  }}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md border ${sortBy === 'rsi' ? 'border-nextrow-primary text-nextrow-primary' : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300'}`}
+                >
+                  RSI
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            {loadingSummary ? (
+              <div className="flex items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+                <SpinnerIcon className="w-8 h-8 animate-spin" />
+              </div>
+            ) : summaryError ? (
+              <div className="px-6 py-8 text-center text-red-600 dark:text-red-400 text-sm">{summaryError}</div>
+            ) : filteredSummary.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400 text-sm">{t('what_happened_no_data')}</div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-[11px]">
+                  <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b border-gray-200 dark:border-gray-700">
+                    <tr className="whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">
+                      <th className="px-2 py-2 text-center font-semibold">★</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('column_symbol')}</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('close')}</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('column_change_percent')}</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('column_actual_range')}</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('column_expected_range')}</th>
+                      <th className="px-2 py-2 text-center font-semibold">RSI</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('column_pattern')}</th>
+                      <th className="px-2 py-2 text-center font-semibold">{t('column_result')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700 whitespace-nowrap">
+                    {paginatedSummary.map((item) => {
+                      const isSelected = item.stock_symbol === selectedSymbol;
+                      return (
+                        <tr
+                          key={item.stock_symbol}
+                          onClick={() => setSelectedSymbol(item.stock_symbol)}
+                          className={`group transition-all duration-200 cursor-pointer ${
+                            isSelected ? 'bg-nextrow-primary/10 dark:bg-nextrow-primary/20' : 'hover:bg-blue-50 dark:hover:bg-gray-800'
+                          }`}
+                        >
+                          <td className="px-1.5 py-2 text-center">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavorite(item.stock_symbol);
+                              }}
+                              className={`p-1 rounded-lg transition-transform hover:scale-110 ${
+                                isFavorite(item.stock_symbol)
+                                  ? 'text-yellow-500 dark:text-yellow-400'
+                                  : 'text-gray-300 dark:text-gray-600 hover:text-yellow-400'
+                              }`}
+                            >
+                              <StarIcon className={`w-4 h-4 ${isFavorite(item.stock_symbol) ? 'fill-current' : ''}`} />
+                            </button>
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <div className="font-semibold text-nextrow-primary tracking-wide">{item.stock_symbol}</div>
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <PriceDisplay price={item.close_price} date={item.trading_date} language={language} />
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <PriceChangeCell change={item.price_change} changePercent={item.price_change_percent} language={language} />
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <RangeDisplay low={item.low_price} high={item.high_price} language={language} />
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <ForecastRangeDisplay low={item.next_forecast_lo} high={item.next_forecast_hi} language={language} />
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <RsiDisplay value={item.rsi} language={language} />
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <PatternBadge name={item.pattern_name} bullish={item.pattern_bullish} />
+                          </td>
+                          <td className="px-1.5 py-2 text-center">
+                            <span className={`inline-flex px-1.5 py-0.5 text-[10px] font-semibold rounded-full ${
+                              item.forecast_hit ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                            }`}>
+                              {item.forecast_hit ? t('hit') : t('miss')}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {filteredSummary.length > itemsPerPage && (
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="text-xs text-gray-600 dark:text-gray-400">
+                <span className="font-semibold">{startIndex + 1}</span> - <span className="font-semibold">{Math.min(startIndex + itemsPerPage, filteredSummary.length)}</span>
+                {' '}{t('of') || 'من'} <span className="font-semibold">{filteredSummary.length}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                >
+                  {t('previous')}
+                </button>
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {currentPage} / {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+                >
+                  {t('next')}
+                </button>
+              </div>
+            </div>
+          )}
+        </section>
+
+        <section className="xl:col-span-4 lg:col-span-12 bg-white dark:bg-gray-900 shadow-lg rounded-2xl border border-gray-200 dark:border-gray-800 overflow-hidden">
+          {selectedSymbol === null ? (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+              <InformationCircleIcon className="w-10 h-10 mb-3" />
+              <p>{t('what_happened_select_stock')}</p>
+            </div>
+          ) : loadingDetails ? (
+            <div className="flex items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+              <SpinnerIcon className="w-8 h-8 animate-spin" />
+              <span className="ml-3 rtl:mr-3 text-sm font-medium">{t('what_happened_loading_details')}</span>
+            </div>
+          ) : detailsError ? (
+            <div className="px-6 py-8 text-center text-red-600 dark:text-red-400 text-sm">{detailsError}</div>
+          ) : !details ? (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-500 dark:text-gray-400">
+              <InformationCircleIcon className="w-10 h-10 mb-3" />
+              <p>{t('what_happened_no_data')}</p>
+            </div>
+          ) : (
+            <div className="p-4 space-y-4 text-[11px]">
+              <header className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{details.symbol}</h3>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('column_trading_date')}: {details.trading_date}</p>
+                </div>
+                <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                  {t('column_change_percent')}: {
+                    (() => {
+                      const summaryRow = summary.find((row) => row.stock_symbol === details.symbol);
+                      if (!summaryRow || summaryRow.price_change_percent === null) return '-';
+                      return `${percentFormatter.format(summaryRow.price_change_percent)}%`;
+                    })()
+                  }
+                </div>
+              </header>
+
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                <div className="md:col-span-2 xl:col-span-4 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-blue-900/40 dark:via-gray-900 dark:to-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3 shadow-sm">
+                  <div className="grid grid-cols-3 gap-2 text-[11px] text-blue-900 dark:text-blue-100">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide">Open</p>
+                      <p className="text-base font-semibold">{formatNumber(details.historical?.open)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide">High</p>
+                      <p className="text-base font-semibold">{formatNumber(details.historical?.high)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide">Low</p>
+                      <p className="text-base font-semibold">{formatNumber(details.historical?.low)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide">Close</p>
+                      <p className="text-base font-semibold">{formatNumber(details.historical?.close)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide">{t('column_volume')}</p>
+                      <p className="text-base font-semibold">{details.historical?.volume === null || typeof details.historical?.volume === 'undefined' ? '-' : numberFormatter.format(details.historical.volume)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide">Range</p>
+                      <p className="text-base font-semibold">{formatNumber(details.historical?.low)} - {formatNumber(details.historical?.high)}</p>
+                    </div>
+                  </div>
+                </div>
+                {indicatorGroups.map((group) => (
+                  <div
+                    key={group.title}
+                    className="rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900/50 dark:via-slate-900 dark:to-slate-800 border border-slate-200 dark:border-slate-700 p-3 shadow"
+                  >
+                    <h5 className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2">
+                      <span className="inline-flex w-2 h-2 rounded-full bg-gradient-to-r from-sky-400 to-indigo-500" />
+                      {group.title}
+                    </h5>
+                    <div className="space-y-2">
+                      {group.metrics.map((metric) => (
+                        <div key={metric.label} className="flex items-center justify-between text-[10px]">
+                          <span className="uppercase tracking-wide text-gray-500 dark:text-gray-400">{metric.label}</span>
+                          <span className={`px-1.5 py-0.5 rounded-full font-semibold ${getMetricBadgeClasses(metric.value)}`}>
+                            {metric.value === null ? '-' : formatNumber(metric.value)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="xl:col-span-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
+                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_patterns')}</h4>
+                  {details.patterns.length === 0 ? (
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                  ) : (
+                    <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {details.patterns.map((pattern) => {
+                        const bullish = pattern.bullish === true;
+                        const gradient = bullish
+                          ? 'from-green-100 via-emerald-50 to-white dark:from-green-900/40 dark:via-emerald-900/30 dark:to-slate-900'
+                          : 'from-red-100 via-rose-50 to-white dark:from-red-900/40 dark:via-rose-900/30 dark:to-slate-900';
+                        return (
+                          <li
+                            key={`${pattern.pattern_name}-${pattern.date}`}
+                            className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-gradient-to-r ${gradient} px-2.5 py-1.5 shadow-sm`}
+                          >
+                            <div className="flex items-center justify-between text-[10px] font-semibold">
+                              <span className="flex items-center gap-1.5">
+                                <span className={`w-1.5 h-1.5 rounded-full ${bullish ? 'bg-green-500' : 'bg-red-500'}`} />
+                                {pattern.pattern_name}
+                              </span>
+                              <span className={`uppercase ${bullish ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
+                                {bullish ? t('bullish') : t('bearish')}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                              <span>{pattern.date}</span>
+                              <span>{pattern.timeframe || '-'}</span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div className="xl:col-span-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
+                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_upcoming_forecasts')}</h4>
+                  {details.forecasts.length === 0 ? (
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto pr-1">
+                      <table className="w-full text-[10px] text-gray-600 dark:text-gray-300 border-separate border-spacing-y-1">
+                        <thead>
+                          <tr className="text-gray-500 dark:text-gray-400">
+                            <th className="text-left font-semibold">{t('column_trading_date')}</th>
+                            <th className="text-center font-semibold">{t('column_forecast')}</th>
+                            <th className="text-center font-semibold">{t('column_range')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {details.forecasts.map((forecast) => (
+                            <tr key={forecast.forecast_date} className="bg-gradient-to-r from-blue-50 via-white to-slate-100 dark:from-blue-900/30 dark:via-slate-900 dark:to-slate-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+                              <td className="px-2 py-1 font-semibold text-gray-900 dark:text-gray-200">{forecast.forecast_date}</td>
+                              <td className="px-2 py-1 text-center">
+                                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 font-semibold">
+                                  {formatNumber(forecast.predicted_price)}
+                                </span>
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <span className="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-gray-800/60 border border-blue-200 dark:border-blue-800 font-semibold">
+                                  {formatNumber(forecast.predicted_lo)}
+                                  <span className="mx-1 text-gray-400">-</span>
+                                  {formatNumber(forecast.predicted_hi)}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="xl:col-span-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
+                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_forecast_history')}</h4>
+                  {details.forecast_history.length === 0 ? (
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto pr-1">
+                      <table className="w-full text-[10px] text-gray-600 dark:text-gray-300 border-separate border-spacing-y-1">
+                        <thead>
+                          <tr className="text-gray-500 dark:text-gray-400">
+                            <th className="text-left font-semibold">{t('column_trading_date')}</th>
+                            <th className="text-center font-semibold">{t('column_forecast')}</th>
+                            <th className="text-center font-semibold">{t('column_result')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {details.forecast_history.map((history) => (
+                            <tr
+                              key={history.forecast_date}
+                              className="border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm bg-white dark:bg-gray-900/60"
+                            >
+                              <td className="px-2 py-1 font-semibold text-gray-900 dark:text-gray-200">{history.forecast_date}</td>
+                              <td className="px-2 py-1 text-center font-semibold text-gray-600 dark:text-gray-300">
+                                {formatNumber(history.predicted_lo)}
+                                <span className="mx-1 text-gray-400">-</span>
+                                {formatNumber(history.predicted_hi)}
+                              </td>
+                              <td className="px-2 py-1 text-center">
+                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${history.hit_range ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                  {history.hit_range ? t('hit') : t('miss')}
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
+                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_recent_prices')}</h4>
+                  {details.historical_series.length === 0 ? (
+                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                  ) : (
+                    <div className="max-h-40 overflow-y-auto pr-1">
+                      <table className="w-full text-[10px] text-gray-600 dark:text-gray-300 border-separate border-spacing-y-1">
+                        <thead>
+                          <tr className="text-gray-500 dark:text-gray-400">
+                            <th className="text-left font-semibold">{t('column_trading_date')}</th>
+                            <th className="text-center font-semibold">{t('close')}</th>
+                            <th className="text-center font-semibold">{t('column_volume')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {details.historical_series.map((row) => (
+                            <tr
+                              key={row.date}
+                              className="flex items-center justify-between gap-2 border border-gray-200 dark:border-gray-700 rounded-xl px-2.5 py-1.5 bg-white dark:bg-gray-900/60 shadow-sm"
+                            >
+                              <td className="flex-1 font-semibold text-gray-900 dark:text-gray-200">{row.date}</td>
+                              <td className="flex-1 text-center text-blue-600 dark:text-blue-300 font-semibold">{formatNumber(row.close)}</td>
+                              <td className="flex-1 text-center text-gray-500 dark:text-gray-400">{row.volume === null ? '-' : numberFormatter.format(row.volume)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+};
+
+export default WhatHappened;
+
+
