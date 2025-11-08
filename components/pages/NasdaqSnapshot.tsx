@@ -12,28 +12,36 @@ const NasdaqSnapshot: React.FC = () => {
 
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
-    setError(null);
+    const controller = new AbortController();
 
-    supabase
-      .rpc('get_latest_nasdaq_snapshot')
-      .maybeSingle()
-      .then(({ data, error }) => {
+    const fetchSnapshot = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const { data, error } = await supabase
+          .rpc('get_latest_nasdaq_snapshot')
+          .abortSignal(controller.signal)
+          .maybeSingle();
+
         if (!isMounted) return;
         if (error) throw error;
         setSnapshot(data as NasdaqDailySnapshot | null);
-      })
-      .catch((err) => {
-        if (!isMounted) return;
+      } catch (err: any) {
+        if (!isMounted || controller.signal.aborted) return;
         console.error('Failed to load Nasdaq snapshot:', err);
         setError(err.message || 'failed to load nasdaq snapshot');
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
+      } finally {
+        if (isMounted && !controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchSnapshot();
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, []);
 

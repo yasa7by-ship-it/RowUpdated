@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase, setSessionPersistence } from '../services/supabaseClient';
-import { useLanguage } from '../../contexts/LanguageContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { GoogleIcon, SpinnerIcon } from './icons';
 import SignUpModal from './SignUpModal';
 

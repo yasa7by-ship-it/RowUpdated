@@ -21,10 +21,12 @@ const ArchiveLogModal: React.FC<ArchiveLogModalProps> = ({ onClose, onSuccess })
     setIsLoading(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('export_activity_logs', { p_older_than_months: period }).single();
+      const { data, error: rpcError } = await supabase
+        .rpc('export_activity_logs', { p_older_than_months: period })
+        .single<{ file_content: string; record_count: number }>();
       if (rpcError) throw rpcError;
 
-      const { file_content, record_count } = data;
+      const { file_content, record_count } = data ?? { file_content: '', record_count: 0 };
 
       if (record_count === 0) {
         setError(t('no_logs_to_archive_for_period'));

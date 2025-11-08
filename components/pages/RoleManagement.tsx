@@ -21,21 +21,24 @@ const RoleManagement: React.FC = () => {
   const fetchData = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
     try {
-        const { data, error } = await supabase.rpc('get_role_management_data').abortSignal(signal).single();
+        const { data, error } = await supabase
+          .rpc('get_role_management_data')
+          .abortSignal(signal)
+          .single<{ roles: Role[]; permissions: Permission[]; role_permissions: RolePermission[] }>();
 
         if (error) throw error;
+
+        const { roles: rolesData = [], permissions: permsData = [], role_permissions: rolePermsData = [] } = data ?? {};
         
-        const { roles: rolesData, permissions: permsData, role_permissions: rolePermsData } = data as any;
-        
-        setRoles(rolesData || []);
-        setPermissions(permsData || []);
+        setRoles(Array.isArray(rolesData) ? rolesData : []);
+        setPermissions(Array.isArray(permsData) ? permsData : []);
         
         const rolePermsMap = new Map<string, Set<string>>();
-        (rolePermsData || []).forEach((rp: RolePermission) => {
-            if (!rolePermsMap.has(rp.role_id)) {
-                rolePermsMap.set(rp.role_id, new Set());
-            }
-            rolePermsMap.get(rp.role_id)!.add(rp.permission_id);
+        (Array.isArray(rolePermsData) ? rolePermsData : []).forEach((rp) => {
+          if (!rolePermsMap.has(rp.role_id)) {
+            rolePermsMap.set(rp.role_id, new Set());
+          }
+          rolePermsMap.get(rp.role_id)!.add(rp.permission_id);
         });
         setRolePermissions(rolePermsMap);
 
@@ -101,7 +104,7 @@ const RoleManagement: React.FC = () => {
     
     // Remove duplicates by action (keep first occurrence)
     const uniquePermissions = Array.from(
-      new Map(permissions.map(p => [p.action, p])).values()
+      new Map<string, Permission>(permissions.map((p) => [p.action, p])).values()
     );
     
     // Sort permissions: main pages first, then by display_order if available, then alphabetically
