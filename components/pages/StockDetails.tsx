@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
@@ -355,9 +355,36 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
     const barGroupWidth = (chartWidth / (sortedData.length > 1 ? sortedData.length - 1 : 1)) * 0.7;
     const barWidth = barGroupWidth / 2;
 
+    const svgRef = useRef<SVGSVGElement | null>(null);
+    const [svgSize, setSvgSize] = useState<{ width: number; height: number }>({ width, height });
+
+    useEffect(() => {
+        const updateSize = () => {
+            if (!svgRef.current) return;
+            const rect = svgRef.current.getBoundingClientRect();
+            if (rect.width && rect.height) {
+                setSvgSize({ width: rect.width, height: rect.height });
+            }
+        };
+
+        updateSize();
+
+        if (typeof ResizeObserver !== 'undefined') {
+            const observer = new ResizeObserver(() => updateSize());
+            if (svgRef.current) observer.observe(svgRef.current);
+            return () => observer.disconnect();
+        } else {
+            window.addEventListener('resize', updateSize);
+            return () => window.removeEventListener('resize', updateSize);
+        }
+    }, []);
+
+    const scaleXFactor = svgSize.width / width;
+    const scaleYFactor = svgSize.height / height;
+
     return (
         <div className="relative">
-            <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
+            <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
                 <g transform={`translate(${padding.left}, ${padding.top})`}>
                     {/* Y-axis grid lines and labels */}
                     {yTicks.map(tick => (
@@ -458,10 +485,10 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
             {hoveredIndex !== null && (
                 <Tooltip 
                     data={sortedData[hoveredIndex]} 
-                    x={scaleX(hoveredIndex) + padding.left}
-                    y={padding.top + scaleY(Math.max(sortedData[hoveredIndex].actual_high, sortedData[hoveredIndex].predicted_hi))}
-                    chartWidth={width}
-                    chartHeight={height}
+                    x={(scaleX(hoveredIndex) + padding.left) * scaleXFactor}
+                    y={(padding.top + scaleY(Math.max(sortedData[hoveredIndex].actual_high, sortedData[hoveredIndex].predicted_hi))) * scaleYFactor}
+                    chartWidth={svgSize.width}
+                    chartHeight={svgSize.height}
                 />
             )}
             <div className="flex justify-center items-center gap-6 mt-4 text-sm text-gray-600 dark:text-gray-400">
@@ -483,7 +510,7 @@ const Tooltip: React.FC<{ data: ForecastCheckHistoryItem; x: number; y: number; 
     const tooltipWidth = 200;
     const tooltipHeight = 130;
     const isRight = x > chartWidth / 2;
-    const tooltipX = Math.max(0, isRight ? x - tooltipWidth - 16 : Math.min(x + 16, chartWidth - tooltipWidth));
+    const tooltipX = Math.max(16, Math.min(isRight ? x - tooltipWidth - 16 : x + 16, chartWidth - tooltipWidth - 16));
     const centeredY = y - tooltipHeight / 2;
     const tooltipY = Math.max(16, Math.min(centeredY, chartHeight - tooltipHeight - 16));
     
