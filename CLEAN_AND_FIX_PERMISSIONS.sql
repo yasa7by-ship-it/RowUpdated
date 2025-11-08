@@ -121,6 +121,10 @@ INSERT INTO public.permissions (action, description) VALUES
 ('view:forecast_history_analysis', 'Can view the forecast history analysis page.')
 ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
 
+INSERT INTO public.permissions (action, description) VALUES
+('view:what_happened', 'Can view the What Happened latest session overview page.')
+ON CONFLICT (action) DO UPDATE SET description = EXCLUDED.description;
+
 RAISE NOTICE 'SUCCESS: تم التأكد من وجود جميع الصلاحيات المستخدمة';
 
 -- ============================================

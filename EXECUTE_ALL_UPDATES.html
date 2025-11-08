@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تنفيذ جميع التحديثات - SQL جاهز</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2d5aa0 0%, #1e3f73 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .content { padding: 30px; }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            overflow-x: auto;
+            margin: 20px 0;
+            direction: ltr;
+            text-align: left;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .copy-btn {
+            background: #2d5aa0;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        .copy-btn:hover { background: #1e3f73; transform: translateY(-2px); }
+        .instructions {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-right: 5px solid #2196F3;
+        }
+        .instructions ol { margin-right: 20px; }
+        .instructions li { margin: 10px 0; }
+        .success { color: #4caf50; font-weight: bold; margin-top: 10px; text-align: center; }
+        .warning { background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-right: 4px solid #ffc107; }
+        .info-box {
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-right: 4px solid #17a2b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 تنفيذ جميع التحديثات</h1>
+            <p>تحديث الوظيفة وإضافة الترجمات في ملف SQL واحد</p>
+        </div>
+        
+        <div class="content">
+            <div class="warning">
+                <strong>⚠️ مهم:</strong> يجب تنفيذ SQL في Supabase SQL Editor
+            </div>
+
+            <div class="instructions">
+                <h3>📝 خطوات التنفيذ:</h3>
+                <ol>
+                    <li>افتح <a href="https://supabase.com/dashboard/project/bojrgkiqsahuwufbkacm/sql/new" target="_blank">Supabase SQL Editor</a></li>
+                    <li>انسخ كامل كود SQL أدناه (اضغط زر النسخ)</li>
+                    <li>الصق الكود في SQL Editor</li>
+                    <li>اضغط <strong>Run</strong> أو <strong>Ctrl+Enter</strong></li>
+                    <li>ستظهر رسالة نجاح مع نتائج التحقق</li>
+                </ol>
+            </div>
+
+            <div class="info-box">
+                <strong>📋 ما سيتم تنفيذه:</strong>
+                <ul style="margin-right: 20px; margin-top: 10px;">
+                    <li>تحديث وظيفة <code>evaluate_and_save_forecasts</code> لإرجاع JSON</li>
+                    <li>إضافة 5 ترجمات جديدة (عربي/إنجليزي)</li>
+                    <li>التحقق من نجاح التحديثات</li>
+                </ul>
+            </div>
+
+            <h3>💻 كود SQL الكامل:</h3>
+            <div class="sql-box" id="sqlCode"></div>
+
+            <div style="text-align: center; margin: 20px 0;">
+                <button class="copy-btn" onclick="copySQL()">📋 نسخ كامل كود SQL</button>
+                <a href="https://supabase.com/dashboard/project/bojrgkiqsahuwufbkacm/sql/new" target="_blank">
+                    <button class="copy-btn" style="background: #4caf50;">🚀 فتح Supabase SQL Editor</button>
+                </a>
+            </div>
+            <p class="success" id="copyMessage" style="display:none;">✅ تم النسخ بنجاح! الآن الصق الكود في Supabase SQL Editor</p>
+        </div>
+    </div>
+
+    <script>
+        // Load SQL content
+        fetch('EXECUTE_ALL_UPDATES.sql')
+            .then(response => response.text())
+            .then(data => {
+                document.getElementById('sqlCode').textContent = data;
+            })
+            .catch(err => {
+                document.getElementById('sqlCode').textContent = 'خطأ في تحميل الملف. يرجى فتح EXECUTE_ALL_UPDATES.sql يدوياً.';
+            });
+
+        function copySQL() {
+            const sqlCode = document.getElementById('sqlCode').textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                const message = document.getElementById('copyMessage');
+                message.style.display = 'block';
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 5000);
+            }).catch(err => {
+                alert('فشل النسخ. يرجى نسخ الكود يدوياً من ملف EXECUTE_ALL_UPDATES.sql');
+            });
+        }
+    </script>
+</body>
+</html>
+

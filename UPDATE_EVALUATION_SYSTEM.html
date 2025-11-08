@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تحديث وظيفة التقييم وإضافة الترجمات</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h1 { color: #2d5aa0; margin-bottom: 20px; }
+        h2 { color: #1e3f73; margin-top: 30px; margin-bottom: 15px; }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 20px 0;
+            direction: ltr;
+            text-align: left;
+        }
+        .copy-btn {
+            background: #2d5aa0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        .copy-btn:hover { background: #1e3f73; }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-right: 4px solid #2196F3;
+        }
+        .success { color: #4caf50; font-weight: bold; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 تحديث وظيفة التقييم وإضافة الترجمات</h1>
+        
+        <div class="instructions">
+            <h3>📝 التعليمات:</h3>
+            <ol>
+                <li>افتح Supabase SQL Editor</li>
+                <li>انسخ الكود SQL أدناه (الجزء 1 أولاً)</li>
+                <li>الصقه في SQL Editor واضغط Run</li>
+                <li>ثم انسخ الجزء 2 واضغط Run مرة أخرى</li>
+            </ol>
+        </div>
+
+        <h2>الجزء 1: تحديث وظيفة evaluate_and_save_forecasts</h2>
+        <div class="sql-box" id="sql1">
+-- تحديث وظيفة evaluate_and_save_forecasts لإرجاع معلومات مفصلة
+BEGIN;
+
+CREATE OR REPLACE FUNCTION public.evaluate_and_save_forecasts(p_date_filter date DEFAULT NULL)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    processed_count integer;
+    stocks_count integer;
+    result_json json;
+BEGIN
+    WITH new_evaluations AS (
+        SELECT
+            f.stock_symbol,
+            s.name AS stock_name,
+            f.forecast_date,
+            f.predicted_price,
+            f.predicted_lo,
+            f.predicted_hi,
+            f.confidence,
+            h.low AS actual_low,
+            h.high AS actual_high,
+            h.close AS actual_close,
+            (f.predicted_lo <= h.high AND h.low <= f.predicted_hi) AS hit_range,
+            ABS(f.predicted_price - h.close) AS abs_error,
+            ABS(f.predicted_price - h.close) / NULLIF(h.close, 0) AS pct_error
+        FROM
+            public.forecasts f
+        JOIN
+            public.stocks s ON f.stock_symbol = s.symbol
+        JOIN
+            public.historical_data h ON f.stock_symbol = h.stock_symbol AND f.forecast_date = h.date
+        WHERE (p_date_filter IS NULL OR f.forecast_date = p_date_filter)
+    ),
+    insert_history AS (
+        INSERT INTO public.forecast_check_history (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        SELECT
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+        RETURNING 1
+    ),
+    upsert_latest AS (
+        INSERT INTO public.forecast_check_latest (
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        )
+        SELECT DISTINCT ON (stock_symbol)
+            stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+            actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+        FROM new_evaluations
+        ORDER BY stock_symbol, forecast_date DESC
+        ON CONFLICT (stock_symbol) DO UPDATE SET
+            forecast_date = EXCLUDED.forecast_date,
+            predicted_price = EXCLUDED.predicted_price,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            actual_close = EXCLUDED.actual_close,
+            hit_range = EXCLUDED.hit_range,
+            abs_error = EXCLUDED.abs_error,
+            pct_error = EXCLUDED.pct_error,
+            confidence = EXCLUDED.confidence,
+            created_at = NOW()
+    ),
+    insert_legacy AS (
+        INSERT INTO public."Forcast_Result" (
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, is_hit
+        )
+        SELECT
+            stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+            actual_low, actual_high, hit_range
+        FROM new_evaluations
+        ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+            stock_name = EXCLUDED.stock_name,
+            predicted_lo = EXCLUDED.predicted_lo,
+            predicted_hi = EXCLUDED.predicted_hi,
+            actual_low = EXCLUDED.actual_low,
+            actual_high = EXCLUDED.actual_high,
+            is_hit = EXCLUDED.is_hit,
+            created_at = NOW()
+    ),
+    count_stats AS (
+        SELECT 
+            COUNT(*) AS forecast_count,
+            COUNT(DISTINCT stock_symbol) AS stock_count
+        FROM new_evaluations
+    )
+    SELECT 
+        forecast_count,
+        stock_count
+    INTO processed_count, stocks_count
+    FROM count_stats;
+    
+    result_json := json_build_object(
+        'forecasts_processed', COALESCE(processed_count, 0),
+        'stocks_processed', COALESCE(stocks_count, 0),
+        'execution_time', NOW()
+    );
+    
+    RAISE NOTICE '% forecast(s) evaluated for % stock(s).', processed_count, stocks_count;
+    
+    RETURN result_json;
+END;
+$$;
+
+COMMIT;
+        </div>
+        <button class="copy-btn" onclick="copySQL('sql1')">📋 نسخ الجزء 1</button>
+        <p class="success" id="copy1" style="display:none;">✅ تم النسخ!</p>
+
+        <h2>الجزء 2: إضافة الترجمات</h2>
+        <div class="sql-box" id="sql2">
+-- إضافة الترجمات
+BEGIN;
+
+ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+
+INSERT INTO public.translations (lang_id, key, value) VALUES
+('en', 'last_run_stats', 'Last Run Statistics'),
+('ar', 'last_run_stats', 'إحصائيات آخر تشغيل'),
+('en', 'forecasts_processed', 'Forecasts Processed'),
+('ar', 'forecasts_processed', 'عدد التوقعات المفحوصة'),
+('en', 'stocks_processed', 'Stocks Processed'),
+('ar', 'stocks_processed', 'عدد الأسهم المفحوصة'),
+('en', 'last_run_time', 'Last Run Time'),
+('ar', 'last_run_time', 'آخر مرة تم التشغيل'),
+('en', 'running', 'Running...'),
+('ar', 'running', 'جاري التشغيل...')
+ON CONFLICT (lang_id, key) 
+DO UPDATE SET value = EXCLUDED.value;
+
+ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+
+COMMIT;
+        </div>
+        <button class="copy-btn" onclick="copySQL('sql2')">📋 نسخ الجزء 2</button>
+        <p class="success" id="copy2" style="display:none;">✅ تم النسخ!</p>
+    </div>
+
+    <script>
+        function copySQL(id) {
+            const sqlCode = document.getElementById(id).textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                const msgId = id === 'sql1' ? 'copy1' : 'copy2';
+                const message = document.getElementById(msgId);
+                message.style.display = 'block';
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
+

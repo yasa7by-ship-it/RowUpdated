@@ -24,6 +24,8 @@ const UserNotes = lazy(() => import('./components/pages/UserNotes'));
 const UserNotesManagement = lazy(() => import('./components/pages/UserNotesManagement'));
 const ForecastAccuracy = lazy(() => import('./components/pages/ForecastAccuracy'));
 const ForecastHistoryAnalysis = lazy(() => import('./components/pages/ForecastHistoryAnalysis'));
+const WhatHappened = lazy(() => import('./components/pages/WhatHappened'));
+const NasdaqSnapshot = lazy(() => import('./components/pages/NasdaqSnapshot'));
 
 // Helper function to detect if device is mobile
 const isMobileDevice = (): boolean => {
@@ -68,6 +70,8 @@ const App: React.FC = () => {
       user_notes_management: 'manage_user_notes', // New
       forecast_accuracy: 'forecast_accuracy', // New
       forecast_history_analysis: 'forecast_history_analysis', // New
+      what_happened: 'what_happened',
+      nasdaq_snapshot: 'nasdaq_snapshot',
     };
     const titleKey = pageTitleKeyMap[currentPageName];
     document.title = (currentPageName === 'landing' || !session) 
@@ -156,6 +160,8 @@ const App: React.FC = () => {
         user_notes_management: 'manage:user_notes', // Admin-only
         forecast_accuracy: 'view:forecast_accuracy', // Forecast accuracy page
         forecast_history_analysis: 'view:forecast_history_analysis', // Forecast history analysis page
+        what_happened: 'view:what_happened',
+        nasdaq_snapshot: 'view:nasdaq_snapshot',
     };
     
     const requiredPermission = pagePermissions[currentPageName];
@@ -222,6 +228,10 @@ const App: React.FC = () => {
           return hasPermission('view:forecast_accuracy') ? <ForecastAccuracy /> : <AccessDenied />;
         case 'forecast_history_analysis':
           return hasPermission('view:forecast_history_analysis') ? <ForecastHistoryAnalysis /> : <AccessDenied />;
+        case 'what_happened':
+          return hasPermission('view:what_happened') ? <WhatHappened /> : <AccessDenied />;
+        case 'nasdaq_snapshot':
+          return hasPermission('view:nasdaq_snapshot') ? <NasdaqSnapshot /> : <AccessDenied />;
         case 'stock_details':
           if (typeof currentPage === 'object' && hasPermission('view:stock_analysis')) {
             return <StockDetails symbol={currentPage.symbol} setPage={setCurrentPage} />;

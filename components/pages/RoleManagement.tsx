@@ -84,6 +84,7 @@ const RoleManagement: React.FC = () => {
   const getPageNameFromPermission = (action: string): string => {
     // Map permissions to page names
     const pageMap: Record<string, string> = {
+      'view:nasdaq_snapshot': 'nasdaq_snapshot',
       'view:daily_watchlist': 'daily_watchlist',
       'view:stock_analysis': 'stock_analysis',
       'view:forecast_accuracy': 'forecast_accuracy',
@@ -107,6 +108,7 @@ const RoleManagement: React.FC = () => {
     const sortedPermissions = [...uniquePermissions].sort((a, b) => {
       // Main pages order
       const mainPagesOrder: Record<string, number> = {
+        'view:nasdaq_snapshot': 0,
         'view:daily_watchlist': 1,
         'view:stock_analysis': 2,
         'view:forecast_accuracy': 3,

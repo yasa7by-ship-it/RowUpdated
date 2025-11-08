@@ -103,6 +103,7 @@ async function checkPermissionsData() {
       'manage:user_notes',
       'view:forecast_accuracy',
       'view:forecast_history_analysis',
+      'view:what_happened',
     ];
 
     console.log('   الصلاحيات المستخدمة في الكود:');

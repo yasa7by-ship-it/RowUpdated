@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إضافة 10 أسهم مستقرة - تنفيذ فوري</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #2d5aa0 0%, #1e3f73 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .header p { opacity: 0.9; }
+        .content { padding: 30px; }
+        .stocks-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stock-card {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-right: 4px solid #2d5aa0;
+        }
+        .stock-card strong { color: #2d5aa0; font-size: 18px; }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 20px 0;
+            direction: ltr;
+            text-align: left;
+            position: relative;
+        }
+        .copy-btn {
+            background: #2d5aa0;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin: 10px 5px;
+            transition: all 0.3s;
+        }
+        .copy-btn:hover { background: #1e3f73; transform: translateY(-2px); }
+        .instructions {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-right: 5px solid #2196F3;
+        }
+        .instructions ol { margin-right: 20px; }
+        .instructions li { margin: 10px 0; }
+        .success { color: #4caf50; font-weight: bold; margin-top: 10px; }
+        .warning { background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0; border-right: 4px solid #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 إضافة 10 أسهم لشركات مستقرة</h1>
+            <p>تم التحقق: هذه الأسهم غير موجودة في قاعدة البيانات</p>
+        </div>
+        
+        <div class="content">
+            <div class="warning">
+                <strong>⚠️ مهم:</strong> يجب تنفيذ SQL في Supabase SQL Editor بسبب Row Level Security (RLS)
+            </div>
+
+            <div class="instructions">
+                <h3>📝 خطوات التنفيذ:</h3>
+                <ol>
+                    <li>افتح <a href="https://supabase.com/dashboard/project/bojrgkiqsahuwufbkacm/sql/new" target="_blank">Supabase SQL Editor</a></li>
+                    <li>انسخ كود SQL أدناه (اضغط زر النسخ)</li>
+                    <li>الصق الكود في SQL Editor</li>
+                    <li>اضغط <strong>Run</strong> أو <strong>Ctrl+Enter</strong></li>
+                    <li>ستظهر رسالة نجاح مع قائمة الأسهم المضافة</li>
+                </ol>
+            </div>
+
+            <h3>📈 الأسهم المضافة (10 أسهم لشركات مستقرة):</h3>
+            <div class="stocks-grid">
+                <div class="stock-card"><strong>NOV</strong><br>NOV Inc.</div>
+                <div class="stock-card"><strong>FTI</strong><br>TechnipFMC plc</div>
+                <div class="stock-card"><strong>HES</strong><br>Hess Corporation</div>
+                <div class="stock-card"><strong>MRO</strong><br>Marathon Oil Corporation</div>
+                <div class="stock-card"><strong>OVV</strong><br>Ovintiv Inc.</div>
+                <div class="stock-card"><strong>PR</strong><br>Permian Resources Corporation</div>
+                <div class="stock-card"><strong>MTDR</strong><br>Matador Resources Company</div>
+                <div class="stock-card"><strong>SM</strong><br>SM Energy Company</div>
+                <div class="stock-card"><strong>SWN</strong><br>Southwestern Energy Company</div>
+                <div class="stock-card"><strong>RRC</strong><br>Range Resources Corporation</div>
+            </div>
+
+            <h3>💻 كود SQL:</h3>
+            <div class="sql-box" id="sqlCode">-- #############################################################################
+-- # إضافة 10 أسهم لشركات مستقرة غير موجودة في قاعدة البيانات
+-- # تم التحقق: هذه الأسهم غير موجودة في جدول stocks (506 سهم موجود)
+-- #############################################################################
+
+BEGIN;
+
+-- إضافة 10 أسهم لشركات مستقرة
+INSERT INTO public.stocks (symbol, name, is_tracked) VALUES
+  ('NOV', 'NOV Inc.', true),
+  ('FTI', 'TechnipFMC plc', true),
+  ('HES', 'Hess Corporation', true),
+  ('MRO', 'Marathon Oil Corporation', true),
+  ('OVV', 'Ovintiv Inc.', true),
+  ('PR', 'Permian Resources Corporation', true),
+  ('MTDR', 'Matador Resources Company', true),
+  ('SM', 'SM Energy Company', true),
+  ('SWN', 'Southwestern Energy Company', true),
+  ('RRC', 'Range Resources Corporation', true)
+ON CONFLICT (symbol) DO UPDATE SET
+  name = EXCLUDED.name,
+  is_tracked = EXCLUDED.is_tracked;
+
+COMMIT;
+
+-- التحقق من الإضافة
+SELECT 
+  symbol,
+  name,
+  is_tracked,
+  '✅ تمت الإضافة' AS status
+FROM public.stocks 
+WHERE symbol IN ('NOV', 'FTI', 'HES', 'MRO', 'OVV', 'PR', 'MTDR', 'SM', 'SWN', 'RRC')
+ORDER BY symbol;</div>
+
+            <div style="text-align: center; margin: 20px 0;">
+                <button class="copy-btn" onclick="copySQL()">📋 نسخ كود SQL</button>
+                <a href="https://supabase.com/dashboard/project/bojrgkiqsahuwufbkacm/sql/new" target="_blank">
+                    <button class="copy-btn" style="background: #4caf50;">🚀 فتح Supabase SQL Editor</button>
+                </a>
+            </div>
+            <p class="success" id="copyMessage" style="display:none; text-align: center;">✅ تم النسخ بنجاح! الآن الصق الكود في Supabase SQL Editor</p>
+        </div>
+    </div>
+
+    <script>
+        function copySQL() {
+            const sqlCode = document.getElementById('sqlCode').textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                const message = document.getElementById('copyMessage');
+                message.style.display = 'block';
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 5000);
+            }).catch(err => {
+                alert('فشل النسخ. يرجى نسخ الكود يدوياً.');
+            });
+        }
+    </script>
+</body>
+</html>
+

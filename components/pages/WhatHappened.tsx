@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useFavorites } from '../../contexts/FavoritesContext';
@@ -267,6 +267,8 @@ const WhatHappened: React.FC = () => {
   const [details, setDetails] = useState<WhatHappenedDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [detailsError, setDetailsError] = useState<string | null>(null);
+  const detailsCacheRef = useRef<Map<string, WhatHappenedDetails>>(new Map());
+  const latestRequestSymbolRef = useRef<string | null>(null);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -323,29 +325,56 @@ const WhatHappened: React.FC = () => {
   useEffect(() => {
     if (!selectedSymbol) {
       setDetails(null);
+      setLoadingDetails(false);
       return;
     }
 
-    const fetchDetails = async () => {
-      setLoadingDetails(true);
+    const cachedDetails = detailsCacheRef.current.get(selectedSymbol);
+    if (cachedDetails) {
+      setDetails(cachedDetails);
       setDetailsError(null);
+      setLoadingDetails(false);
+      return;
+    }
+
+    let cancelled = false;
+    latestRequestSymbolRef.current = selectedSymbol;
+    setLoadingDetails(true);
+    setDetailsError(null);
+
+    const fetchDetails = async () => {
       try {
         const { data, error } = await supabase.rpc('get_what_happened_stock_details', { p_symbol: selectedSymbol });
-        if (error) throw error;
-        if (!data || data.error === 'no_data') {
+        if (cancelled || latestRequestSymbolRef.current !== selectedSymbol) {
+          return;
+        }
+        if (error) {
+          throw error;
+        }
+        if (!data || (data as any).error === 'no_data') {
+          detailsCacheRef.current.delete(selectedSymbol);
           setDetails(null);
         } else {
-          setDetails(data as WhatHappenedDetails);
+          const normalized = normalizeDetails(data);
+          detailsCacheRef.current.set(selectedSymbol, normalized);
+          setDetails(normalized);
         }
       } catch (err: any) {
+        if (cancelled) return;
         console.error('Failed to load What Happened details', err);
         setDetailsError(err.message || 'failed to load details');
       } finally {
-        setLoadingDetails(false);
+        if (!cancelled && latestRequestSymbolRef.current === selectedSymbol) {
+          setLoadingDetails(false);
+        }
       }
     };
 
     fetchDetails();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedSymbol]);
 
   const latestDate = useMemo(() => {
@@ -370,6 +399,129 @@ const WhatHappened: React.FC = () => {
 
   const formatNumber = (value: number | null | undefined, fractionDigits = 2) =>
     formatNumberByLocale(value, language, fractionDigits);
+
+  const toNumberOrNull = (value: any): number | null => {
+    if (value === null || typeof value === 'undefined' || value === '') {
+      return null;
+    }
+    const numeric = Number(value);
+    return Number.isNaN(numeric) ? null : numeric;
+  };
+
+  const toBooleanOrNull = (value: any): boolean | null => {
+    if (value === null || typeof value === 'undefined') {
+      return null;
+    }
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+    if (typeof value === 'string') {
+      const lowered = value.toLowerCase();
+      if (lowered === 'true' || lowered === 't' || lowered === 'yes') return true;
+      if (lowered === 'false' || lowered === 'f' || lowered === 'no') return false;
+    }
+    return Boolean(value);
+  };
+
+  const normalizeDetails = (payload: any): WhatHappenedDetails => {
+    const historical = payload?.historical
+      ? {
+          stock_symbol: payload.historical.stock_symbol,
+          date: payload.historical.date,
+          open: toNumberOrNull(payload.historical.open),
+          high: toNumberOrNull(payload.historical.high),
+          low: toNumberOrNull(payload.historical.low),
+          close: toNumberOrNull(payload.historical.close),
+          volume: toNumberOrNull(payload.historical.volume),
+        }
+      : null;
+
+    const indicators = payload?.indicators
+      ? {
+          stock_symbol: payload.indicators.stock_symbol,
+          date: payload.indicators.date,
+          rsi: toNumberOrNull(payload.indicators.rsi),
+          macd: toNumberOrNull(payload.indicators.macd),
+          macd_signal: toNumberOrNull(payload.indicators.macd_signal),
+          macd_histogram: toNumberOrNull(payload.indicators.macd_histogram),
+          sma20: toNumberOrNull(payload.indicators.sma20),
+          sma50: toNumberOrNull(payload.indicators.sma50),
+          sma200: toNumberOrNull(payload.indicators.sma200),
+          ema12: toNumberOrNull(payload.indicators.ema12),
+          ema26: toNumberOrNull(payload.indicators.ema26),
+          boll_upper: toNumberOrNull(payload.indicators.boll_upper),
+          boll_middle: toNumberOrNull(payload.indicators.boll_middle),
+          boll_lower: toNumberOrNull(payload.indicators.boll_lower),
+          stochastic_k: toNumberOrNull(payload.indicators.stochastic_k),
+          stochastic_d: toNumberOrNull(payload.indicators.stochastic_d),
+          williams_r: toNumberOrNull(payload.indicators.williams_r),
+          atr14: toNumberOrNull(payload.indicators.atr14),
+          volatility_20: toNumberOrNull(payload.indicators.volatility_20),
+        }
+      : null;
+
+    const patterns: PatternRow[] = Array.isArray(payload?.patterns)
+      ? payload.patterns.map((pattern: any) => ({
+          stock_symbol: pattern.stock_symbol,
+          date: pattern.date,
+          pattern_name: pattern.pattern_name,
+          bullish: toBooleanOrNull(pattern.bullish),
+          description: pattern.description ?? null,
+          confidence: toNumberOrNull(pattern.confidence),
+        }))
+      : [];
+
+    const forecast_history: ForecastHistoryRow[] = Array.isArray(payload?.forecast_history)
+      ? payload.forecast_history.map((history: any) => ({
+          stock_symbol: history.stock_symbol,
+          forecast_date: history.forecast_date,
+          predicted_lo: toNumberOrNull(history.predicted_lo),
+          predicted_hi: toNumberOrNull(history.predicted_hi),
+          actual_low: toNumberOrNull(history.actual_low),
+          actual_high: toNumberOrNull(history.actual_high),
+          predicted_price: toNumberOrNull(history.predicted_price),
+          actual_close: toNumberOrNull(history.actual_close),
+          hit_range: toBooleanOrNull(history.hit_range),
+        }))
+      : [];
+
+    const forecasts: ForecastRow[] = Array.isArray(payload?.forecasts)
+      ? payload.forecasts.map((forecast: any) => ({
+          stock_symbol: forecast.stock_symbol,
+          forecast_date: forecast.forecast_date,
+          predicted_lo: toNumberOrNull(forecast.predicted_lo),
+          predicted_hi: toNumberOrNull(forecast.predicted_hi),
+          predicted_price: toNumberOrNull(forecast.predicted_price),
+          confidence: toNumberOrNull(forecast.confidence),
+        }))
+      : [];
+
+    const historical_series: HistoricalRow[] = Array.isArray(payload?.historical_series)
+      ? payload.historical_series.map((row: any) => ({
+          stock_symbol: row.stock_symbol,
+          date: row.date,
+          open: toNumberOrNull(row.open),
+          high: toNumberOrNull(row.high),
+          low: toNumberOrNull(row.low),
+          close: toNumberOrNull(row.close),
+          volume: toNumberOrNull(row.volume),
+        }))
+      : [];
+
+    return {
+      symbol: payload.symbol,
+      trading_date: payload.trading_date,
+      historical,
+      indicators,
+      patterns,
+      forecast_history,
+      forecasts,
+      historical_series,
+    };
+  };
 
   const totalHits = useMemo(() => summary.filter(item => item.forecast_hit === true).length, [summary]);
   const totalMisses = useMemo(() => summary.filter(item => item.forecast_hit === false).length, [summary]);
@@ -496,6 +648,59 @@ const WhatHappened: React.FC = () => {
       },
     ].filter(group => group.metrics.some(metric => metric.value !== null && typeof metric.value !== 'undefined'));
   }, [details?.indicators, t]);
+
+  const indicatorCardStyles = useMemo(
+    () => [
+      {
+        gradient: 'from-sky-100 via-white to-blue-50 dark:from-sky-900/40 dark:via-slate-900 dark:to-blue-900/30',
+        accent: 'text-sky-600 dark:text-sky-300',
+        iconBg: 'bg-sky-500/90',
+      },
+      {
+        gradient: 'from-emerald-100 via-white to-emerald-50 dark:from-emerald-900/30 dark:via-slate-900 dark:to-emerald-900/20',
+        accent: 'text-emerald-600 dark:text-emerald-300',
+        iconBg: 'bg-emerald-500/80',
+      },
+      {
+        gradient: 'from-amber-100 via-white to-orange-50 dark:from-amber-900/30 dark:via-slate-900 dark:to-orange-900/20',
+        accent: 'text-amber-600 dark:text-amber-300',
+        iconBg: 'bg-amber-500/80',
+      },
+      {
+        gradient: 'from-purple-100 via-white to-indigo-50 dark:from-purple-900/30 dark:via-slate-900 dark:to-indigo-900/20',
+        accent: 'text-indigo-600 dark:text-indigo-300',
+        iconBg: 'bg-indigo-500/80',
+      },
+      {
+        gradient: 'from-rose-100 via-white to-rose-50 dark:from-rose-900/30 dark:via-slate-900 dark:to-rose-900/20',
+        accent: 'text-rose-600 dark:text-rose-300',
+        iconBg: 'bg-rose-500/80',
+      },
+      {
+        gradient: 'from-teal-100 via-white to-teal-50 dark:from-teal-900/30 dark:via-slate-900 dark:to-teal-900/20',
+        accent: 'text-teal-600 dark:text-teal-300',
+        iconBg: 'bg-teal-500/80',
+      },
+      {
+        gradient: 'from-slate-100 via-white to-slate-50 dark:from-slate-900/40 dark:via-slate-900 dark:to-slate-900/20',
+        accent: 'text-slate-600 dark:text-slate-300',
+        iconBg: 'bg-slate-500/80',
+      },
+    ],
+    []
+  );
+
+  const visiblePatterns = useMemo(() => (details?.patterns ?? []).slice(0, 4), [details]);
+  const remainingPatterns = Math.max(0, (details?.patterns?.length ?? 0) - visiblePatterns.length);
+
+  const visibleUpcomingForecasts = useMemo(() => (details?.forecasts ?? []).slice(0, 4), [details]);
+  const remainingUpcomingForecasts = Math.max(0, (details?.forecasts?.length ?? 0) - visibleUpcomingForecasts.length);
+
+  const visibleForecastHistory = useMemo(() => (details?.forecast_history ?? []).slice(0, 4), [details]);
+  const remainingForecastHistory = Math.max(0, (details?.forecast_history?.length ?? 0) - visibleForecastHistory.length);
+
+  const visibleHistoricalSeries = useMemo(() => (details?.historical_series ?? []).slice(0, 5), [details]);
+  const remainingHistoricalSeries = Math.max(0, (details?.historical_series?.length ?? 0) - visibleHistoricalSeries.length);
 
   return (
     <div className="space-y-8">
@@ -741,215 +946,214 @@ const WhatHappened: React.FC = () => {
             </div>
           ) : (
             <div className="p-4 space-y-4 text-[11px]">
-              <header className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{details.symbol}</h3>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('column_trading_date')}: {details.trading_date}</p>
-                </div>
-                <div className="text-[10px] text-gray-500 dark:text-gray-400">
-                  {t('column_change_percent')}: {
-                    (() => {
-                      const summaryRow = summary.find((row) => row.stock_symbol === details.symbol);
-                      if (!summaryRow || summaryRow.price_change_percent === null) return '-';
-                      return `${percentFormatter.format(summaryRow.price_change_percent)}%`;
-                    })()
-                  }
-                </div>
-              </header>
-
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                <div className="md:col-span-2 xl:col-span-4 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-blue-900/40 dark:via-gray-900 dark:to-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-xl p-3 shadow-sm">
-                  <div className="grid grid-cols-3 gap-2 text-[11px] text-blue-900 dark:text-blue-100">
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Open</p>
-                      <p className="text-base font-semibold">{formatNumber(details.historical?.open)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">High</p>
-                      <p className="text-base font-semibold">{formatNumber(details.historical?.high)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Low</p>
-                      <p className="text-base font-semibold">{formatNumber(details.historical?.low)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Close</p>
-                      <p className="text-base font-semibold">{formatNumber(details.historical?.close)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">{t('column_volume')}</p>
-                      <p className="text-base font-semibold">{details.historical?.volume === null || typeof details.historical?.volume === 'undefined' ? '-' : numberFormatter.format(details.historical.volume)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] uppercase tracking-wide">Range</p>
-                      <p className="text-base font-semibold">{formatNumber(details.historical?.low)} - {formatNumber(details.historical?.high)}</p>
+               <header className="flex items-center justify-between gap-3">
+                 <div>
+                   <h3 className="text-xl font-semibold text-gray-900 dark:text-white">{details.symbol}</h3>
+                   <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('column_trading_date')}: {details.trading_date}</p>
+                 </div>
+                 <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                   {t('column_change_percent')}: {
+                     (() => {
+                       const summaryRow = summary.find((row) => row.stock_symbol === details.symbol);
+                       if (!summaryRow || summaryRow.price_change_percent === null) return '-';
+                       return `${percentFormatter.format(summaryRow.price_change_percent)}%`;
+                     })()
+                   }
+                 </div>
+               </header>
+ 
+              <div className="space-y-5">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-gradient-to-r from-blue-50 via-white to-blue-100 dark:from-blue-900/30 dark:via-slate-900 dark:to-blue-900/20 p-4 shadow-sm">
+                    <p className="text-[10px] uppercase tracking-wide text-blue-500 dark:text-blue-300">{t('close')}</p>
+                    <div className="mt-2 text-2xl font-semibold text-blue-800 dark:text-blue-200">{formatNumber(details.historical?.close)}</div>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-[10px] text-blue-900 dark:text-blue-100">
+                      <div>
+                        <span className="block text-xs text-blue-400 dark:text-blue-300">Open</span>
+                        <span className="text-sm font-semibold">{formatNumber(details.historical?.open)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs text-blue-400 dark:text-blue-300">Volume</span>
+                        <span className="text-sm font-semibold">{details.historical?.volume === null || typeof details.historical?.volume === 'undefined' ? '-' : numberFormatter.format(details.historical.volume)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs text-blue-400 dark:text-blue-300">High</span>
+                        <span className="text-sm font-semibold">{formatNumber(details.historical?.high)}</span>
+                      </div>
+                      <div>
+                        <span className="block text-xs text-blue-400 dark:text-blue-300">Low</span>
+                        <span className="text-sm font-semibold">{formatNumber(details.historical?.low)}</span>
+                      </div>
                     </div>
                   </div>
+
+                  <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900/40 bg-gradient-to-br from-emerald-50 via-white to-emerald-100 dark:from-emerald-900/20 dark:via-slate-900 dark:to-emerald-900/30 p-4 shadow-sm">
+                    <p className="text-[10px] uppercase tracking-wide text-emerald-500 dark:text-emerald-300">{t('column_actual_range')}</p>
+                    <div className="mt-2 text-xl font-semibold text-emerald-700 dark:text-emerald-200">
+                      {formatNumber(details.historical?.low)} - {formatNumber(details.historical?.high)}
+                    </div>
+                    <div className="mt-3 h-2 rounded-full bg-emerald-200/60 dark:bg-emerald-900/40 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 w-full" />
+                    </div>
+                    <p className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-300">{t('what_happened_recent_prices')}</p>
+                  </div>
+
+                  <div className="rounded-2xl border border-amber-200 dark:border-amber-900/40 bg-gradient-to-br from-amber-50 via-white to-orange-50 dark:from-amber-900/20 dark:via-slate-900 dark:to-orange-900/30 p-4 shadow-sm">
+                    <p className="text-[10px] uppercase tracking-wide text-amber-500 dark:text-amber-300">{t('column_change_percent')}</p>
+                    <div className="flex items-baseline gap-2 mt-2">
+                      <span className={`text-2xl font-semibold ${Number(details?.indicators?.rsi ?? 0) >= 50 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-500 dark:text-rose-300'}`}>
+                        {formatNumber(summary.find((row) => row.stock_symbol === details.symbol)?.price_change_percent ?? null, 2)}%
+                      </span>
+                      <span className="text-xs text-amber-500 dark:text-amber-300">RSI {formatNumber(details.indicators?.rsi ?? null, 1)}</span>
+                    </div>
+                    <p className="mt-3 text-[10px] text-amber-600 dark:text-amber-300">{t('what_happened_last_session')}</p>
+                  </div>
                 </div>
-                {indicatorGroups.map((group) => (
-                  <div
-                    key={group.title}
-                    className="rounded-xl bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-900/50 dark:via-slate-900 dark:to-slate-800 border border-slate-200 dark:border-slate-700 p-3 shadow"
-                  >
-                    <h5 className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2">
-                      <span className="inline-flex w-2 h-2 rounded-full bg-gradient-to-r from-sky-400 to-indigo-500" />
-                      {group.title}
-                    </h5>
-                    <div className="space-y-2">
-                      {group.metrics.map((metric) => (
-                        <div key={metric.label} className="flex items-center justify-between text-[10px]">
-                          <span className="uppercase tracking-wide text-gray-500 dark:text-gray-400">{metric.label}</span>
-                          <span className={`px-1.5 py-0.5 rounded-full font-semibold ${getMetricBadgeClasses(metric.value)}`}>
-                            {metric.value === null ? '-' : formatNumber(metric.value)}
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {indicatorGroups.map((group, index) => {
+                    const palette = indicatorCardStyles[index % indicatorCardStyles.length];
+                    return (
+                      <div
+                        key={group.title}
+                        className={`rounded-xl border border-white/60 dark:border-slate-800 bg-gradient-to-br ${palette.gradient} p-4 shadow`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h5 className={`text-[11px] font-semibold ${palette.accent}`}>{group.title}</h5>
+                            <span className="text-[9px] text-gray-500 dark:text-gray-400">{t('what_happened_technicals')}</span>
+                          </div>
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-white text-xs font-semibold ${palette.iconBg}`}>
+                            {index + 1}
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-
-                <div className="xl:col-span-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
-                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_patterns')}</h4>
-                  {details.patterns.length === 0 ? (
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                  ) : (
-                    <ul className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                      {details.patterns.map((pattern) => {
-                        const bullish = pattern.bullish === true;
-                        const gradient = bullish
-                          ? 'from-green-100 via-emerald-50 to-white dark:from-green-900/40 dark:via-emerald-900/30 dark:to-slate-900'
-                          : 'from-red-100 via-rose-50 to-white dark:from-red-900/40 dark:via-rose-900/30 dark:to-slate-900';
-                        return (
-                          <li
-                            key={`${pattern.pattern_name}-${pattern.date}`}
-                            className={`rounded-lg border border-gray-200 dark:border-gray-700 bg-gradient-to-r ${gradient} px-2.5 py-1.5 shadow-sm`}
-                          >
-                            <div className="flex items-center justify-between text-[10px] font-semibold">
-                              <span className="flex items-center gap-1.5">
-                                <span className={`w-1.5 h-1.5 rounded-full ${bullish ? 'bg-green-500' : 'bg-red-500'}`} />
-                                {pattern.pattern_name}
-                              </span>
-                              <span className={`uppercase ${bullish ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-                                {bullish ? t('bullish') : t('bearish')}
+                        <div className="mt-3 space-y-2">
+                          {group.metrics.map((metric) => (
+                            <div key={metric.label} className="flex items-center justify-between text-[10px]">
+                              <span className="uppercase tracking-wide text-gray-500 dark:text-gray-400">{metric.label}</span>
+                              <span className={`px-1.5 py-0.5 rounded-full font-semibold ${getMetricBadgeClasses(metric.value)}`}>
+                                {metric.value === null ? '-' : formatNumber(metric.value)}
                               </span>
                             </div>
-                            <div className="mt-1 text-[10px] text-gray-500 dark:text-gray-400 flex items-center justify-between">
-                              <span>{pattern.date}</span>
-                              <span>{pattern.timeframe || '-'}</span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_patterns')}</h4>
+                      <span className="text-[9px] text-gray-400">{t('column_result')}</span>
+                    </div>
+                    {visiblePatterns.length === 0 ? (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {visiblePatterns.map((pattern) => (
+                          <li key={`${pattern.pattern_name}-${pattern.date}`} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`w-1.5 h-1.5 rounded-full ${pattern.bullish ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                              <span className="font-semibold text-gray-800 dark:text-gray-100">{pattern.pattern_name}</span>
+                            </div>
+                            <span className="text-gray-500 dark:text-gray-400">{pattern.date}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {remainingPatterns > 0 && (
+                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingPatterns}</div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_upcoming_forecasts')}</h4>
+                      <span className="text-[9px] text-gray-400">{t('column_range')}</span>
+                    </div>
+                    {visibleUpcomingForecasts.length === 0 ? (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {visibleUpcomingForecasts.map((forecast) => (
+                          <li key={forecast.forecast_date} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
+                            <span className="font-semibold text-gray-800 dark:text-gray-100">{forecast.forecast_date}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 font-semibold">
+                                {formatNumber(forecast.predicted_price)}
+                              </span>
+                              <span className="text-gray-500 dark:text-gray-400">
+                                {formatNumber(forecast.predicted_lo)}
+                                <span className="mx-1">-</span>
+                                {formatNumber(forecast.predicted_hi)}
+                              </span>
                             </div>
                           </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-                </div>
+                        ))}
+                      </ul>
+                    )}
+                    {remainingUpcomingForecasts > 0 && (
+                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingUpcomingForecasts}</div>
+                    )}
+                  </div>
 
-                <div className="xl:col-span-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
-                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_upcoming_forecasts')}</h4>
-                  {details.forecasts.length === 0 ? (
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                  ) : (
-                    <div className="max-h-40 overflow-y-auto pr-1">
-                      <table className="w-full text-[10px] text-gray-600 dark:text-gray-300 border-separate border-spacing-y-1">
-                        <thead>
-                          <tr className="text-gray-500 dark:text-gray-400">
-                            <th className="text-left font-semibold">{t('column_trading_date')}</th>
-                            <th className="text-center font-semibold">{t('column_forecast')}</th>
-                            <th className="text-center font-semibold">{t('column_range')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {details.forecasts.map((forecast) => (
-                            <tr key={forecast.forecast_date} className="bg-gradient-to-r from-blue-50 via-white to-slate-100 dark:from-blue-900/30 dark:via-slate-900 dark:to-slate-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
-                              <td className="px-2 py-1 font-semibold text-gray-900 dark:text-gray-200">{forecast.forecast_date}</td>
-                              <td className="px-2 py-1 text-center">
-                                <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 font-semibold">
-                                  {formatNumber(forecast.predicted_price)}
-                                </span>
-                              </td>
-                              <td className="px-2 py-1 text-center">
-                                <span className="px-1.5 py-0.5 rounded-full bg-white/70 dark:bg-gray-800/60 border border-blue-200 dark:border-blue-800 font-semibold">
-                                  {formatNumber(forecast.predicted_lo)}
-                                  <span className="mx-1 text-gray-400">-</span>
-                                  {formatNumber(forecast.predicted_hi)}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_forecast_history')}</h4>
+                      <span className="text-[9px] text-gray-400">{t('column_result')}</span>
                     </div>
-                  )}
-                </div>
-
-                <div className="xl:col-span-2 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
-                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_forecast_history')}</h4>
-                  {details.forecast_history.length === 0 ? (
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                  ) : (
-                    <div className="max-h-40 overflow-y-auto pr-1">
-                      <table className="w-full text-[10px] text-gray-600 dark:text-gray-300 border-separate border-spacing-y-1">
-                        <thead>
-                          <tr className="text-gray-500 dark:text-gray-400">
-                            <th className="text-left font-semibold">{t('column_trading_date')}</th>
-                            <th className="text-center font-semibold">{t('column_forecast')}</th>
-                            <th className="text-center font-semibold">{t('column_result')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {details.forecast_history.map((history) => (
-                            <tr
-                              key={history.forecast_date}
-                              className="border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm bg-white dark:bg-gray-900/60"
-                            >
-                              <td className="px-2 py-1 font-semibold text-gray-900 dark:text-gray-200">{history.forecast_date}</td>
-                              <td className="px-2 py-1 text-center font-semibold text-gray-600 dark:text-gray-300">
+                    {visibleForecastHistory.length === 0 ? (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {visibleForecastHistory.map((history) => (
+                          <li key={history.forecast_date} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
+                            <span className="font-semibold text-gray-800 dark:text-gray-100">{history.forecast_date}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400">
                                 {formatNumber(history.predicted_lo)}
-                                <span className="mx-1 text-gray-400">-</span>
+                                <span className="mx-1">-</span>
                                 {formatNumber(history.predicted_hi)}
-                              </td>
-                              <td className="px-2 py-1 text-center">
-                                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${history.hit_range ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-                                  {history.hit_range ? t('hit') : t('miss')}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
+                              </span>
+                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${history.hit_range ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
+                                {history.hit_range ? t('hit') : t('miss')}
+                              </span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {remainingForecastHistory > 0 && (
+                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingForecastHistory}</div>
+                    )}
+                  </div>
 
-                <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-3">
-                  <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white mb-2">{t('what_happened_recent_prices')}</h4>
-                  {details.historical_series.length === 0 ? (
-                    <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                  ) : (
-                    <div className="max-h-40 overflow-y-auto pr-1">
-                      <table className="w-full text-[10px] text-gray-600 dark:text-gray-300 border-separate border-spacing-y-1">
-                        <thead>
-                          <tr className="text-gray-500 dark:text-gray-400">
-                            <th className="text-left font-semibold">{t('column_trading_date')}</th>
-                            <th className="text-center font-semibold">{t('close')}</th>
-                            <th className="text-center font-semibold">{t('column_volume')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {details.historical_series.map((row) => (
-                            <tr
-                              key={row.date}
-                              className="flex items-center justify-between gap-2 border border-gray-200 dark:border-gray-700 rounded-xl px-2.5 py-1.5 bg-white dark:bg-gray-900/60 shadow-sm"
-                            >
-                              <td className="flex-1 font-semibold text-gray-900 dark:text-gray-200">{row.date}</td>
-                              <td className="flex-1 text-center text-blue-600 dark:text-blue-300 font-semibold">{formatNumber(row.close)}</td>
-                              <td className="flex-1 text-center text-gray-500 dark:text-gray-400">{row.volume === null ? '-' : numberFormatter.format(row.volume)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                  <div className="md:col-span-2 xl:col-span-1 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_recent_prices')}</h4>
+                      <span className="text-[9px] text-gray-400">{t('column_volume')}</span>
                     </div>
-                  )}
+                    {visibleHistoricalSeries.length === 0 ? (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {visibleHistoricalSeries.map((row) => (
+                          <li key={row.date} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
+                            <span className="font-semibold text-gray-800 dark:text-gray-100">{row.date}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-blue-600 dark:text-blue-300 font-semibold">{formatNumber(row.close)}</span>
+                              <span className="text-gray-500 dark:text-gray-400">{row.volume === null ? '-' : numberFormatter.format(row.volume)}</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {remainingHistoricalSeries > 0 && (
+                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingHistoricalSeries}</div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

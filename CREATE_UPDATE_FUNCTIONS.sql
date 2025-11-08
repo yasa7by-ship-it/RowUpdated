@@ -1,0 +1,173 @@
+-- #############################################################################
+-- # إنشاء RPC functions لتنفيذ التحديثات مباشرة
+-- #############################################################################
+
+BEGIN;
+
+-- Function 1: تحديث evaluate_and_save_forecasts
+CREATE OR REPLACE FUNCTION public.update_evaluate_function()
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    EXECUTE '
+    CREATE OR REPLACE FUNCTION public.evaluate_and_save_forecasts(p_date_filter date DEFAULT NULL)
+    RETURNS json
+    LANGUAGE plpgsql
+    SECURITY DEFINER
+    SET search_path = public
+    AS $func$
+    DECLARE
+        processed_count integer;
+        stocks_count integer;
+        result_json json;
+    BEGIN
+        WITH new_evaluations AS (
+            SELECT
+                f.stock_symbol,
+                s.name AS stock_name,
+                f.forecast_date,
+                f.predicted_price,
+                f.predicted_lo,
+                f.predicted_hi,
+                f.confidence,
+                h.low AS actual_low,
+                h.high AS actual_high,
+                h.close AS actual_close,
+                (f.predicted_lo <= h.high AND h.low <= f.predicted_hi) AS hit_range,
+                ABS(f.predicted_price - h.close) AS abs_error,
+                ABS(f.predicted_price - h.close) / NULLIF(h.close, 0) AS pct_error
+            FROM
+                public.forecasts f
+            JOIN
+                public.stocks s ON f.stock_symbol = s.symbol
+            JOIN
+                public.historical_data h ON f.stock_symbol = h.stock_symbol AND f.forecast_date = h.date
+            WHERE (p_date_filter IS NULL OR f.forecast_date = p_date_filter)
+        ),
+        insert_history AS (
+            INSERT INTO public.forecast_check_history (
+                stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+                actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+            )
+            SELECT
+                stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+                actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+            FROM new_evaluations
+            ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+                predicted_price = EXCLUDED.predicted_price,
+                predicted_lo = EXCLUDED.predicted_lo,
+                predicted_hi = EXCLUDED.predicted_hi,
+                actual_low = EXCLUDED.actual_low,
+                actual_high = EXCLUDED.actual_high,
+                actual_close = EXCLUDED.actual_close,
+                hit_range = EXCLUDED.hit_range,
+                abs_error = EXCLUDED.abs_error,
+                pct_error = EXCLUDED.pct_error,
+                confidence = EXCLUDED.confidence,
+                created_at = NOW()
+            RETURNING 1
+        ),
+        upsert_latest AS (
+            INSERT INTO public.forecast_check_latest (
+                stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+                actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+            )
+            SELECT DISTINCT ON (stock_symbol)
+                stock_symbol, forecast_date, predicted_price, predicted_lo, predicted_hi,
+                actual_low, actual_high, actual_close, hit_range, abs_error, pct_error, confidence
+            FROM new_evaluations
+            ORDER BY stock_symbol, forecast_date DESC
+            ON CONFLICT (stock_symbol) DO UPDATE SET
+                forecast_date = EXCLUDED.forecast_date,
+                predicted_price = EXCLUDED.predicted_price,
+                predicted_lo = EXCLUDED.predicted_lo,
+                predicted_hi = EXCLUDED.predicted_hi,
+                actual_low = EXCLUDED.actual_low,
+                actual_high = EXCLUDED.actual_high,
+                actual_close = EXCLUDED.actual_close,
+                hit_range = EXCLUDED.hit_range,
+                abs_error = EXCLUDED.abs_error,
+                pct_error = EXCLUDED.pct_error,
+                confidence = EXCLUDED.confidence,
+                created_at = NOW()
+        ),
+        insert_legacy AS (
+            INSERT INTO public."Forcast_Result" (
+                stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+                actual_low, actual_high, is_hit
+            )
+            SELECT
+                stock_symbol, stock_name, forecast_date, predicted_lo, predicted_hi,
+                actual_low, actual_high, hit_range
+            FROM new_evaluations
+            ON CONFLICT (stock_symbol, forecast_date) DO UPDATE SET
+                stock_name = EXCLUDED.stock_name,
+                predicted_lo = EXCLUDED.predicted_lo,
+                predicted_hi = EXCLUDED.predicted_hi,
+                actual_low = EXCLUDED.actual_low,
+                actual_high = EXCLUDED.actual_high,
+                is_hit = EXCLUDED.is_hit,
+                created_at = NOW()
+        ),
+        count_stats AS (
+            SELECT 
+                COUNT(*) AS forecast_count,
+                COUNT(DISTINCT stock_symbol) AS stock_count
+            FROM new_evaluations
+        )
+        SELECT 
+            forecast_count,
+            stock_count
+        INTO processed_count, stocks_count
+        FROM count_stats;
+        
+        result_json := json_build_object(
+            ''forecasts_processed'', COALESCE(processed_count, 0),
+            ''stocks_processed'', COALESCE(stocks_count, 0),
+            ''execution_time'', NOW()
+        );
+        
+        RETURN result_json;
+    END;
+    $func$;
+    ';
+    
+    RETURN 'Function updated successfully';
+END;
+$$;
+
+-- Function 2: إضافة الترجمات
+CREATE OR REPLACE FUNCTION public.add_evaluation_translations()
+RETURNS text
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    ALTER TABLE public.translations DISABLE ROW LEVEL SECURITY;
+    
+    INSERT INTO public.translations (lang_id, key, value) VALUES
+    ('en', 'last_run_stats', 'Last Run Statistics'),
+    ('ar', 'last_run_stats', 'إحصائيات آخر تشغيل'),
+    ('en', 'forecasts_processed', 'Forecasts Processed'),
+    ('ar', 'forecasts_processed', 'عدد التوقعات المفحوصة'),
+    ('en', 'stocks_processed', 'Stocks Processed'),
+    ('ar', 'stocks_processed', 'عدد الأسهم المفحوصة'),
+    ('en', 'last_run_time', 'Last Run Time'),
+    ('ar', 'last_run_time', 'آخر مرة تم التشغيل'),
+    ('en', 'running', 'Running...'),
+    ('ar', 'running', 'جاري التشغيل...')
+    ON CONFLICT (lang_id, key) 
+    DO UPDATE SET value = EXCLUDED.value;
+    
+    ALTER TABLE public.translations ENABLE ROW LEVEL SECURITY;
+    
+    RETURN 'Translations added successfully';
+END;
+$$;
+
+COMMIT;
+

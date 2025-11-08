@@ -1,0 +1,28 @@
+name: 04-forecast
+
+on:
+  workflow_run:
+    workflows: ["03-compute-indicators"]
+    types: [completed]
+  workflow_dispatch: {}
+
+concurrency:
+  group: nightly-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Run forecast
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: python forecast_generate_tracked_symbols_v6i_1day_silent.py

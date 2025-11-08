@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>تنفيذ تنظيف الصلاحيات المكررة</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .sql-box {
+            background: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            white-space: pre-wrap;
+            max-height: 600px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            direction: ltr;
+            text-align: left;
+        }
+        .button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            display: block;
+            margin: 20px auto;
+            transition: background 0.3s;
+        }
+        .button:hover {
+            background: #0056b3;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border: 1px solid #bee5eb;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 تنظيف الصلاحيات المكررة وإعادة ترتيبها</h1>
+        
+        <div class="info">
+            <strong>تعليمات:</strong><br>
+            1. انسخ محتوى SQL أدناه<br>
+            2. افتح <a href="https://supabase.com/dashboard/project/bojrgkiqsahuwufbkacm/sql" target="_blank">Supabase SQL Editor</a><br>
+            3. الصق SQL واضغط Run
+        </div>
+
+        <div class="sql-box" id="sqlContent"></div>
+
+        <button class="button" onclick="copySQL()">📋 نسخ SQL</button>
+
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const sql = `-- ============================================
+-- تنظيف الصلاحيات المكررة وإعادة ترتيبها
+-- ============================================
+
+BEGIN;
+
+-- 1. حذف الصلاحيات المكررة (نحتفظ بالأحدث)
+DO $$
+DECLARE
+    perm_record RECORD;
+    kept_id UUID;
+BEGIN
+    FOR perm_record IN 
+        SELECT action, COUNT(*) as cnt, array_agg(id ORDER BY created_at DESC) as ids
+        FROM public.permissions
+        GROUP BY action
+        HAVING COUNT(*) > 1
+    LOOP
+        kept_id := perm_record.ids[1];
+        
+        -- نقل جميع role_permissions إلى الصلاحية المحفوظة
+        UPDATE public.role_permissions
+        SET permission_id = kept_id
+        WHERE permission_id = ANY(perm_record.ids[2:array_length(perm_record.ids, 1)])
+        AND permission_id != kept_id;
+        
+        -- حذف role_permissions المكررة
+        DELETE FROM public.role_permissions
+        WHERE permission_id = ANY(perm_record.ids[2:array_length(perm_record.ids, 1)]);
+        
+        -- حذف الصلاحيات المكررة
+        DELETE FROM public.permissions
+        WHERE id = ANY(perm_record.ids[2:array_length(perm_record.ids, 1)]);
+        
+        RAISE NOTICE 'Removed % duplicate(s) for action: %', perm_record.cnt - 1, perm_record.action;
+    END LOOP;
+END $$;
+
+-- 2. إضافة عمود display_order
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'permissions' 
+        AND column_name = 'display_order'
+    ) THEN
+        ALTER TABLE public.permissions ADD COLUMN display_order INTEGER DEFAULT 999;
+        RAISE NOTICE 'Added display_order column';
+    END IF;
+END $$;
+
+-- 3. تحديث ترتيب العرض - الصفحات الرئيسية أولاً
+UPDATE public.permissions SET display_order = 1 WHERE action = 'view:daily_watchlist';
+UPDATE public.permissions SET display_order = 2 WHERE action = 'view:stock_analysis';
+UPDATE public.permissions SET display_order = 3 WHERE action = 'view:forecast_accuracy';
+UPDATE public.permissions SET display_order = 4 WHERE action = 'view:forecast_history_analysis';
+UPDATE public.permissions SET display_order = 5 WHERE action = 'view:dashboard';
+
+-- الصلاحيات الإدارية
+UPDATE public.permissions SET display_order = 10 WHERE action = 'manage:users';
+UPDATE public.permissions SET display_order = 11 WHERE action = 'manage:roles';
+UPDATE public.permissions SET display_order = 12 WHERE action = 'manage:announcements';
+UPDATE public.permissions SET display_order = 13 WHERE action = 'view:system_documentation';
+UPDATE public.permissions SET display_order = 14 WHERE action = 'manage:stocks';
+UPDATE public.permissions SET display_order = 15 WHERE action = 'manage:translations';
+UPDATE public.permissions SET display_order = 16 WHERE action = 'view:activity_log';
+UPDATE public.permissions SET display_order = 17 WHERE action = 'submit:user_notes';
+UPDATE public.permissions SET display_order = 18 WHERE action = 'manage:user_notes';
+UPDATE public.permissions SET display_order = 19 WHERE action = 'manage:settings';
+UPDATE public.permissions SET display_order = 20 WHERE action = 'truncate:activity_log';
+
+-- بقية الصلاحيات
+UPDATE public.permissions SET display_order = 999 WHERE display_order IS NULL OR display_order = 999;
+
+COMMIT;`;
+
+        document.getElementById('sqlContent').textContent = sql;
+
+        function copySQL() {
+            navigator.clipboard.writeText(sql).then(() => {
+                const status = document.getElementById('status');
+                status.className = 'status success';
+                status.style.display = 'block';
+                status.textContent = '✅ تم نسخ SQL بنجاح! الآن افتح Supabase SQL Editor والصقه.';
+                setTimeout(() => {
+                    status.style.display = 'none';
+                }, 5000);
+            }).catch(err => {
+                alert('❌ فشل النسخ: ' + err.message);
+            });
+        }
+    </script>
+</body>
+</html>
+
+

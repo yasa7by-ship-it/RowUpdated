@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>إضافة 10 أسهم جديدة</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2d5aa0;
+            margin-bottom: 20px;
+        }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            margin: 20px 0;
+            direction: ltr;
+            text-align: left;
+        }
+        .instructions {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            border-right: 4px solid #2196F3;
+        }
+        .stocks-list {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .stocks-list ul {
+            list-style: none;
+            padding: 0;
+        }
+        .stocks-list li {
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        .stocks-list li:last-child {
+            border-bottom: none;
+        }
+        .copy-btn {
+            background: #2d5aa0;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        .copy-btn:hover {
+            background: #1e3f73;
+        }
+        .success {
+            color: #4caf50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 إضافة 10 أسهم جديدة إلى قاعدة البيانات</h1>
+        
+        <div class="instructions">
+            <h3>📝 التعليمات:</h3>
+            <ol>
+                <li>افتح Supabase Dashboard</li>
+                <li>اذهب إلى SQL Editor</li>
+                <li>انسخ الكود SQL أدناه</li>
+                <li>الصقه في SQL Editor</li>
+                <li>اضغط Run لتنفيذ الكود</li>
+            </ol>
+        </div>
+
+        <div class="stocks-list">
+            <h3>الأسهم المضافة:</h3>
+            <ul>
+                <li>1. SNOW - Snowflake Inc.</li>
+                <li>2. SHOP - Shopify Inc.</li>
+                <li>3. ZM - Zoom Video Communications</li>
+                <li>4. DOCU - DocuSign Inc.</li>
+                <li>5. TWLO - Twilio Inc.</li>
+                <li>6. NET - Cloudflare Inc.</li>
+                <li>7. OKTA - Okta Inc.</li>
+                <li>8. ROKU - Roku Inc.</li>
+                <li>9. SPLK - Splunk Inc.</li>
+                <li>10. ZS - Zscaler Inc.</li>
+            </ul>
+        </div>
+
+        <h3>كود SQL:</h3>
+        <div class="sql-box" id="sqlCode">
+-- #############################################################################
+-- # SCRIPT: Add 10 New Stocks to Database
+-- # Purpose: Add 10 prominent stocks that are not currently in the database
+-- #############################################################################
+
+BEGIN;
+
+-- Add 10 new stocks
+INSERT INTO public.stocks (symbol, name, is_tracked) VALUES
+  ('SNOW', 'Snowflake Inc.', true),
+  ('SHOP', 'Shopify Inc.', true),
+  ('ZM', 'Zoom Video Communications', true),
+  ('DOCU', 'DocuSign Inc.', true),
+  ('TWLO', 'Twilio Inc.', true),
+  ('NET', 'Cloudflare Inc.', true),
+  ('OKTA', 'Okta Inc.', true),
+  ('ROKU', 'Roku Inc.', true),
+  ('SPLK', 'Splunk Inc.', true),
+  ('ZS', 'Zscaler Inc.', true)
+ON CONFLICT (symbol) DO UPDATE SET
+  name = EXCLUDED.name,
+  is_tracked = EXCLUDED.is_tracked;
+
+COMMIT;
+
+-- Verify the stocks were added
+SELECT 
+  symbol,
+  name,
+  is_tracked,
+  CASE 
+    WHEN symbol IN ('SNOW', 'SHOP', 'ZM', 'DOCU', 'TWLO', 'NET', 'OKTA', 'ROKU', 'SPLK', 'ZS') 
+    THEN '✅ Added'
+    ELSE 'Existing'
+  END AS status
+FROM public.stocks
+WHERE symbol IN ('SNOW', 'SHOP', 'ZM', 'DOCU', 'TWLO', 'NET', 'OKTA', 'ROKU', 'SPLK', 'ZS')
+ORDER BY symbol;
+        </div>
+
+        <button class="copy-btn" onclick="copySQL()">📋 نسخ الكود</button>
+        <p class="success" id="copyMessage" style="display:none;">✅ تم النسخ بنجاح!</p>
+    </div>
+
+    <script>
+        function copySQL() {
+            const sqlCode = document.getElementById('sqlCode').textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                const message = document.getElementById('copyMessage');
+                message.style.display = 'block';
+                setTimeout(() => {
+                    message.style.display = 'none';
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,30 @@
+name: 01-update-prices
+
+on:
+  schedule:
+    # صيف (مارس-أكتوبر): 21:00 UTC = 5:00pm نيويورك (إغلاق + 1 ساعة)
+    - cron: "0 21 * 3-10 1-5"
+    # شتاء (نوفمبر-فبراير): 22:00 UTC = 5:00pm نيويورك (إغلاق + 1 ساعة)
+    - cron: "0 22 * 11-12 1-5"
+    - cron: "0 22 * 1-2 1-5"
+  workflow_dispatch: {}
+
+concurrency:
+  group: nightly-pipeline
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Update prices only
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE: ${{ secrets.SUPABASE_SERVICE_ROLE }}
+        run: python update_prices_only.py

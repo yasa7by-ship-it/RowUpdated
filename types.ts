@@ -74,7 +74,7 @@ export type AppSettings = {
 };
 
 // --- App Navigation Types ---
-export type PageName = 'landing' | 'dashboard' | 'users' | 'roles' | 'announcements' | 'system_documentation' | 'stock_analysis' | 'daily_watchlist' | 'stock_management' | 'translations' | 'stock_details' | 'activity_log' | 'user_notes' | 'user_notes_management' | 'forecast_accuracy' | 'forecast_history_analysis';
+export type PageName = 'landing' | 'dashboard' | 'users' | 'roles' | 'announcements' | 'system_documentation' | 'stock_analysis' | 'daily_watchlist' | 'stock_management' | 'translations' | 'stock_details' | 'activity_log' | 'user_notes' | 'user_notes_management' | 'forecast_accuracy' | 'forecast_history_analysis' | 'what_happened' | 'nasdaq_snapshot';
 export type PageState = PageName | { page: 'stock_details'; symbol: string };
 
 
@@ -300,6 +300,48 @@ export interface ActivityLogItem {
   ip_address: string | null;
   details: any; // JSONB
   total_count: number;
+}
+
+export interface NasdaqSectorPerformance {
+  symbol?: string | null;
+  name?: string | null;
+  change_percent?: number | null;
+}
+
+export interface NasdaqHeatmapEntry {
+  symbol?: string | null;
+  name?: string | null;
+  change_percent?: number | null;
+  market_cap?: number | null;
+}
+
+export interface NasdaqDailySnapshot {
+  trading_date: string;
+  close_price: number | null;
+  change_points: number | null;
+  change_percent: number | null;
+  open_price: number | null;
+  high_price: number | null;
+  low_price: number | null;
+  volume: number | null;
+  advancers_count: number | null;
+  decliners_count: number | null;
+  leading_sector: string | null;
+  lagging_sector: string | null;
+  headline: string | null;
+  headline_source: string | null;
+  heatmap_json: NasdaqHeatmapEntry[] | null;
+  sectors_json: NasdaqSectorPerformance[] | null;
+  metadata_json: {
+    fetched_at?: string;
+    source?: string;
+    notices?: string[];
+  } | null;
+  created_at: string;
+}
+
+export interface NasdaqSnapshotResponse {
+  data: NasdaqDailySnapshot | null;
 }
 
 // --- NEW User Notes Types ---
