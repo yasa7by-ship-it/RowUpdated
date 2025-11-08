@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase, setSessionPersistence } from '../services/supabaseClient';
 import { useTheme } from '../contexts/ThemeContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useAppSettings } from '../contexts/AppSettingsContext';
+import { createPortal } from 'react-dom';
 import {
   SunIcon, MoonIcon, ArrowRightOnRectangleIcon, SpinnerIcon, SearchChartIcon,
   ChartPieIcon, UsersIcon, ShieldCheckIcon, MegaphoneIcon, DocumentTextIcon, ChartBarIcon,
@@ -39,12 +40,15 @@ const LoggedInView: React.FC<{
   const displayName = profile?.full_name?.trim() ? profile.full_name : profile?.email;
   
   return (
-     <div className="relative" ref={profileMenuRef}>
-        <button onClick={() => setProfileOpen(!isProfileOpen)} className="flex items-center space-x-2 rtl:space-x-reverse p-1 rounded-md hover:bg-nextrow-primary/80">
-        <span className="hidden sm:inline text-sm font-medium text-white px-2 truncate max-w-[150px]">{displayName}</span>
-        <div className="w-8 h-8 rounded-full bg-nextrow-primary text-white flex items-center justify-center font-bold shrink-0">
+    <div className="relative" ref={profileMenuRef}>
+        <button
+          onClick={() => setProfileOpen(!isProfileOpen)}
+          className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/80 px-3 py-1.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-white dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100"
+        >
+          <span className="hidden sm:inline truncate max-w-[160px]">{displayName}</span>
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-slate-100 text-base font-bold text-slate-700 dark:bg-slate-700 dark:text-white">
             {getInitials(profile?.full_name, profile?.email)}
-        </div>
+          </span>
         </button>
 
         {isProfileOpen && (
@@ -266,6 +270,8 @@ const Header: React.FC<{
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const languageMenuRef = useRef<HTMLDivElement>(null);
   const siteMgmtMenuRef = useRef<HTMLDivElement>(null);
+  const siteMgmtButtonRef = useRef<HTMLButtonElement>(null);
+  const [siteMgmtMenuStyles, setSiteMgmtMenuStyles] = useState<{ top: number; left: number } | null>(null);
   
   const handleSignOut = async () => {
     setIsSigningOut(true);
@@ -344,7 +350,11 @@ const Header: React.FC<{
       if (languageMenuRef.current && !languageMenuRef.current.contains(event.target as Node)) {
         setLanguageOpen(false);
       }
-       if (siteMgmtMenuRef.current && !siteMgmtMenuRef.current.contains(event.target as Node)) {
+      if (
+        siteMgmtMenuRef.current &&
+        !siteMgmtMenuRef.current.contains(event.target as Node) &&
+        !(siteMgmtButtonRef.current && siteMgmtButtonRef.current.contains(event.target as Node))
+      ) {
         setSiteMgmtOpen(false);
       }
     };
@@ -376,172 +386,374 @@ const Header: React.FC<{
   ] as const;
   
   const canViewSiteManagement = siteManagementLinks.some(link => hasPermission(link.permission));
+  const isSiteManagementActive = siteManagementLinks.some(link => link.page === currentPage);
+  const isRTL = language === 'ar';
+  const iconButtonClass =
+    'inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white/80 text-slate-600 shadow-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-200 dark:hover:bg-slate-800';
+  const navPillBase =
+    'inline-flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-200';
+  const getNavLinkClasses = (page: PageName, isVisuallyDistinct: boolean) => {
+    const isActive = currentPage === page;
+    if (isVisuallyDistinct) {
+      return `${navPillBase} ${
+        isActive
+          ? 'border border-amber-200 bg-amber-100 text-amber-900 shadow-sm dark:border-amber-400/40 dark:bg-amber-500/20 dark:text-amber-50'
+          : 'border border-transparent bg-amber-50 text-amber-700 hover:border-amber-200 hover:bg-amber-100 dark:bg-amber-500/10 dark:text-amber-100 dark:hover:bg-amber-500/20'
+      }`;
+    }
+    return `${navPillBase} ${
+      isActive
+        ? 'border border-blue-200 bg-blue-100 text-blue-700 shadow-sm dark:border-blue-400/40 dark:bg-blue-500/20 dark:text-blue-100'
+        : 'border border-transparent text-slate-600 hover:border-blue-100 hover:bg-slate-100 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white'
+    }`;
+  };
+  const siteManagementButtonClasses = `${navPillBase} ${
+    isSiteManagementActive
+      ? 'border border-blue-200 bg-blue-100 text-blue-700 shadow-sm dark:border-blue-400/40 dark:bg-blue-500/20 dark:text-blue-100'
+      : 'border border-transparent text-slate-600 hover:border-blue-100 hover:bg-slate-100 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white'
+  }`;
+
+  const updateSiteMgmtMenuPosition = useCallback(() => {
+    if (!siteMgmtButtonRef.current || typeof window === 'undefined') return;
+    const buttonRect = siteMgmtButtonRef.current.getBoundingClientRect();
+    const gap = 8;
+    const menuWidth = 256; // w-64
+    const scrollTop = window.scrollY || 0;
+    const scrollLeft = window.scrollX || 0;
+    const viewportWidth = window.innerWidth;
+    const minLeft = 16;
+    const maxLeft = Math.max(minLeft, viewportWidth - menuWidth - 16);
+    let left = isRTL
+      ? buttonRect.right + scrollLeft - menuWidth
+      : buttonRect.left + scrollLeft;
+    left = Math.max(minLeft, Math.min(maxLeft, left));
+    const top = buttonRect.bottom + scrollTop + gap;
+    setSiteMgmtMenuStyles({ top, left });
+  }, [isRTL]);
+
+  useEffect(() => {
+    if (!isSiteMgmtOpen) return;
+    updateSiteMgmtMenuPosition();
+    const handleWindowChanges = () => updateSiteMgmtMenuPosition();
+    window.addEventListener('resize', handleWindowChanges);
+    window.addEventListener('scroll', handleWindowChanges, true);
+    return () => {
+      window.removeEventListener('resize', handleWindowChanges);
+      window.removeEventListener('scroll', handleWindowChanges, true);
+    };
+  }, [isSiteMgmtOpen, updateSiteMgmtMenuPosition]);
+
+  const canUsePortal = typeof window !== 'undefined' && typeof document !== 'undefined';
 
   return (
     <>
-        {isSignUpModalOpen && (
-            <SignUpModal
-                onClose={() => setSignUpModalOpen(false)}
-                onSuccess={() => setSignUpModalOpen(false)}
-            />
-        )}
-        <header className="bg-nextrow-primary dark:bg-nextrow-dark shadow-md p-2 md:p-4 flex justify-between items-center z-20">
-        <div className="flex items-center space-x-4 rtl:space-x-reverse">
-            <a href="#" onClick={(e) => { e.preventDefault(); setPage('landing'); }} className="flex items-center space-x-2 rtl:space-x-reverse">
-                <span className="inline-block w-8 h-8 text-white" dangerouslySetInnerHTML={{ __html: settings.site_logo || '' }} />
-                <span className="text-white font-bold text-xl">{t('site_title')}</span>
+      {isSignUpModalOpen && (
+        <SignUpModal
+          onClose={() => setSignUpModalOpen(false)}
+          onSuccess={() => setSignUpModalOpen(false)}
+        />
+      )}
+      <header className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/90 backdrop-blur-md dark:border-slate-800/60 dark:bg-slate-900/90">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-3 py-3">
+          <div className={`flex items-center justify-between gap-3 ${isRTL ? 'flex-row-reverse' : ''}`}>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                setPage('landing');
+              }}
+              className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white/80 px-3 py-1.5 text-base font-semibold text-slate-800 shadow-sm transition hover:bg-white dark:border-slate-700 dark:bg-slate-800/80 dark:text-slate-100"
+            >
+              {settings.site_logo ? (
+                <span
+                  className="inline-flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl"
+                  dangerouslySetInnerHTML={{ __html: settings.site_logo }}
+                />
+              ) : (
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600/20 text-sm font-bold text-blue-700 dark:bg-blue-500/20 dark:text-blue-100">
+                  TV
+                </span>
+              )}
+              <span className="hidden sm:inline">{t('site_title')}</span>
             </a>
-            
-            {/* Main navigation for logged-in users */}
-            {profile && (
-                <nav className="hidden md:flex items-center space-x-1 rtl:space-x-reverse bg-nextrow-dark/50 dark:bg-gray-900/50 p-1 rounded-lg">
-                    {navLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon, isVisuallyDistinct }) => (
-                        <a key={page} href="#" onClick={(e) => { e.preventDefault(); setPage(page); }}
-                            className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all duration-200 ${
-                                isVisuallyDistinct
-                                ? (currentPage === page ? 'bg-amber-400 text-black shadow-inner' : 'bg-amber-300 dark:bg-amber-500 text-black hover:bg-amber-400 dark:hover:bg-amber-600')
-                                : (currentPage === page ? 'bg-white dark:bg-gray-700 text-nextrow-primary dark:text-white' : 'text-white/80 hover:bg-nextrow-primary/80 hover:text-white')
-                            }`}>
-                            <Icon className="w-5 h-5" />
-                            {label}
-                        </a>
-                    ))}
-                    
-                    {/* Site Management Dropdown */}
-                    {canViewSiteManagement && (
-                        <div className="relative" ref={siteMgmtMenuRef}>
-                            <button onClick={() => setSiteMgmtOpen(!isSiteMgmtOpen)}
-                            className="flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors text-white/80 hover:bg-nextrow-primary/80 hover:text-white">
-                                {t('site_management')}
-                                <ChevronDownIcon className="w-4 h-4 ml-1 rtl:mr-1" />
-                            </button>
-                            {isSiteMgmtOpen && (
-                                <div className="absolute ltr:left-0 rtl:right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 z-10">
-                                    <ul className="py-1">
-                                        {siteManagementLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon }) => (
-                                            <li key={page}>
-                                                <a href="#" onClick={(e) => { e.preventDefault(); setPage(page); setSiteMgmtOpen(false); }} className="w-full text-start flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                                                    <Icon className="w-5 h-5 mr-3 rtl:ml-3" />
-                                                    {label}
-                                                </a>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </nav>
-            )}
-        </div>
-
-        <div className="flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse rtl:md:space-x-reverse">
-            {profile && session ? (
-            <LoggedInView
-                profile={profile}
-                isProfileOpen={isProfileOpen}
-                setProfileOpen={setProfileOpen}
-                profileMenuRef={profileMenuRef}
-                isSigningOut={isSigningOut}
-                signOutError={signOutError}
-                handleSignOut={handleSignOut}
-            />
-            ) : (
+            <div className={`flex items-center gap-2 ${isRTL ? 'flex-row-reverse' : ''}`}>
+              {profile && session ? (
+                <LoggedInView
+                  profile={profile}
+                  isProfileOpen={isProfileOpen}
+                  setProfileOpen={setProfileOpen}
+                  profileMenuRef={profileMenuRef}
+                  isSigningOut={isSigningOut}
+                  signOutError={signOutError}
+                  handleSignOut={handleSignOut}
+                />
+              ) : (
                 <LoggedOutView setPage={setPage} setSignUpModalOpen={setSignUpModalOpen} />
-            )}
-            
-             {/* Desktop-only controls */}
-            <div className="hidden md:flex items-center space-x-1 md:space-x-2 rtl:space-x-reverse rtl:md:space-x-reverse">
-                {/* Theme Toggle */}
-                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full hover:bg-nextrow-primary/80 text-white" aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}>
-                    {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+              )}
+              <div className="hidden items-center gap-2 md:flex">
+                <button
+                  onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                  className={iconButtonClass}
+                  aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}
+                >
+                  {theme === 'dark' ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
                 </button>
-
-                {/* Language Selector */}
                 <div className="relative" ref={languageMenuRef}>
-                    <button onClick={() => setLanguageOpen(!isLanguageOpen)} className="p-2 rounded-full hover:bg-nextrow-primary/80 text-white" aria-label={t('select_language')}>
-                        <LanguageIcon />
-                    </button>
-                    {isLanguageOpen && (
-                        <div className="absolute right-0 rtl:left-0 rtl:right-auto mt-2 w-32 bg-white dark:bg-gray-800 rounded-md shadow-lg border dark:border-gray-700 z-10">
-                            <ul className="py-1">
-                                <li><button onClick={() => { setLanguage('en'); setLanguageOpen(false); }} className="w-full text-start px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">English</button></li>
-                                <li><button onClick={() => { setLanguage('ar'); setLanguageOpen(false); }} className="w-full text-start px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">العربية</button></li>
-                            </ul>
-                        </div>
-                    )}
+                  <button
+                    onClick={() => setLanguageOpen(!isLanguageOpen)}
+                    className={iconButtonClass}
+                    aria-label={t('select_language')}
+                  >
+                    <LanguageIcon className="h-5 w-5" />
+                  </button>
+                  {isLanguageOpen && (
+                    <div
+                      className={`absolute mt-2 w-36 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95 ${
+                        isRTL ? 'left-0' : 'right-0'
+                      }`}
+                    >
+                      <ul className="space-y-1">
+                        <li>
+                          <button
+                            onClick={() => {
+                              setLanguage('en');
+                              setLanguageOpen(false);
+                            }}
+                            className={`w-full rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                              language === 'en'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-100'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-800/60'
+                            }`}
+                          >
+                            English
+                          </button>
+                        </li>
+                        <li>
+                          <button
+                            onClick={() => {
+                              setLanguage('ar');
+                              setLanguageOpen(false);
+                            }}
+                            className={`w-full rounded-xl px-3 py-2 text-sm font-semibold transition ${
+                              language === 'ar'
+                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-500/20 dark:text-blue-100'
+                                : 'text-slate-600 hover:bg-slate-100 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-800/60'
+                            }`}
+                          >
+                            العربية
+                          </button>
+                        </li>
+                      </ul>
+                    </div>
+                  )}
                 </div>
+                <span className="inline-flex items-center rounded-full bg-blue-600/20 px-3 py-1 text-xs font-bold uppercase text-blue-700 dark:bg-blue-500/20 dark:text-blue-100">
+                  {language?.toUpperCase()}
+                </span>
+              </div>
+              {profile && (
+                <button
+                  onClick={() => setMobileMenuOpen(!isMobileMenuOpen)}
+                  className={`${iconButtonClass} md:hidden`}
+                  aria-label={t('toggle_navigation')}
+                >
+                  {isMobileMenuOpen ? <XMarkIcon className="h-5 w-5" /> : <Bars3Icon className="h-5 w-5" />}
+                </button>
+              )}
             </div>
-
-             {/* Mobile-only Hamburger Menu Button */}
-            {profile && (
-                <div className="md:hidden">
-                    <button onClick={() => setMobileMenuOpen(!isMobileMenuOpen)} className="p-2 rounded-full hover:bg-nextrow-primary/80 text-white" aria-label={t('toggle_navigation')}>
-                        {isMobileMenuOpen ? <XMarkIcon className="w-6 h-6"/> : <Bars3Icon className="w-6 h-6"/>}
-                    </button>
-                </div>
-            )}
+          </div>
+          {profile && (
+            <nav className="hidden md:block">
+              <div
+                className={`no-scrollbar flex items-center gap-2 overflow-x-auto overflow-y-visible rounded-3xl border border-slate-200 bg-slate-50/80 px-2 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800/40 ${
+                  isRTL ? 'justify-end' : 'justify-start'
+                }`}
+              >
+                {navLinks
+                  .filter((link) => hasPermission(link.permission))
+                  .map(({ page, label, Icon, isVisuallyDistinct }) => (
+                    <a
+                      key={page}
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPage(page);
+                      }}
+                      className={`${getNavLinkClasses(page, isVisuallyDistinct)} gap-2`}
+                    >
+                      <Icon className="h-5 w-5" />
+                      {label}
+                    </a>
+                  ))}
+                {canViewSiteManagement && (
+                  <button
+                    ref={siteMgmtButtonRef}
+                    onClick={() => {
+                      setSiteMgmtOpen((prev) => !prev);
+                      if (!isSiteMgmtOpen) {
+                        updateSiteMgmtMenuPosition();
+                      }
+                    }}
+                    className={`${siteManagementButtonClasses} gap-2`}
+                  >
+                    {t('site_management')}
+                    <ChevronDownIcon className="h-4 w-4 rtl:rotate-180" />
+                  </button>
+                )}
+              </div>
+            </nav>
+          )}
         </div>
-        </header>
-
-        {/* Mobile Menu Panel */}
-        {isMobileMenuOpen && profile && (
-            <div className="md:hidden absolute top-[56px] left-0 right-0 bg-nextrow-dark dark:bg-gray-800 shadow-lg z-10 p-4 border-t border-nextrow-primary/50 dark:border-gray-700">
-                <nav className="flex flex-col space-y-1">
-                    {navLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon, isVisuallyDistinct }) => (
-                         <a key={page} href="#" onClick={(e) => { e.preventDefault(); setPage(page); setMobileMenuOpen(false); }}
-                            className={`flex items-center gap-3 p-3 text-base font-medium rounded-md ${
-                                isVisuallyDistinct
-                                ? (currentPage === page ? 'bg-amber-400 text-black' : 'bg-amber-300/80 dark:bg-amber-500/80 text-black hover:bg-amber-400')
-                                : (currentPage === page ? 'bg-white dark:bg-gray-700 text-nextrow-primary dark:text-white' : 'text-white/80 hover:bg-nextrow-primary/80 hover:text-white')
-                            }`}>
-                            <Icon className="w-6 h-6" />
-                            {label}
-                        </a>
-                    ))}
-                    
-                    {canViewSiteManagement && (
-                        <>
-                            <hr className="border-nextrow-primary/50 dark:border-gray-600 my-2" />
-                            <h3 className="px-3 pt-2 pb-1 text-xs font-semibold text-white/70 dark:text-gray-400 uppercase tracking-wider">{t('site_management')}</h3>
-                             {siteManagementLinks.filter(link => hasPermission(link.permission)).map(({ page, label, Icon }) => (
-                                <a key={page} href="#" onClick={(e) => { e.preventDefault(); setPage(page); setMobileMenuOpen(false); }}
-                                    className={`flex items-center gap-3 p-3 text-base font-medium rounded-md ${currentPage === page ? 'bg-white dark:bg-gray-700 text-nextrow-primary dark:text-white' : 'text-white/80 hover:bg-nextrow-primary/80 hover:text-white'}`}>
-                                    <Icon className="w-6 h-6" />
-                                    {label}
-                                </a>
-                            ))}
-                        </>
-                    )}
-
-                    {/* Controls */}
-                    <hr className="border-nextrow-primary/50 dark:border-gray-600 my-2" />
-                    <div className="px-3 py-2 flex justify-between items-center text-white/80">
-                        <span>{t('theme')}</span>
-                        <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 rounded-full hover:bg-nextrow-primary/80" aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}>
-                            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-                        </button>
-                    </div>
-                     <div className="px-3 py-2 flex justify-between items-center text-white/80">
-                        <span>{t('language')}</span>
-                        <div className="flex gap-2">
-                            {/* FIX: Removed erroneous function calls on the `language` string variable. The `language` variable is a string, not a function. */}
-                            <button onClick={() => { setLanguage('en'); setMobileMenuOpen(false); }} className={`px-3 py-1 text-sm font-bold rounded ${language === 'en' ? 'bg-white text-nextrow-primary' : 'bg-nextrow-primary/80 hover:bg-nextrow-primary'}`}>EN</button>
-                            <button onClick={() => { setLanguage('ar'); setMobileMenuOpen(false); }} className={`px-3 py-1 text-sm font-bold rounded ${language === 'ar' ? 'bg-white text-nextrow-primary' : 'bg-nextrow-primary/80 hover:bg-nextrow-primary'}`}>AR</button>
-                        </div>
-                    </div>
-                </nav>
+      </header>
+      {isMobileMenuOpen && profile && (
+        <div className="border-b border-slate-200 bg-white/95 p-4 shadow-lg dark:border-slate-800 dark:bg-slate-900/95 md:hidden">
+          <nav className="flex flex-col gap-2">
+            {navLinks
+              .filter((link) => hasPermission(link.permission))
+              .map(({ page, label, Icon, isVisuallyDistinct }) => (
+                <a
+                  key={page}
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setPage(page);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`${getNavLinkClasses(page, isVisuallyDistinct)} w-full justify-between text-base`}
+                >
+                  <span className="flex items-center gap-3">
+                    <Icon className="h-5 w-5" />
+                    {label}
+                  </span>
+                </a>
+              ))}
+            {canViewSiteManagement && (
+              <>
+                <hr className="border-slate-200 dark:border-slate-700" />
+                <h3 className="px-1 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  {t('site_management')}
+                </h3>
+                {siteManagementLinks.filter((link) => hasPermission(link.permission)).map(({ page, label, Icon }) => (
+                  <a
+                    key={page}
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setPage(page);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`${navPillBase} w-full justify-start border border-transparent text-base text-slate-600 hover:border-blue-100 hover:bg-slate-100 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-800/70 dark:hover:text-white`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {label}
+                  </a>
+                ))}
+              </>
+            )}
+            <hr className="border-slate-200 dark:border-slate-700" />
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+              <span>{t('theme')}</span>
+              <button
+                onClick={() => {
+                  setTheme(theme === 'dark' ? 'light' : 'dark');
+                }}
+                className={iconButtonClass}
+                aria-label={theme === 'dark' ? t('light_theme') : t('dark_theme')}
+              >
+                {theme === 'dark' ? <SunIcon className="h-5 w-5" /> : <MoonIcon className="h-5 w-5" />}
+              </button>
             </div>
-        )}
-        <style>{`
-            @keyframes fade-in-down {
-                from { opacity: 0; transform: translateY(-10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            .animate-fade-in-down {
-                animation: fade-in-down 0.2s ease-out forwards;
-            }
-        `}</style>
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-sm font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/40 dark:text-slate-300">
+              <span>{t('language')}</span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setLanguage('en');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`rounded-full px-3 py-1 text-sm font-bold transition ${
+                    language === 'en'
+                      ? 'bg-blue-600 text-white shadow-sm dark:bg-blue-500'
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  EN
+                </button>
+                <button
+                  onClick={() => {
+                    setLanguage('ar');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`rounded-full px-3 py-1 text-sm font-bold transition ${
+                    language === 'ar'
+                      ? 'bg-blue-600 text-white shadow-sm dark:bg-blue-500'
+                      : 'bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+                  }`}
+                >
+                  AR
+                </button>
+              </div>
+            </div>
+          </nav>
+        </div>
+      )}
+      <style>{`
+        @keyframes fade-in-down {
+          from { opacity: 0; transform: translateY(-10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-down {
+          animation: fade-in-down 0.2s ease-out forwards;
+        }
+        .no-scrollbar {
+          scrollbar-width: none;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+          display: none;
+        }
+      `}</style>
+      {canUsePortal && canViewSiteManagement && isSiteMgmtOpen && siteMgmtMenuStyles &&
+        createPortal(
+          <div
+            ref={siteMgmtMenuRef}
+            style={{
+              position: 'absolute',
+              top: `${siteMgmtMenuStyles.top}px`,
+              left: `${siteMgmtMenuStyles.left}px`,
+              zIndex: 2000,
+            }}
+            className="w-64 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/95"
+          >
+            <ul className="space-y-1">
+              {siteManagementLinks.filter((link) => hasPermission(link.permission)).length > 0 ? (
+                siteManagementLinks
+                  .filter((link) => hasPermission(link.permission))
+                  .map(({ page, label, Icon }) => (
+                    <li key={page}>
+                      <a
+                        href="#"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          setPage(page);
+                          setSiteMgmtOpen(false);
+                        }}
+                        className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-blue-700 dark:text-slate-300 dark:hover:bg-slate-800/60 dark:hover:text-white"
+                      >
+                        <Icon className="h-5 w-5" />
+                        {label}
+                      </a>
+                    </li>
+                  ))
+              ) : (
+                <li className="rounded-xl bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                  {t('no_permissions')}
+                </li>
+              )}
+            </ul>
+          </div>,
+          document.body
+        )
+      }
     </>
   );
 };
