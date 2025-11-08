@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, memo } from 'react';
+import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { supabase } from '../../services/supabaseClient';
 import type { DailyWatchlistItem, PageState } from '../../types';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -267,9 +267,21 @@ interface DailyWatchlistProps {
 }
 
 const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
-    const { t } = useLanguage();
+    const { t, language } = useLanguage();
     const { isFavorite, toggleFavorite } = useFavorites();
     const { settings } = useAppSettings();
+
+    const resolveTranslation = useCallback(
+        (key: string, fallbackEn: string, fallbackAr: string) => {
+            const value = t(key);
+            if (!value || value === key) {
+                return language === 'ar' ? fallbackAr : fallbackEn;
+            }
+            return value;
+        },
+        [t, language]
+    );
+
     const [data, setData] = useState<DailyWatchlistItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -280,6 +292,9 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
+
+    const favoritesLabel = resolveTranslation('favorites', 'Favorites', 'المفضلة');
+    const searchPlaceholder = resolveTranslation('search_by_symbol_or_name', 'Search by symbol or name...', 'ابحث بالرمز أو الاسم...');
 
     useEffect(() => {
         let isMounted = true;
@@ -473,7 +488,7 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
             {/* Search and Filters Tools */}
             <div className="flex justify-center">
                 <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-                    <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+                    <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                         <button
                             onClick={() => setShowFavorites(!showFavorites)}
                             className={`flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border ${
@@ -483,13 +498,13 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
                             }`}
                         >
                             <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
-                            {t('favorites')}
+                            {favoritesLabel}
                         </button>
 
                         <div className="flex-1 relative">
                             <input 
                                 type="text"
-                                placeholder={t('search_by_symbol_or_name')}
+                                placeholder={searchPlaceholder}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-900 dark:border-gray-700 dark:text-white"
@@ -499,11 +514,6 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
                                     <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
                                 </svg>
                             </span>
-                        </div>
-
-                        <div className="hidden lg:flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400">
-                            <SparklesIcon className="w-4 h-4" />
-                            <span>{t('daily_watchlist_filters_hint') || 'استخدم البحث أو المفضلة لتضييق النتائج'}</span>
                         </div>
                     </div>
                 </div>

@@ -282,6 +282,17 @@ const NasdaqSnapshot: React.FC<NasdaqSnapshotProps> = ({ setPage }) => {
     );
   };
 
+  const resolveTranslation = (key: string, fallbackEn: string, fallbackAr: string) => {
+    const value = t(key);
+    if (!value || value === key) {
+      return language === 'ar' ? fallbackAr : fallbackEn;
+    }
+    return value;
+  };
+
+  const favoritesLabel = resolveTranslation('favorites', 'Favorites', 'المفضلة');
+  const searchPlaceholder = resolveTranslation('search_by_symbol_or_name', 'Search by symbol or name...', 'ابحث بالرمز أو الاسم...');
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -417,11 +428,38 @@ const NasdaqSnapshot: React.FC<NasdaqSnapshotProps> = ({ setPage }) => {
             </div>
           </header>
 
-          <div className="flex flex-col lg:flex-row lg:items-center gap-3">
-            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-md p-1">
+          <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+            <button
+              onClick={() => setShowFavorites((prev) => !prev)}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+                showFavorites
+                  ? 'bg-yellow-400 border-yellow-400 text-black shadow'
+                  : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
+              {favoritesLabel}
+            </button>
+
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder={searchPlaceholder}
+                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-900 dark:border-gray-700 dark:text-white"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
+                </svg>
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-full p-1">
               <button
                 onClick={() => setResultFilter('all')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
                   resultFilter === 'all'
                     ? 'bg-white dark:bg-gray-700 shadow text-gray-900 dark:text-gray-100'
                     : 'text-gray-600 dark:text-gray-300'
@@ -431,7 +469,7 @@ const NasdaqSnapshot: React.FC<NasdaqSnapshotProps> = ({ setPage }) => {
               </button>
               <button
                 onClick={() => setResultFilter('hits')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
                   resultFilter === 'hits'
                     ? 'bg-white dark:bg-gray-700 shadow text-green-600 dark:text-green-300'
                     : 'text-gray-600 dark:text-gray-300'
@@ -441,34 +479,13 @@ const NasdaqSnapshot: React.FC<NasdaqSnapshotProps> = ({ setPage }) => {
               </button>
               <button
                 onClick={() => setResultFilter('misses')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+                className={`px-4 py-1.5 text-xs font-semibold rounded-full transition-all ${
                   resultFilter === 'misses'
                     ? 'bg-white dark:bg-gray-700 shadow text-rose-600 dark:text-rose-300'
                     : 'text-gray-600 dark:text-gray-300'
                 }`}
               >
                 {t('incorrect_forecasts')}
-              </button>
-            </div>
-
-            <div className="flex-1 flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder={t('search_by_symbol_or_name')}
-                className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-800 dark:border-gray-600 dark:text-white"
-              />
-              <button
-                onClick={() => setShowFavorites((prev) => !prev)}
-                className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-medium rounded-md border transition-colors ${
-                  showFavorites
-                    ? 'bg-yellow-400 border-yellow-400 text-black'
-                    : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
-                {t('favorites_filter')}
               </button>
             </div>
           </div>
