@@ -231,7 +231,7 @@ const App: React.FC = () => {
         case 'what_happened':
           return hasPermission('view:what_happened') ? <WhatHappened /> : <AccessDenied />;
         case 'nasdaq_snapshot':
-          return hasPermission('view:nasdaq_snapshot') ? <NasdaqSnapshot /> : <AccessDenied />;
+          return hasPermission('view:nasdaq_snapshot') ? <NasdaqSnapshot setPage={setCurrentPage} /> : <AccessDenied />;
         case 'stock_details':
           if (typeof currentPage === 'object' && hasPermission('view:stock_analysis')) {
             return <StockDetails symbol={currentPage.symbol} setPage={setCurrentPage} />;

@@ -473,31 +473,38 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
             {/* Search and Filters Tools */}
             <div className="flex justify-center">
                 <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
-                    <div className="space-y-4">
-                        {/* Search */}
-                        <div className="relative">
+                    <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
+                        <button
+                            onClick={() => setShowFavorites(!showFavorites)}
+                            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all border ${
+                                showFavorites
+                                    ? 'bg-yellow-400 border-yellow-400 text-black shadow'
+                                    : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+                            }`}
+                        >
+                            <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
+                            {t('favorites')}
+                        </button>
+
+                        <div className="flex-1 relative">
                             <input 
                                 type="text"
                                 placeholder={t('search_by_symbol_or_name')}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
+                                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 rounded-full shadow-sm focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-900 dark:border-gray-700 dark:text-white"
                             />
-                            <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M18 10.5a7.5 7.5 0 1 1-15 0 7.5 7.5 0 0 1 15 0Z" />
+                                </svg>
+                            </span>
                         </div>
-                        
-                        {/* Favorites Filter */}
-                        <button
-                            onClick={() => setShowFavorites(!showFavorites)}
-                            className={`w-full px-4 py-3 rounded-md text-sm font-medium transition-all ${
-                                showFavorites 
-                                    ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
-                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-200 dark:hover:bg-gray-600'
-                            }`}
-                        >
-                            <StarIcon className={`w-4 h-4 inline mr-1 ${showFavorites ? 'fill-current' : ''}`} />
-                            {t('favorites')}
-                        </button>
+
+                        <div className="hidden lg:flex items-center gap-2 bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            <SparklesIcon className="w-4 h-4" />
+                            <span>{t('daily_watchlist_filters_hint') || 'استخدم البحث أو المفضلة لتضييق النتائج'}</span>
+                        </div>
                     </div>
                 </div>
             </div>
