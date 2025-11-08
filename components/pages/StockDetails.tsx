@@ -484,7 +484,8 @@ const Tooltip: React.FC<{ data: ForecastCheckHistoryItem; x: number; y: number; 
     const tooltipHeight = 130;
     const isRight = x > chartWidth / 2;
     const tooltipX = Math.max(0, isRight ? x - tooltipWidth - 16 : Math.min(x + 16, chartWidth - tooltipWidth));
-    const tooltipY = Math.max(0, Math.min(y - tooltipHeight - 12, chartHeight - tooltipHeight - 16));
+    const centeredY = y - tooltipHeight / 2;
+    const tooltipY = Math.max(16, Math.min(centeredY, chartHeight - tooltipHeight - 16));
     
     return (
         <div 
