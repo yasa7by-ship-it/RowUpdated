@@ -456,7 +456,13 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
                 </g>
             </svg>
             {hoveredIndex !== null && (
-                <Tooltip data={sortedData[hoveredIndex]} x={scaleX(hoveredIndex) + padding.left} chartWidth={width} />
+                <Tooltip 
+                    data={sortedData[hoveredIndex]} 
+                    x={scaleX(hoveredIndex) + padding.left}
+                    y={padding.top + scaleY(Math.max(sortedData[hoveredIndex].actual_high, sortedData[hoveredIndex].predicted_hi))}
+                    chartWidth={width}
+                    chartHeight={height}
+                />
             )}
             <div className="flex justify-center items-center gap-6 mt-4 text-sm text-gray-600 dark:text-gray-400">
                 <div className="flex items-center gap-2">
@@ -472,14 +478,19 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
     );
 };
 
-const Tooltip: React.FC<{ data: ForecastCheckHistoryItem; x: number; chartWidth: number }> = ({ data, x, chartWidth }) => {
+const Tooltip: React.FC<{ data: ForecastCheckHistoryItem; x: number; y: number; chartWidth: number; chartHeight: number }> = ({ data, x, y, chartWidth, chartHeight }) => {
     const { t } = useLanguage();
     const tooltipWidth = 200;
+    const tooltipHeight = 130;
     const isRight = x > chartWidth / 2;
-    const tooltipX = isRight ? x - tooltipWidth - 10 : x + 10;
+    const tooltipX = Math.max(0, isRight ? x - tooltipWidth - 16 : Math.min(x + 16, chartWidth - tooltipWidth));
+    const tooltipY = Math.max(0, Math.min(y - tooltipHeight - 12, chartHeight - tooltipHeight - 16));
     
     return (
-        <div className="absolute top-0 pointer-events-none transition-transform duration-100" style={{ transform: `translateX(${tooltipX}px)`, width: tooltipWidth }}>
+        <div 
+            className="absolute pointer-events-none transition-transform duration-100"
+            style={{ transform: `translate(${tooltipX}px, ${tooltipY}px)`, width: tooltipWidth }}
+        >
             <div className="p-3 bg-gray-800 dark:bg-gray-900 text-white rounded-lg shadow-lg border border-gray-700">
                 <p className="font-bold mb-2">{formatDate(data.forecast_date)}</p>
                 <div className="text-xs space-y-1">
