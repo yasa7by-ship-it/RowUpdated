@@ -1,5 +1,5 @@
-const CACHE_NAME = 'mrowdir-cache-v2';
-const STATIC_CACHE_NAME = 'mrowdir-static-v2';
+const CACHE_NAME = 'trendview-cache-v1';
+const STATIC_CACHE_NAME = 'trendview-static-v1';
 const urlsToCache = [
   '/',
   '/index.html',

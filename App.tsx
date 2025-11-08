@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react';
 import Layout from './components/Layout';
 import MobileLayout from './components/MobileLayout';
 import AccessDenied from './components/AccessDenied';
@@ -43,6 +43,15 @@ const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<PageState>('landing');
   const { direction, t, language } = useLanguage();
   const isMobile = useIsMobile();
+  const fallbackSiteTitle = 'Trendview';
+
+  const resolvedSiteTitle = useMemo(() => {
+    const translated = t('site_title');
+    if (!translated || translated === 'site_title') {
+      return fallbackSiteTitle;
+    }
+    return translated;
+  }, [t, language]);
 
   useEffect(() => {
     document.documentElement.dir = direction;
@@ -74,16 +83,18 @@ const App: React.FC = () => {
       nasdaq_snapshot: 'nasdaq_snapshot',
     };
     const titleKey = pageTitleKeyMap[currentPageName];
+    const rawPageTitle = t(titleKey);
+    const pageTitle = (!rawPageTitle || rawPageTitle === titleKey) ? resolvedSiteTitle : rawPageTitle;
+    const siteTitle = resolvedSiteTitle;
     document.title = (currentPageName === 'landing' || !session) 
-        ? t(titleKey)
-        : `${t(titleKey)} | ${t('site_title')}`;
-  }, [currentPageName, t, language, session]);
+        ? pageTitle
+        : `${pageTitle} | ${siteTitle}`;
+  }, [currentPageName, t, language, session, resolvedSiteTitle]);
 
   // Effect to dynamically update PWA manifest and title
   useEffect(() => {
-    const siteTitle = t('site_title');
-    // Don't run if translation isn't ready or it's the default key
-    if (!siteTitle || siteTitle === 'site_title') return;
+    const siteTitle = resolvedSiteTitle;
+    if (!siteTitle) return;
 
     // Detect device type
     const isMobile = isMobileDevice();
@@ -128,7 +139,7 @@ const App: React.FC = () => {
       manifestLink.setAttribute('href', manifestUrl);
     }
 
-  }, [t, language]);
+  }, [resolvedSiteTitle]);
 
   // Effect to handle page access control and redirection
   useEffect(() => {

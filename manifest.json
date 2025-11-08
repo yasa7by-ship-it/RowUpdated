@@ -1,6 +1,6 @@
 {
-  "short_name": "MRowDir",
-  "name": "MRowDir - Stock Predictions",
+  "short_name": "Trendview",
+  "name": "Trendview",
   "description": "Professional and visually engaging stock price predictions for the U.S. markets.",
   "icons": [
     {
@@ -22,7 +22,7 @@
     }
   ],
   "start_url": "/",
-  "display": "browser",
+  "display": "standalone",
   "orientation": "portrait-primary",
   "scope": "/",
   "theme_color": "#2d5aa0",
