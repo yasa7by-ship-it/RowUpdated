@@ -463,10 +463,9 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
 
     // Standard web layout for all devices (mobile and desktop)
     return (
-        <div className="space-y-6">
+        <div className="flex flex-col items-center gap-6">
             {/* Header - بطاقة توقعات ليوم */}
-            <div className="flex justify-center">
-                <div className="w-full max-w-3xl">
+            <div className="w-full max-w-2xl">
                     <DateCard 
                         title={nextForecastDate ? t('forecasts_for') : t('daily_watchlist')}
                         date={nextForecastDate ? formatDate(nextForecastDate) : undefined}
@@ -483,11 +482,9 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
                         </p>
                     )}
                 </div>
-            </div>
 
             {/* Search and Filters Tools */}
-            <div className="flex justify-center">
-                <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
+            <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
                     <div className="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
                         <button
                             onClick={() => setShowFavorites(!showFavorites)}
@@ -517,12 +514,10 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
                         </div>
                     </div>
                 </div>
-            </div>
 
             {/* Table */}
             {filteredData.length > 0 ? (
-                <div className="flex justify-center">
-                    <div className="w-full max-w-3xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full">
                             <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
@@ -666,7 +661,6 @@ const DailyWatchlist: React.FC<DailyWatchlistProps> = ({ setPage }) => {
                             </div>
                         )}
                     </div>
-                </div>
             ) : data.length === 0 && !loading && !error ? (
                 <div className="text-center py-16 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
                     <ChartBarIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
