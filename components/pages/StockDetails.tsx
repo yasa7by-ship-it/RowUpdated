@@ -355,15 +355,31 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
     const barGroupWidth = (chartWidth / (sortedData.length > 1 ? sortedData.length - 1 : 1)) * 0.7;
     const barWidth = barGroupWidth / 2;
 
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const svgRef = useRef<SVGSVGElement | null>(null);
-    const [svgSize, setSvgSize] = useState<{ width: number; height: number }>({ width, height });
+    const [layout, setLayout] = useState({
+        svgWidth: width,
+        svgHeight: height,
+        svgOffsetX: 0,
+        svgOffsetY: 0,
+        containerWidth: width,
+        containerHeight: height,
+    });
 
     useEffect(() => {
         const updateSize = () => {
-            if (!svgRef.current) return;
-            const rect = svgRef.current.getBoundingClientRect();
-            if (rect.width && rect.height) {
-                setSvgSize({ width: rect.width, height: rect.height });
+            if (!svgRef.current || !containerRef.current) return;
+            const svgRect = svgRef.current.getBoundingClientRect();
+            const containerRect = containerRef.current.getBoundingClientRect();
+            if (svgRect.width && svgRect.height) {
+                setLayout({
+                    svgWidth: svgRect.width,
+                    svgHeight: svgRect.height,
+                    svgOffsetX: svgRect.left - containerRect.left,
+                    svgOffsetY: svgRect.top - containerRect.top,
+                    containerWidth: containerRect.width,
+                    containerHeight: containerRect.height,
+                });
             }
         };
 
@@ -371,7 +387,7 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
 
         if (typeof ResizeObserver !== 'undefined') {
             const observer = new ResizeObserver(() => updateSize());
-            if (svgRef.current) observer.observe(svgRef.current);
+            if (containerRef.current) observer.observe(containerRef.current);
             return () => observer.disconnect();
         } else {
             window.addEventListener('resize', updateSize);
@@ -379,11 +395,11 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
         }
     }, []);
 
-    const scaleXFactor = svgSize.width / width;
-    const scaleYFactor = svgSize.height / height;
+    const scaleXFactor = layout.svgWidth / width;
+    const scaleYFactor = layout.svgHeight / height;
 
     return (
-        <div className="relative">
+        <div className="relative" ref={containerRef}>
             <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
                 <g transform={`translate(${padding.left}, ${padding.top})`}>
                     {/* Y-axis grid lines and labels */}
@@ -485,10 +501,10 @@ const RangeBarChart: React.FC<{ data: StockDetailsPageData['forecast_history']; 
             {hoveredIndex !== null && (
                 <Tooltip 
                     data={sortedData[hoveredIndex]} 
-                    x={(scaleX(hoveredIndex) + padding.left) * scaleXFactor}
-                    y={(padding.top + scaleY(Math.max(sortedData[hoveredIndex].actual_high, sortedData[hoveredIndex].predicted_hi))) * scaleYFactor}
-                    chartWidth={svgSize.width}
-                    chartHeight={svgSize.height}
+                    x={layout.svgOffsetX + (scaleX(hoveredIndex) + padding.left) * scaleXFactor}
+                    y={layout.svgOffsetY + (padding.top + scaleY(Math.max(sortedData[hoveredIndex].actual_high, sortedData[hoveredIndex].predicted_hi))) * scaleYFactor}
+                    chartWidth={layout.containerWidth}
+                    chartHeight={layout.containerHeight}
                 />
             )}
             <div className="flex justify-center items-center gap-6 mt-4 text-sm text-gray-600 dark:text-gray-400">
@@ -510,14 +526,15 @@ const Tooltip: React.FC<{ data: ForecastCheckHistoryItem; x: number; y: number; 
     const tooltipWidth = 200;
     const tooltipHeight = 130;
     const isRight = x > chartWidth / 2;
-    const tooltipX = Math.max(16, Math.min(isRight ? x - tooltipWidth - 16 : x + 16, chartWidth - tooltipWidth - 16));
-    const centeredY = y - tooltipHeight / 2;
-    const tooltipY = Math.max(16, Math.min(centeredY, chartHeight - tooltipHeight - 16));
+    const rawX = isRight ? x - tooltipWidth - 12 : x + 12;
+    const rawY = y - tooltipHeight - 12;
+    const tooltipX = Math.max(16, Math.min(rawX, chartWidth - tooltipWidth - 16));
+    const tooltipY = Math.max(16, Math.min(rawY, chartHeight - tooltipHeight - 16));
     
     return (
         <div 
-            className="absolute pointer-events-none transition-transform duration-100"
-            style={{ transform: `translate(${tooltipX}px, ${tooltipY}px)`, width: tooltipWidth }}
+            className="absolute pointer-events-none transition-all duration-100"
+            style={{ left: tooltipX, top: tooltipY, width: tooltipWidth }}
         >
             <div className="p-3 bg-gray-800 dark:bg-gray-900 text-white rounded-lg shadow-lg border border-gray-700">
                 <p className="font-bold mb-2">{formatDate(data.forecast_date)}</p>
