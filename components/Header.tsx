@@ -563,43 +563,45 @@ const Header: React.FC<{
             </div>
           </div>
           {profile && (
-            <nav className="hidden md:block">
-              <div
-                className={`no-scrollbar flex items-center gap-2 overflow-x-auto overflow-y-visible rounded-3xl border border-slate-200 bg-slate-50/80 px-2 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800/40 ${
-                  isRTL ? 'justify-end' : 'justify-start'
-                }`}
-              >
-                {navLinks
-                  .filter((link) => hasPermission(link.permission))
-                  .map(({ page, label, Icon, isVisuallyDistinct }) => (
-                    <a
-                      key={page}
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setPage(page);
-                      }}
-                      className={`${getNavLinkClasses(page, isVisuallyDistinct)} gap-2`}
-                    >
-                      <Icon className="h-5 w-5" />
-                      {label}
-                    </a>
-                  ))}
-                {canViewSiteManagement && (
-                  <button
-                    ref={siteMgmtButtonRef}
-                    onClick={() => {
-                      setSiteMgmtOpen((prev) => !prev);
-                      if (!isSiteMgmtOpen) {
-                        updateSiteMgmtMenuPosition();
-                      }
-                    }}
-                    className={`${siteManagementButtonClasses} gap-2`}
-                  >
-                    {t('site_management')}
-                    <ChevronDownIcon className="h-4 w-4 rtl:rotate-180" />
-                  </button>
-                )}
+            <nav className="hidden md:flex justify-center">
+              <div className="relative w-full max-w-5xl">
+                <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-8 bg-gradient-to-r from-white via-white/25 to-transparent dark:from-slate-900 dark:via-slate-900/25" />
+                <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-8 bg-gradient-to-l from-white via-white/25 to-transparent dark:from-slate-900 dark:via-slate-900/25" />
+                <div className="no-scrollbar relative flex items-center justify-center gap-2 overflow-x-auto overflow-y-visible rounded-3xl border border-slate-200 bg-slate-50/80 px-6 py-2 shadow-sm dark:border-slate-700 dark:bg-slate-800/40">
+                  <div className="flex min-w-max items-center justify-center gap-2">
+                    {navLinks
+                      .filter((link) => hasPermission(link.permission))
+                      .map(({ page, label, Icon, isVisuallyDistinct }) => (
+                        <a
+                          key={page}
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            setPage(page);
+                          }}
+                          className={`${getNavLinkClasses(page, isVisuallyDistinct)} gap-2`}
+                        >
+                          <Icon className="h-5 w-5" />
+                          {label}
+                        </a>
+                      ))}
+                    {canViewSiteManagement && (
+                      <button
+                        ref={siteMgmtButtonRef}
+                        onClick={() => {
+                          setSiteMgmtOpen((prev) => !prev);
+                          if (!isSiteMgmtOpen) {
+                            updateSiteMgmtMenuPosition();
+                          }
+                        }}
+                        className={`${siteManagementButtonClasses} gap-2`}
+                      >
+                        {t('site_management')}
+                        <ChevronDownIcon className="h-4 w-4 rtl:rotate-180" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
             </nav>
           )}
