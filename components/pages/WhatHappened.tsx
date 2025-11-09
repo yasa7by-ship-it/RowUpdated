@@ -690,18 +690,6 @@ const WhatHappened: React.FC = () => {
     []
   );
 
-  const visiblePatterns = useMemo(() => (details?.patterns ?? []).slice(0, 4), [details]);
-  const remainingPatterns = Math.max(0, (details?.patterns?.length ?? 0) - visiblePatterns.length);
-
-  const visibleUpcomingForecasts = useMemo(() => (details?.forecasts ?? []).slice(0, 4), [details]);
-  const remainingUpcomingForecasts = Math.max(0, (details?.forecasts?.length ?? 0) - visibleUpcomingForecasts.length);
-
-  const visibleForecastHistory = useMemo(() => (details?.forecast_history ?? []).slice(0, 4), [details]);
-  const remainingForecastHistory = Math.max(0, (details?.forecast_history?.length ?? 0) - visibleForecastHistory.length);
-
-  const visibleHistoricalSeries = useMemo(() => (details?.historical_series ?? []).slice(0, 5), [details]);
-  const remainingHistoricalSeries = Math.max(0, (details?.historical_series?.length ?? 0) - visibleHistoricalSeries.length);
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1041,120 +1029,8 @@ const WhatHappened: React.FC = () => {
                     );
                   })}
                 </div>
+                
 
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_patterns')}</h4>
-                      <span className="text-[9px] text-gray-400">{t('column_result')}</span>
-                    </div>
-                    {visiblePatterns.length === 0 ? (
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                    ) : (
-                      <ul className="space-y-1.5">
-                        {visiblePatterns.map((pattern) => (
-                          <li key={`${pattern.pattern_name}-${pattern.date}`} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
-                            <div className="flex items-center gap-1.5">
-                              <span className={`w-1.5 h-1.5 rounded-full ${pattern.bullish ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                              <span className="font-semibold text-gray-800 dark:text-gray-100">{pattern.pattern_name}</span>
-                            </div>
-                            <span className="text-gray-500 dark:text-gray-400">{pattern.date}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {remainingPatterns > 0 && (
-                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingPatterns}</div>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_upcoming_forecasts')}</h4>
-                      <span className="text-[9px] text-gray-400">{t('column_range')}</span>
-                    </div>
-                    {visibleUpcomingForecasts.length === 0 ? (
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                    ) : (
-                      <ul className="space-y-1.5">
-                        {visibleUpcomingForecasts.map((forecast) => (
-                          <li key={forecast.forecast_date} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
-                            <span className="font-semibold text-gray-800 dark:text-gray-100">{forecast.forecast_date}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-200 font-semibold">
-                                {formatNumber(forecast.predicted_price)}
-                              </span>
-                              <span className="text-gray-500 dark:text-gray-400">
-                                {formatNumber(forecast.predicted_lo)}
-                                <span className="mx-1">-</span>
-                                {formatNumber(forecast.predicted_hi)}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {remainingUpcomingForecasts > 0 && (
-                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingUpcomingForecasts}</div>
-                    )}
-                  </div>
-
-                  <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_forecast_history')}</h4>
-                      <span className="text-[9px] text-gray-400">{t('column_result')}</span>
-                    </div>
-                    {visibleForecastHistory.length === 0 ? (
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                    ) : (
-                      <ul className="space-y-1.5">
-                        {visibleForecastHistory.map((history) => (
-                          <li key={history.forecast_date} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
-                            <span className="font-semibold text-gray-800 dark:text-gray-100">{history.forecast_date}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-gray-500 dark:text-gray-400">
-                                {formatNumber(history.predicted_lo)}
-                                <span className="mx-1">-</span>
-                                {formatNumber(history.predicted_hi)}
-                              </span>
-                              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${history.hit_range ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300'}`}>
-                                {history.hit_range ? t('hit') : t('miss')}
-                              </span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {remainingForecastHistory > 0 && (
-                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingForecastHistory}</div>
-                    )}
-                  </div>
-
-                  <div className="md:col-span-2 xl:col-span-1 rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900/60 p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-[11px] font-semibold text-gray-900 dark:text-white">{t('what_happened_recent_prices')}</h4>
-                      <span className="text-[9px] text-gray-400">{t('column_volume')}</span>
-                    </div>
-                    {visibleHistoricalSeries.length === 0 ? (
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('what_happened_pattern_none')}</p>
-                    ) : (
-                      <ul className="space-y-1.5">
-                        {visibleHistoricalSeries.map((row) => (
-                          <li key={row.date} className="flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-2.5 py-1.5 text-[10px]">
-                            <span className="font-semibold text-gray-800 dark:text-gray-100">{row.date}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-blue-600 dark:text-blue-300 font-semibold">{formatNumber(row.close)}</span>
-                              <span className="text-gray-500 dark:text-gray-400">{row.volume === null ? '-' : numberFormatter.format(row.volume)}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    {remainingHistoricalSeries > 0 && (
-                      <div className="mt-2 text-center text-[9px] text-gray-400">+{remainingHistoricalSeries}</div>
-                    )}
-                  </div>
-                </div>
               </div>
             </div>
           )}
