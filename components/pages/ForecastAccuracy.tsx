@@ -610,17 +610,17 @@ const RecommendationBreakdown: React.FC<{
   const maxValue = Math.max(...data.map(d => d.value), 1);
   
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {title && (
-        <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-3">{title}</h3>
+        <h3 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h3>
       )}
       {data.map((item, index) => (
         <div key={index} className="space-y-1">
-          <div className="flex justify-between items-center">
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{item.label}</span>
-            <span className="text-sm font-bold text-gray-900 dark:text-white">{item.value}</span>
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-gray-700 dark:text-gray-300">{item.label}</span>
+            <span className="text-xs font-bold text-gray-900 dark:text-white">{item.value}</span>
           </div>
-          <div className="w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+          <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-gray-700">
             <div
               className="h-full rounded-full transition-all duration-500"
               style={{
@@ -636,6 +636,92 @@ const RecommendationBreakdown: React.FC<{
 });
 RecommendationBreakdown.displayName = 'RecommendationBreakdown';
 
+const SummaryGaugeCard: React.FC<{
+  title: string;
+  value: number;
+  colorClass: string;
+  subtitle?: string;
+  footnote?: string;
+}> = memo(({ title, value, colorClass, subtitle, footnote }) => (
+  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+      <span>{title}</span>
+      {subtitle && <span className="font-normal normal-case text-gray-400 dark:text-gray-500">{subtitle}</span>}
+    </div>
+    <div className="mt-3 flex items-center gap-3">
+      <CircularProgress value={value} max={100} size={68} strokeWidth={8} color={colorClass} />
+      <div>
+        <p className="text-xl font-bold text-gray-900 dark:text-white">{value.toFixed(1)}%</p>
+        {footnote && <p className="text-xs text-gray-500 dark:text-gray-400">{footnote}</p>}
+      </div>
+    </div>
+  </div>
+));
+SummaryGaugeCard.displayName = 'SummaryGaugeCard';
+
+const MiniGaugeCard: React.FC<{
+  title: string;
+  value: number;
+  colorClass: string;
+  footer?: string;
+}> = memo(({ title, value, colorClass, footer }) => (
+  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{title}</p>
+    <div className="mt-2 flex items-center gap-2">
+      <CircularProgress value={value} max={100} size={56} strokeWidth={7} color={colorClass} />
+      <div>
+        <p className="text-lg font-bold text-gray-900 dark:text-white">{value.toFixed(1)}%</p>
+        {footer && <p className="text-[11px] text-gray-500 dark:text-gray-400">{footer}</p>}
+      </div>
+    </div>
+  </div>
+));
+MiniGaugeCard.displayName = 'MiniGaugeCard';
+
+const HighlightsCard: React.FC<{ title: string; items: Array<string> }> = memo(({ title, items }) => (
+  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <h3 className="text-sm font-bold text-gray-900 dark:text-white">{title}</h3>
+    <ul className="mt-3 space-y-1.5 text-xs text-gray-600 dark:text-gray-300">
+      {items.map((item, idx) => (
+        <li key={idx} className="flex items-start gap-2">
+          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-nextrow-primary"></span>
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+));
+HighlightsCard.displayName = 'HighlightsCard';
+
+const TopStocksCard: React.FC<{ title: string; data: Array<{ name: string; hitRate: number; forecasts: number }> }> = memo(({ title, data }) => (
+  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+    <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">{title}</h3>
+    {(!data || data.length === 0) ? (
+      <p className="text-xs text-gray-500 dark:text-gray-400">{'—'}</p>
+    ) : (
+      <table className="w-full text-left text-xs">
+        <thead className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">
+          <tr>
+            <th className="pb-1">{'Symbol'}</th>
+            <th className="pb-1 text-right">{'Hit%'}</th>
+            <th className="pb-1 text-right">{'Total'}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+          {data.slice(0, 5).map(stock => (
+            <tr key={stock.name}>
+              <td className="py-1 font-semibold text-gray-800 dark:text-gray-200">{stock.name}</td>
+              <td className="py-1 text-right font-medium text-emerald-500 dark:text-emerald-400">{stock.hitRate.toFixed(1)}%</td>
+              <td className="py-1 text-right text-gray-500 dark:text-gray-400">{stock.forecasts}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </div>
+));
+TopStocksCard.displayName = 'TopStocksCard';
+
 // --- Multi-Bar Chart Component (مثل Assets & Liabilities chart) ---
 const MultiBarChart: React.FC<{
   data: Array<{ period: string; [key: string]: number | string }>;
@@ -644,7 +730,7 @@ const MultiBarChart: React.FC<{
   height?: number;
 }> = memo(({ data, bars, title, height = 250 }) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+        <div className="mx-auto max-w-5xl bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
       {title && (
         <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{title}</h3>
       )}
@@ -699,7 +785,7 @@ const MultiLineChart: React.FC<{
   xAxisKey?: string;
 }> = memo(({ data, lines, title, height = 350, xAxisKey = 'date' }) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
+        <div className="mx-auto max-w-5xl bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
       {title && (
         <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4">{title}</h3>
       )}
@@ -1341,20 +1427,20 @@ const ForecastAccuracy: React.FC = () => {
   }, [advancedStats?.biasAnalysis, t]);
 
   // Top Stocks Performance Data - Ranked Bar Chart (Top 10)
-  const topStocksData = useMemo(() => {
-    if (!stats?.by_stock || stats.by_stock.length === 0) return [];
-    return stats.by_stock
-      .slice()
-      .sort((a, b) => b.hit_rate - a.hit_rate)
-      .slice(0, 10)
-      .map(stock => ({
-        name: stock.stock_symbol,
-        hitRate: parseFloat(stock.hit_rate.toFixed(1)),
-        forecasts: stock.total_forecasts,
-        hits: stock.hit_count,
-        misses: stock.miss_count,
-      }));
-  }, [stats?.by_stock]);
+const topStocksData = useMemo(() => {
+  if (!stats?.by_stock || stats.by_stock.length === 0) return [];
+  return stats.by_stock
+    .slice()
+    .sort((a, b) => b.hit_rate - a.hit_rate)
+    .slice(0, 10)
+    .map(stock => ({
+      name: stock.stock_symbol,
+      hitRate: parseFloat(stock.hit_rate.toFixed(1)),
+      forecasts: stock.total_forecasts,
+      hits: stock.hit_count,
+      misses: stock.miss_count,
+    }));
+}, [stats?.by_stock]);
 
   // Check permission
   if (!hasPermission('view:forecast_accuracy')) {
@@ -1393,130 +1479,197 @@ const ForecastAccuracy: React.FC = () => {
     );
   }
 
-  const { overall, by_stock, by_date, by_confidence, recent_forecasts } = stats;
+  const { overall, by_stock, by_date, by_confidence = {
+    high_confidence: { count: 0, hit_rate: 0 },
+    medium_confidence: { count: 0, hit_rate: 0 },
+    low_confidence: { count: 0, hit_rate: 0 },
+  }, recent_forecasts } = stats;
+
+  const totalConfidenceCount =
+    (by_confidence?.high_confidence?.count || 0) +
+    (by_confidence?.medium_confidence?.count || 0) +
+    (by_confidence?.low_confidence?.count || 0);
+
+  const highConfidencePct = totalConfidenceCount > 0 ? (by_confidence.high_confidence.count / totalConfidenceCount) * 100 : 0;
+  const mediumConfidencePct = totalConfidenceCount > 0 ? (by_confidence.medium_confidence.count / totalConfidenceCount) * 100 : 0;
+  const lowConfidencePct = totalConfidenceCount > 0 ? (by_confidence.low_confidence.count / totalConfidenceCount) * 100 : 0;
+
+  const highlightItems = [
+    `${(t('total_forecasts') || 'إجمالي التوقعات')}: ${overall.total_forecasts.toLocaleString('en-US')}`,
+    `${(t('correct_forecasts') || 'التوقعات الصحيحة')}: ${overall.hit_range_count.toLocaleString('en-US')}`,
+    `${(t('incorrect_forecasts') || 'التوقعات الخاطئة')}: ${overall.miss_range_count.toLocaleString('en-US')}`,
+  ];
   const adv = advancedStats;
 
   return (
     <div className="bg-gray-50 dark:bg-gray-900 min-h-screen p-3">
-      {/* Page Title */}
       <div className="mb-3">
-        <h1 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          <ChartBarIcon className="w-5 h-5 text-nextrow-primary" />
+        <h1 className="flex items-center gap-2 text-xl font-bold text-gray-900 dark:text-white">
+          <ChartBarIcon className="h-5 w-5 text-nextrow-primary" />
           {t('forecast_accuracy_analysis')}
         </h1>
       </div>
 
-      {/* ============================================
-          SECTION 1: KPI Indicators (Small - Radial Charts)
-          ============================================ */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-          {t('forecast_accuracy_indicators_dashboard') || 'لوحة مؤشرات دقة التوقعات'}
-        </h2>
-        <div className="grid grid-cols-4 gap-4">
-          {/* Within Range */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
-            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
-              {t('within_range') || 'داخل النطاق'}
-            </h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.withinRange, fill: '#10b981' }]} startAngle={180} endAngle={0}>
-                <RadialBar dataKey="value" cornerRadius={5} fill="#10b981" />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
-              <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                {kpiIndicators.withinRange.toFixed(1)}%
-              </span>
+      <div className="mx-auto flex flex-col gap-6 max-w-6xl">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="flex items-center gap-3">
+              <div className="grid h-12 w-12 place-items-center rounded-xl bg-nextrow-primary/10 text-nextrow-primary">
+                <TrendingUpIcon className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {t('overview') || 'ملخص عام'}
+                </p>
+                <p className="text-lg font-bold text-gray-900 dark:text-white">
+                  {formatPercent(overall.hit_rate, t)}
+                </p>
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                  {t('overall_performance_gauge') || 'مؤشر الأداء الإجمالي'}
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Range Width */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
-            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
-              {t('range_width') || 'اتساع النطاق'}
-            </h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.rangeWidth, fill: '#3b82f6' }]} startAngle={180} endAngle={0}>
-                <RadialBar dataKey="value" cornerRadius={5} fill="#3b82f6" />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
-              <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                {kpiIndicators.rangeWidth.toFixed(1)}%
-              </span>
-            </div>
-          </div>
+          <SummaryGaugeCard
+            title={t('accuracy_rate_global') || 'نسبة الدقة العالمية'}
+            value={kpiIndicators.accuracyRate}
+            colorClass="text-emerald-500"
+            subtitle={`${overall.hit_range_count.toLocaleString('en-US')} / ${overall.total_forecasts.toLocaleString('en-US')}`}
+            footnote={t('hit_rate') || 'نسبة النجاح'}
+          />
+          <SummaryGaugeCard
+            title={t('within_range') || 'داخل النطاق'}
+            value={kpiIndicators.withinRange}
+            colorClass="text-sky-500"
+            subtitle={`${overall.hit_range_count.toLocaleString('en-US')} ${t('hits') || 'صحيحة'}`}
+            footnote={`${(t('range_width') || 'اتساع النطاق')}: ${kpiIndicators.rangeWidth.toFixed(1)}%`}
+          />
+          <HighlightsCard
+            title={t('highlights') || 'ملحوظات سريعة'}
+            items={highlightItems}
+          />
+        </section>
 
-          {/* MAPE */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
-            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
-              {t('mape') || 'الخطأ المتوسط (MAPE)'}
-            </h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.mape, fill: '#f59e0b' }]} startAngle={180} endAngle={0}>
-                <RadialBar dataKey="value" cornerRadius={5} fill="#f59e0b" />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
-              <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                {kpiIndicators.mape.toFixed(1)}%
-              </span>
+        {dateChartData.length > 0 && (
+          <section className="grid gap-3 lg:grid-cols-3">
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2">
+              <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
+                {t('performance_by_period') || 'الأداء حسب الفترة'}
+              </h3>
+              <MultiBarChart
+                data={dateChartData.slice(-8).map(item => ({
+                  period: item.date,
+                  hits: item.hits,
+                  misses: item.misses,
+                  total: item.forecasts,
+                }))}
+                bars={[
+                  { key: 'hits', label: t('hits') || 'صحيحة', color: '#10b981' },
+                  { key: 'misses', label: t('misses') || 'خاطئة', color: '#ef4444' },
+                  { key: 'total', label: t('total') || 'إجمالي', color: '#3b82f6' },
+                ]}
+                title={undefined}
+                height={200}
+              />
             </div>
-          </div>
-
-          {/* Accuracy Rate (Global KPI) */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4 relative">
-            <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2 text-center">
-              {t('accuracy_rate_global') || 'نسبة الدقة (KPI Global)'}
-            </h3>
-            <ResponsiveContainer width="100%" height={120}>
-              <RadialBarChart cx="50%" cy="50%" innerRadius="50%" outerRadius="90%" data={[{ value: kpiIndicators.accuracyRate, fill: '#10b981' }]} startAngle={180} endAngle={0}>
-                <RadialBar dataKey="value" cornerRadius={5} fill="#10b981" />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none mt-12">
-              <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                {kpiIndicators.accuracyRate.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ============================================
-          SECTION 2: Performance Overview (Medium - Gauge + Breakdown)
-          ============================================ */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-          {t('forecast_performance_analysis') || 'تحليل أداء التوقعات'}
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Gauge Chart - Overall Performance */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
-              {t('overall_performance_gauge') || 'مقياس الأداء الإجمالي'}
-            </h3>
-            <GaugeChart
-              value={overall.hit_rate}
-              min={0}
-              max={100}
-              segments={[
-                { label: t('very_low') || 'منخفض جداً', color: '#ef4444', range: [0, 30] },
-                { label: t('low') || 'منخفض', color: '#f97316', range: [30, 50] },
-                { label: t('medium') || 'متوسط', color: '#eab308', range: [50, 70] },
-                { label: t('good') || 'جيد', color: '#3b82f6', range: [70, 85] },
-                { label: t('excellent') || 'ممتاز', color: '#10b981', range: [85, 100] },
-              ]}
-              size={250}
-              label={t('hit_rate') || 'نسبة النجاح'}
-              t={t}
+            <TopStocksCard
+              title={t('top_performing_stocks') || 'أفضل الأسهم دقة'}
+              data={topStocksData}
             />
-          </div>
+          </section>
+        )}
 
-          {/* Recommendation Breakdown */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-4 text-center">
+        <section className="grid gap-3 md:grid-cols-3">
+          <MiniGaugeCard
+            title={t('high_confidence') || 'ثقة عالية'}
+            value={highConfidencePct}
+            colorClass="text-emerald-500"
+            footer={`${by_confidence.high_confidence.count.toLocaleString('en-US')} ${t('forecasts') || 'توقع'}`}
+          />
+          <MiniGaugeCard
+            title={t('medium_confidence') || 'ثقة متوسطة'}
+            value={mediumConfidencePct}
+            colorClass="text-amber-500"
+            footer={`${by_confidence.medium_confidence.count.toLocaleString('en-US')} ${t('forecasts') || 'توقع'}`}
+          />
+          <MiniGaugeCard
+            title={t('low_confidence') || 'ثقة منخفضة'}
+            value={lowConfidencePct}
+            colorClass="text-rose-500"
+            footer={`${by_confidence.low_confidence.count.toLocaleString('en-US')} ${t('forecasts') || 'توقع'}`}
+          />
+        </section>
+
+        {(trend30DaysData.hitRate.length > 0 || errorDistributionData.length > 0) && (
+          <section className="grid gap-3 lg:grid-cols-2">
+            {trend30DaysData.mape.length > 0 && trend30DaysData.hitRate.length > 0 && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
+                  {t('performance_trends') || 'اتجاهات الأداء - آخر 30 يوم'}
+                </h3>
+                <MultiLineChart
+                  data={trend30DaysData.hitRate.map((item, index) => ({
+                    date: item.date,
+                    hitRate: item.value,
+                    mape: trend30DaysData.mape[index]?.value || 0,
+                  }))}
+                  lines={[
+                    { key: 'hitRate', label: t('hit_rate') || 'نسبة النجاح', color: '#10b981', strokeWidth: 3 },
+                    { key: 'mape', label: t('mape') || 'الخطأ المتوسط', color: '#f59e0b', strokeWidth: 2 },
+                  ]}
+                  title={undefined}
+                  height={220}
+                  xAxisKey="date"
+                />
+              </div>
+            )}
+
+            {errorDistributionData.length > 0 && (
+              <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+                <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
+                  {t('error_distribution_absolute') || 'توزيع الخطأ'}
+                </h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={errorDistributionData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="range" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 9 }} />
+                    <Tooltip
+                      formatter={(value: number) => value.toLocaleString()}
+                      contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                    />
+                    <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="grid gap-3 lg:grid-cols-2">
+          {weeklyCumulativeData.length > 0 && (
+            <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
+                {t('within_range_weekly_cumulative') || 'داخل النطاق - تجميعي أسبوعي'}
+              </h3>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={weeklyCumulativeData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="week" tick={{ fontSize: 9 }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
+                  <Tooltip
+                    formatter={(value: number) => `${value.toFixed(1)}%`}
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
+                  />
+                  <Bar dataKey="percentage" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="mb-2 text-sm font-bold text-gray-900 dark:text-white">
               {t('forecast_breakdown') || 'تفاصيل التوقعات'}
             </h3>
             <RecommendationBreakdown
@@ -1549,242 +1702,72 @@ const ForecastAccuracy: React.FC = () => {
               ]}
             />
           </div>
-        </div>
-      </div>
+        </section>
 
-      {/* ============================================
-          SECTION 3: Trend Analysis (Medium - 30-Day Trends)
-          ============================================ */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-          {t('performance_trends') || 'اتجاهات الأداء - آخر 30 يوم'}
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* MAPE Trend */}
-          {trend30DaysData.mape.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
-                {t('last_30_days_mape_trend') || 'آخر 30 يوم - MAPE Trend'}
-              </h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={trend30DaysData.mape} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
-                  <YAxis domain={[0, 'dataMax + 0.5']} tick={{ fontSize: 9 }} />
-                  <Tooltip 
-                    formatter={(value: number) => `${value.toFixed(2)}%`}
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                  />
-                  <Line type="monotone" dataKey="value" stroke="#a855f7" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Hit Rate Trend */}
-          {trend30DaysData.hitRate.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
-                {t('last_30_days_hit_rate') || 'آخر 30 يوم - Hit Rate'}
-              </h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={trend30DaysData.hitRate} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="date" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
-                  <Tooltip 
-                    formatter={(value: number) => `${value.toFixed(1)}%`}
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                  />
-                  <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ============================================
-          SECTION 4: Distribution Analysis (Medium - Error & Weekly)
-          ============================================ */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-          {t('error_distribution_absolute') || 'تحليل التوزيع'}
-        </h2>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Error Distribution */}
-          {errorDistributionData.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
-                {t('error_distribution_absolute') || 'توزيع الخطأ (Absolute Error)'}
-              </h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={errorDistributionData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="range" tick={{ fontSize: 9 }} angle={-45} textAnchor="end" height={60} />
-                  <YAxis tick={{ fontSize: 9 }} />
-                  <Tooltip 
-                    formatter={(value: number) => value.toLocaleString()}
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                  />
-                  <Bar dataKey="count" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Weekly Cumulative */}
-          {weeklyCumulativeData.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white mb-2">
-                {t('within_range_weekly_cumulative') || 'داخل النطاق - تجميعي أسبوعي'}
-              </h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={weeklyCumulativeData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                  <XAxis dataKey="week" tick={{ fontSize: 9 }} />
-                  <YAxis domain={[0, 100]} tick={{ fontSize: 9 }} />
-                  <Tooltip 
-                    formatter={(value: number) => `${value.toFixed(1)}%`}
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.98)', border: '1px solid #e5e7eb', borderRadius: '8px' }}
-                  />
-                  <Bar dataKey="percentage" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ============================================
-          SECTION 5: Period Performance (Large - Multi-Bar Chart)
-          ============================================ */}
-      {dateChartData.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-            {t('performance_by_period') || 'الأداء حسب الفترة'}
-          </h2>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <MultiBarChart
-              data={dateChartData.slice(-8).map(item => ({
-                period: item.date,
-                hits: item.hits,
-                misses: item.misses,
-                total: item.forecasts,
-              }))}
-              bars={[
-                { key: 'hits', label: t('hits') || 'صحيحة', color: '#10b981' },
-                { key: 'misses', label: t('misses') || 'خاطئة', color: '#ef4444' },
-                { key: 'total', label: t('total') || 'إجمالي', color: '#3b82f6' },
-              ]}
-              title={t('performance_by_period') || 'الأداء حسب الفترة'}
-              height={280}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ============================================
-          SECTION 6: Combined Trends Analysis (Large - Multi-Line Chart)
-          ============================================ */}
-      {trend30DaysData.mape.length > 0 && trend30DaysData.hitRate.length > 0 && (
-        <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
-            {t('performance_trends') || 'تحليل الاتجاهات المركبة'}
-          </h2>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-4">
-            <MultiLineChart
-              data={trend30DaysData.hitRate.map((item, index) => ({
-                date: item.date,
-                hitRate: item.value,
-                mape: trend30DaysData.mape[index]?.value || 0,
-              }))}
-              lines={[
-                { key: 'hitRate', label: t('hit_rate') || 'نسبة النجاح', color: '#10b981', strokeWidth: 3 },
-                { key: 'mape', label: t('mape') || 'الخطأ المتوسط', color: '#f59e0b', strokeWidth: 2 },
-              ]}
-              title={t('performance_trends') || 'اتجاهات الأداء - آخر 30 يوم'}
-              height={400}
-              xAxisKey="date"
-            />
-          </div>
-        </div>
-      )}
-
-
-      {/* ============================================
-          SECTION 7: Stock Performance Table (Large - Full Width)
-          ============================================ */}
-      <div className="mb-6">
-        <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 text-center">
+        {/* Stock table and controls remain unchanged */}
+        <section className="space-y-3">
+        <h2 className="text-lg font-bold text-gray-900 dark:text-white text-center">
           {t('stock_performance_table')}
         </h2>
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-          {/* Search and Filters Tools - Always visible */}
-          <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
-              {/* Search Input */}
-              <div className="relative flex-1">
-                <input 
-                  type="text"
-                  placeholder={t('search_by_symbol_or_name')}
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-nextrow-primary focus:border-nextrow-primary dark:bg-gray-700 dark:text-white text-sm"
-                />
-                <SparklesIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              </div>
-              
-              {/* Favorites Filter */}
+        <div className="mx-auto max-w-5xl space-y-4">
+          {/* Search and Filters Tools */}
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <input 
+                type="text"
+                placeholder={t('search_by_symbol_or_name')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full rounded-md border border-gray-300 pl-10 pr-4 py-2 text-sm focus:border-nextrow-primary focus:outline-none focus:ring-2 focus:ring-nextrow-primary dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              />
+              <SparklesIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 transform text-gray-400" />
+            </div>
+            <button
+              onClick={() => setShowFavorites(!showFavorites)}
+              className={`flex items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-medium transition ${
+                showFavorites
+                  ? 'border-2 border-yellow-500 bg-yellow-400 text-black'
+                  : 'border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              <StarIcon className={`h-4 w-4 ${showFavorites ? 'fill-current' : ''}`} />
+              {t('favorites')}
+            </button>
+            <div className="flex items-center gap-2 rounded-md bg-gray-50 p-1 dark:bg-gray-700">
               <button
-                onClick={() => setShowFavorites(!showFavorites)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center justify-center gap-2 ${
-                  showFavorites 
-                    ? 'bg-yellow-400 text-black border-2 border-yellow-500' 
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
+                onClick={() => setHitFilter('all')}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+                  hitFilter === 'all'
+                    ? 'bg-gray-200 text-nextrow-primary dark:bg-gray-600 dark:text-blue-400'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
                 }`}
               >
-                <StarIcon className={`w-4 h-4 ${showFavorites ? 'fill-current' : ''}`} />
-                {t('favorites')}
+                {t('all')}
               </button>
-              
-              {/* Hit/Miss Filter Buttons */}
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-md p-1">
-                <button
-                  onClick={() => setHitFilter('all')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    hitFilter === 'all'
-                      ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                >
-                  {t('all')}
-                </button>
-                <button
-                  onClick={() => setHitFilter('hit')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    hitFilter === 'hit'
-                      ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                >
-                  {t('hit')}
-                </button>
-                <button
-                  onClick={() => setHitFilter('miss')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    hitFilter === 'miss'
-                      ? 'bg-gray-200 dark:bg-gray-600 text-nextrow-primary dark:text-blue-400'
-                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                  }`}
-                >
-                  {t('miss')}
-                </button>
-              </div>
+              <button
+                onClick={() => setHitFilter('hit')}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+                  hitFilter === 'hit'
+                    ? 'bg-gray-200 text-nextrow-primary dark:bg-gray-600 dark:text-blue-400'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('hit')}
+              </button>
+              <button
+                onClick={() => setHitFilter('miss')}
+                className={`rounded-md px-4 py-2 text-sm font-medium transition ${
+                  hitFilter === 'miss'
+                    ? 'bg-gray-200 text-nextrow-primary dark:bg-gray-600 dark:text-blue-400'
+                    : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('miss')}
+              </button>
             </div>
           </div>
-          {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+            <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 border-b-2 border-gray-300 dark:border-gray-600 sticky top-0 z-10">
                     <tr>
@@ -1950,6 +1933,8 @@ const ForecastAccuracy: React.FC = () => {
                 </div>
               )}
           </div>
+        </div>
+      </section>
       </div>
     </div>
   );

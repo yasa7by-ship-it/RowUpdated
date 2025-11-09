@@ -121,6 +121,36 @@
           -moz-osx-font-smoothing: grayscale;
         }
       }
+
+      :root {
+        color-scheme: light dark;
+        --app-max-width: 1180px;
+        --app-mobile-padding: clamp(16px, 4vw, 22px);
+      }
+
+      .app-max-width {
+        width: min(100%, var(--app-max-width));
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .safe-area-top {
+        padding-top: env(safe-area-inset-top, 0);
+      }
+
+      .safe-area-bottom {
+        padding-bottom: calc(env(safe-area-inset-bottom, 0) + 0.5rem);
+      }
+
+      @media (max-width: 768px) {
+        html, body {
+          font-size: 15px;
+        }
+        .app-max-width {
+          padding-left: var(--app-mobile-padding);
+          padding-right: var(--app-mobile-padding);
+        }
+      }
     </style>
     
     <!-- Device Detection Script - Runs early to set PWA mode -->
@@ -155,7 +185,7 @@
       })();
     </script>
   </head>
-  <body class="bg-nextrow-bg dark:bg-nextrow-bg-dark text-nextrow-text dark:text-gray-200">
+  <body class="bg-nextrow-bg dark:bg-nextrow-bg-dark text-nextrow-text dark:text-gray-200 font-nextrow">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
 

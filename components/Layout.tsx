@@ -21,7 +21,7 @@ const Layout: React.FC<LayoutProps> = ({ profile, children, setPage, currentPage
       <Header profile={profile} setPage={setPage} currentPage={currentPage} />
       <AnnouncementsBanner />
       <main className="flex-grow">
-        <div className="container mx-auto px-6 py-8">
+        <div className="app-max-width w-full px-4 sm:px-6 lg:px-10 py-6 sm:py-8">
           {children}
         </div>
       </main>
