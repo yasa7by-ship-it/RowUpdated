@@ -1,0 +1,102 @@
+نظرة عامة عن المنصة
+- تعتمد الواجهة على React + Tailwind CSS، مع إدارة حالة عبر سياقات متخصصة (اللغة، الإعدادات، المصادقة، المفضلات).
+- جميع البيانات تُجلب من قاعدة PostgreSQL (Supabase) باستخدام الدوال المخزنة (RPC) أو via SELECT مباشر عندما يكون ذلك مناسباً.
+- تدعم المنصة العربية والإنجليزية وتحتوي على caching محلي (localStorage) لتقليل عدد الاستدعاءات.
+
+1) صفحة الهبوط Landing Page
+- العرض: أقسام تسويقية، دعوات لاتخاذ إجراء، شرح للمنصة، روابط تسجيل الدخول.
+- مصدر البيانات: جدول translations (مفاتيح مثل landing_hero_title). يتم جلب القيم عبر rpc get_translations للغة الحالية. يتم دمج الإعدادات العامة مثل شعار الموقع وعنوانه من جدول app_settings عبر سياق useAppSettings.
+
+2) صفحة لوحة التحكم Dashboard
+- العرض: بطاقات إحصائية عن عدد المستخدمين، حالة المهام، حالة النظام، أزرار لتشغيل مهام يومية (تحديث بيانات، تقييم توقعات).
+- مصادر البيانات:
+  • rpc get_site_stats (JSON) يعيد إجمالي المستخدمين، الأدوار، آخر تحديث.
+  • rpc get_pending_processes يعرض قائمة بالعمليات المتوقفة أو قيد التنفيذ.
+  • rpc trigger_daily_tasks يُستدعى عندما يضغط المسؤول زر “تشغيل التحديث”.
+  • تحديث الإعدادات يتم عبر rpc update_setting و get_all_app_settings.
+
+3) Daily Watchlist (قائمة المراقبة اليومية)
+- العرض: جدول رئيسي يظهر لكل سهم (symbol, name, predicted range, actual range, hit/miss, confidence)، مع بحث، فلاتر، مفضلة، وترقيم صفحات.
+- مصدر البيانات: rpc get_daily_checklist يعود بعرض (View) يسمى daily_checklist_view يحتوي على أحدث توقعات اليوم. يتم تخزين النتائج مؤقتًا في localStorage تحت مفتاح dailyWatchlistCache.
+- العمليات:
+  • فلترة محلية حسب حالة hit/miss.
+  • toggleFavorite يستدعي supabase.from('user_favorites').upsert لحفظ المفضلة.
+  • تغيير الصفحة يعيد حساب slice محليًا بدون استدعاء جديد.
+
+4) Stock Analysis (تحليل الأسهم)
+- العرض: نفس بيانات Daily Watchlist لكن مع بطاقات إضافية (آخر يوم عمل، إجمالي التوقعات، نسبة النجاح) ومخططات مصغرة.
+- مصدر البيانات: نفس rpc get_daily_checklist. يتم حساب last business day عبر مقارنة forecast_date وإظهار أحدث قيمة.
+- المكونات تكرّر منطق البحث والمفضلة، وتضيف ملخصًا باستخدام summaryStats المحسوب محليًا.
+
+5) What Happened (ماذا حدث)
+- العرض: جدول “آخر جلسة تداول” يضم symbol, close, change%, range, forecast range, RSI, pattern, result. عند اختيار صف تظهر لوحة تفصيلية على اليمين.
+- مصادر البيانات:
+  • rpc get_what_happened_summary يعيد قائمة الجلسة الأخيرة.
+  • rpc get_what_happened_stock_details(p_symbol) يعيد JSON يحتوي على historical data، indicators، patterns، forecasts، historical series. يتم تخزين النتائج في Map لتفادي الاستدعاء المتكرر.
+  • مؤشرات RSI و MACD تُعرض مباشرة من المؤشرات المعادة.
+
+6) Nasdaq Snapshot (ملخص ناسداك)
+- العرض: بطاقات رئيسية (close, change, range)، أقسام إضافية (Market Breadth, Sector Leaders/laggards، Heatmap)، جدول للتوقعات اليومية مطابق لصفحة Daily Watchlist، جدول آخر للأخبار أو الملاحظات إذا توفرت.
+- مصادر البيانات:
+  • rpc get_latest_nasdaq_snapshot يعيد الصف الأحدث من جدول nasdaq_daily_snapshot.
+  • بيانات الجدول السفلي “Last Day Forecasts” تأتي من rpc get_daily_checklist.
+  • metadata_json والنصوص الفرعية يتم تحليلها محليًا، وتظهر فقط عند توفر قيمة في snapshot.
+
+7) Forecast Accuracy (دقة التوقعات)
+- العرض: لوحة مؤشرات (Hit Rate، MAPE، متوسط الفارق)، مخططات (trend charts، distribution charts، multi-line chart)، جداول مفصلة.
+- مصادر البيانات الأساسية:
+  • get_forecast_accuracy_overall → مؤشرات إجمالية.
+  • get_forecast_accuracy_by_stock, by_date, by_confidence → تقسيمات.
+  • get_forecast_error_range_stats, get_forecast_range_size_stats → بيانات مخطط الأعمدة.
+  • get_forecast_time_trends, get_forecast_day_of_week_stats → اتجاهات 30 يوم وتحليل أيام الأسبوع.
+  • get_forecast_accuracy_recent → جدول سجل التوقعات الأخيرة.
+  • عند اختيار رمز، يتم استدعاء نسخ functions التي تنتهي بـ _by_stock.
+  • caching: يتم الاحتفاظ بالبيانات في useMemo استنادًا إلى اللغة والخيارات.
+
+8) Forecast History Analysis (تحليل تاريخ التوقعات)
+- العرض: فلاتر التاريخ/النطاق، مخططات تجمع الأداء حسب الأسابيع والشهور، جداول قابلة للتصدير.
+- مصادر البيانات:
+  • rpc get_forecast_history_overview(filters) لإحصائيات ضمن الفترة.
+  • rpc get_forecast_history_details(filters) لإرجاع السجلات التفصيلية.
+  • التصدير يتم بتحويل البيانات إلى CSV محليًا.
+
+9) Stock Details (تفاصيل السهم)
+- العرض: بطاقة ملخص، مخطط الشموع مع نطاق التوقع، جدول تاريخ التوقعات للسهم، tabs للبيانات الفنية.
+- مصادر البيانات:
+  • rpc get_stock_forecast_details(p_symbol) يعيد forecasts، historical_data، indicators، patterns.
+  • يتم استخدام ResizeObserver لضبط tooltip داخل المخطط.
+
+10) صفحات الإدارة الأساسية
+- UserManagement: تستدعي rpc get_all_users_with_roles لعرض المستخدمين والأدوار. تحديث الأدوار عبر rpc update_user_role. إنشاء مستخدم جديد يستعمل Supabase Auth API.
+- RoleManagement: تستدعي get_all_roles و get_all_permissions و get_role_permissions. تحديث الصلاحيات عبر rpc update_role_permissions.
+- TranslationManagement: تستخدم rpc get_translations_paginated، update_translation، delete_translation.
+- AnnouncementsManagement: بيانات من جدول global_announcements عبر supabase.from('global_announcements'), التعديل باستخدام insert/update/delete.
+- SystemDocumentation / Notes / Logs: تعتمد على جداول system_documentation, user_notes, activity_logs مع استعلامات عبر Supabase.
+- Settings (SiteSettings): تستخدم rpc get_all_app_settings و update_setting، وتقرأ ترجمات العنوان عبر get_translations_for_key.
+
+11) المفضلة والسياقات المشتركة
+- FavoritesContext: يستخدم supabase.from('user_favorites') لجلب وإدارة مفضلة المستخدم.
+- LanguageContext: يحفظ اللغة في localStorage، ويستدعي get_translations عند التبديل.
+- AuthContext: يعتمد على Supabase Auth Session ويستخدم rpc get_user_profile_and_permissions للحصول على الدور والصلاحيات.
+
+12) البيانات المخبأة محلياً
+- dailyWatchlistCache (JSON) في localStorage.
+- nasdaqSnapshotCache (JSON) لتخزين snapshot مؤقتًا.
+- whatHappenedCache لخزن تفاصيل الأسهم داخل Map (ذاكرة التطبيق).
+
+13) سكربتات البيانات الخارجية
+- update_nasdaq_daily_snapshot_minimal_ny.py: يجلب بيانات ناسداك من yfinance أو Stooq، يحسب change، ثم يستدعي upsert_nasdaq_daily_snapshot.
+- evaluate_and_save_forecasts (وظيفة داخل RDBMS) تُشغَّل يدويًا أو عبر وظائف مجدولة لتحديث forecast_checks.
+
+14) PWA ودعم الأجهزة المحمولة
+- manifest يتم توليده ديناميكيًا عبر JavaScript لتبديل display بين standalone (الهاتف) و browser (سطح المكتب).
+- service worker sw.js يتولى التخزين المؤقت للأصول ويحدث cache version عبر static cache v2.
+
+15) التبديل بين الوضع الليلي والضوء
+- ThemeContext (dark/light) يستخدم localStorage ويحترم تفضيل الجهاز. الصفحات تستخدم كلاس tailwind dark: لتغيير الألوان.
+
+16) التقارير والملفات
+- ملفات التوثيق الباقية مثل site_services_detail_ar.txt و database_component_spec_en.txt توفر مرجعًا للخصائص والبيانات.
+
+المخطط العام لتدفق البيانات:
+- المستخدم يحمّل الصفحة → سياق اللغة يحدد الترجمات → سياق Auth يتحقق من الجلسة → الصفحة تستدعي RPC المناسب → البيانات تُعرض في البطاقات والجداول → المستخدِم يمكنه التفاعل (فلترة، مفضلات، إنشاء/تعديل) → الاستجابة تُرسل عبر supabase.from(...) أو RPC → يتم تحديث الحالة محليًا وتخزينها في cache إذا لزم الأمر.

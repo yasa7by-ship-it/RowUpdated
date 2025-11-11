@@ -1,0 +1,97 @@
+Platform Overview
+- Front end built with React and Tailwind CSS. State managed via contexts (language, auth, settings, favorites).
+- Data fetched from PostgreSQL (Supabase) through stored procedures (RPC) or direct SELECT statements when appropriate.
+- Supports bilingual UI (Arabic/English) and local caching (localStorage) to reduce round trips.
+
+1) Landing Page
+- Displays marketing sections, calls-to-action, feature lists, login links.
+- Data source: translations table (keys such as landing_hero_title). Values retrieved via rpc get_translations_for_key for the current language. Global settings (logo, site title) loaded from app_settings through useAppSettings context.
+
+2) Dashboard
+- Shows summary cards (user count, role count, tasks), status banners, buttons to launch daily maintenance jobs.
+- Data sources:
+  • rpc get_site_stats → returns JSON with totals and last-run timestamps.
+  • rpc get_pending_processes → returns list of queued operations.
+  • rpc trigger_daily_tasks → invoked when admin clicks “Run Tasks”.
+  • app_settings fetched/updated via rpc get_all_app_settings and update_setting.
+
+3) Daily Watchlist
+- Main table showing symbol, company name, predicted range, actual range, hit/miss, confidence, plus search, filters, favorites, pagination.
+- Data source: rpc get_daily_checklist which selects from daily_checklist_view containing the most recent trading session. Response cached in localStorage under dailyWatchlistCache.
+- Actions:
+  • Filtering performed locally.
+  • Favoriting uses supabase.from('user_favorites').upsert.
+  • Pagination conducted by slicing the cached array.
+
+4) Stock Analysis
+- Uses the same dataset as Daily Watchlist but adds top cards (Last Business Day, Total Forecasts, Hit Rate) and mini insights.
+- Data source: get_daily_checklist. Last business day derived by picking the max forecast_date.
+
+5) What Happened
+- Table “Last Trading Session” with columns for symbol, close, change %, actual/forecast range, RSI, pattern, result. Selecting a row shows detailed panel.
+- Data sources:
+  • rpc get_what_happened_summary → summary table.
+  • rpc get_what_happened_stock_details(p_symbol) → detailed JSON including historical records, indicators, patterns, upcoming forecasts, history list. Cached per symbol in memory (Map).
+
+6) Nasdaq Snapshot
+- Cards for close price, change, range, volume, breadth, sector leaders/laggards, optional heatmap/headlines, and a forecast table identical to Daily Watchlist.
+- Data sources:
+  • rpc get_latest_nasdaq_snapshot → fetches most recent nasdaq_daily_snapshot row.
+  • Forecast table reuses get_daily_checklist.
+  • Optional metadata parsed from metadata_json if present.
+
+7) Forecast Accuracy Dashboard
+- KPI cards (Hit Rate, Mean Absolute Error, Range Width), charts (trend lines, bar charts, multi-line, distribution), and summary tables.
+- Data sources:
+  • get_forecast_accuracy_overall
+  • get_forecast_accuracy_by_stock/by_date/by_confidence
+  • get_forecast_error_range_stats, get_forecast_range_size_stats
+  • get_forecast_time_trends, get_forecast_day_of_week_stats
+  • get_forecast_accuracy_recent
+  • Metric-specific RPC suffixed with _by_stock when drilling into a symbol.
+
+8) Forecast History Analysis
+- Filters by date/period, trend charts by week/month, exportable data table.
+- Data sources:
+  • rpc get_forecast_history_overview(filters)
+  • rpc get_forecast_history_details(filters)
+  • Export generated client-side (CSV).
+
+9) Stock Details
+- Detailed page for one ticker: summary card, candle chart with prediction range, forecast history table, tabs for technical indicators.
+- Data source: rpc get_stock_forecast_details(p_symbol) returning forecasts, historical_data, indicators, patterns. Uses ResizeObserver to position chart tooltips correctly.
+
+10) Administrative Pages
+- UserManagement: rpc get_all_users_with_roles for table view, rpc update_user_role to assign roles. New users created through Supabase Auth APIs.
+- RoleManagement: rpc get_all_roles, get_all_permissions, get_role_permissions; rpc update_role_permissions to modify assignments.
+- TranslationManagement: rpc get_translations_paginated, update_translation, delete_translation.
+- AnnouncementsManagement: direct CRUD on global_announcements (select/insert/update/delete via Supabase client).
+- SystemDocumentation / Notes / Logs: operate on system_documentation, user_notes, activity_logs accordingly.
+- Settings: use get_all_app_settings and update_setting; translate labels with get_translations_for_key.
+
+11) Shared Contexts & Favorites
+- FavoritesContext: synchronizes user_favorites table.
+- LanguageContext: toggles language, stores preference in localStorage, re-fetches translations.
+- AuthContext: listens to Supabase Auth session and loads profile via rpc get_user_profile_and_permissions.
+
+12) Local Caching
+- dailyWatchlistCache for watchlist data.
+- nasdaqSnapshotCache for snapshot JSON.
+- In-memory Map for “What Happened” stock details.
+
+13) External Data Jobs
+- update_nasdaq_daily_snapshot_minimal_ny.py: runs daily to fetch NASDAQ OHLC data (yfinance/Stooq) and calls upsert_nasdaq_daily_snapshot.
+- evaluate_and_save_forecasts (stored procedure) executed nightly or after forecast import to populate forecast_checks and audit metrics.
+
+14) PWA & Mobile Support
+- Manifest generated dynamically to switch display mode (standalone on mobile, browser on desktop).
+- Service worker (sw.js) caches static assets with versioned cache names.
+
+15) Theme Switching
+- ThemeContext toggles dark/light mode using localStorage and system preference. Tailwind dark: classes handle color changes.
+
+16) Documentation Assets
+- site_services_detail_ar.txt (Arabic description) and database_component_spec_en.txt (schema details) document current implementation.
+
+Data Flow Summary
+- User opens page → Language context loads translations → Auth context verifies session → Page triggers appropriate RPC (get_daily_checklist, get_latest_nasdaq_snapshot, etc.) → Results stored in component state & optional cache → User interactions (filters, favorites, admin actions) call Supabase RPC or direct table operations → UI updates accordingly.
