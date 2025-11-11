@@ -1,0 +1,25 @@
+الموقع مبني على واجهة React مع Tailwind CSS ويعتمد على Supabase كطبقة بيانات ومصادقة. كل الصفحات تعمل بوضع العميل وتستخدم مبدأ caching محلي عبر localStorage عندما يكون مفيدا، وتستدعي واجهات Supabase عبر الدوال المخزنة (RPC) أو الاستعلامات المباشرة.
+
+صفحة الهبوط تعرض معلومات ثابتة من ترجمات مخزنة في جدول translations وتقرأ العناوين المختلفة بواسطة rpc get_translations_for_key مع تطبيق الإعدادات من جدول app_settings عبر سياق useAppSettings.
+
+صفحة لوحة التحكم Dashboard موجهة للمستخدم صاحب الصلاحيات الإدارية وتقرأ المقاييس التنفيذية عبر مجموعة من استدعاءات supabase.rpc مثل get_pending_processes و get_site_stats وتتيح تشغيل عمليات مجدولة من خلال rpc trigger_daily_tasks. يتم تحميل الإعدادات العامة للموقع وتعديلها عبر دوال update_setting و get_app_settings وتظهر النتائج في بطاقات إحصائية وقوائم Accordion.
+
+صفحة قائمة المراقبة اليومية Daily Watchlist تركز على توقعات اليوم التالي، وتحمّل البيانات بواسطة supabase.rpc('get_daily_checklist') مع تطبيق فلترة محلية للنتائج وفصل التوقعات حسب حالة النجاح. يتم تخزين البيانات مؤقتا في localStorage لتقليل عدد الاستدعاءات. الصفحة تتيح للمستخدم تمييز الأسهم كمفضلة عبر سياق Favorites الذي يرتبط بجدول user_favorites في Supabase.
+
+صفحة تحليل الأسهم Stock Analysis تستخدم نفس مصدر البيانات get_daily_checklist لكنها تعيد ترتيب البطاقة الرئيسية لعرض تاريخ آخر يوم عمل، ونقاط القوة والضعف، والبحث المتقدم عن الأسهم. تم تحديث منطق البطاقة ليبحث عن أحدث تاريخ داخل البيانات عبر مقارنة forecast_date لكل صف قبل عرض التاريخ.
+
+صفحة ماذا حدث What Happened تعرض ملخص الجلسة الماضية. الجزء العلوي يستدعي supabase.rpc('get_what_happened_summary') للحصول على قائمة الأسهم مع التغير السعري ونتائج التوقعات. عند اختيار سهم يتم استدعاء supabase.rpc('get_what_happened_stock_details', { p_symbol }) لاسترجاع بيانات المؤشرات الفنية، الأنماط، السلاسل التاريخية، وتاريخ التوقعات، وتُخزن النتائج في ذاكرة مؤقتة Map لتجنب إعادة التحميل.
+
+صفحة ملخص ناسداك Nasdaq Snapshot تعتمد على جدول nasdaq_daily_snapshot وتمزج بين بيانات snapshot ودوال مترجمة. يجري تحميل أحدث سجل عبر supabase.rpc('get_latest_nasdaq_snapshot')، كما يتم جلب قوائم التوقعات اليومية باستخدام get_daily_checklist لعرض جدول مطابق لما يظهر في Daily Watchlist. الصفحة تحتوي على منطق fallback لعرض الأقسام فقط عندما تتوفر الحقول في الجدول.
+
+صفحة دقة التوقعات Forecast Accuracy عبارة عن لوحة تحليلية كثيفة تستخدم عدة دوال RPC: get_forecast_accuracy_overall للحصول على مؤشرات إجمالية، get_forecast_accuracy_by_stock و by_date و by_confidence لتقسيم النتائج، get_forecast_error_range_stats لتحليل أخطاء التوقعات، بالإضافة إلى دوال خاصة لكل سهم عند اختيار رمز معين. البيانات تُدمج داخل مخططات Recharts وجداول مقارنة.
+
+صفحة تحليل تاريخ التوقعات Forecast History Analysis تقدم أدوات تصفية زمنية تعتمد على rpc get_forecast_history_overview و get_forecast_history_details وتتيح تصدير النتائج. يتم استخدام مخططات متعددة لتوضيح الأداء بالأسابيع والأشهر وتحليل الانحياز في التوقعات.
+
+صفحة تفاصيل السهم Stock Details تعرِض سجل التوقعات للسهم الواحد وتستدعي supabase.rpc('get_stock_forecast_details', { p_symbol }) مع استعلامات إضافية لجلب السلاسل التاريخية من historical_data. كما يوجد منطق لقياس أبعاد الرسم باستخدام ResizeObserver لضبط موضع أداة Tooltip داخل مخطط الأداء.
+
+النظام يتضمن صفحات إدارية: إدارة المستخدمين UserManagement تستدعي دوال auth و rpc get_users_with_roles، وتستخدم update_user_role لتعديل الصلاحيات. إدارة الأدوار RoleManagement تعتمد على جداول roles و permissions و role_permissions عبر دوال rpc مثل get_roles_with_permissions و update_role_permissions. صفحة إدارة الترجمات TranslationManagement تستعمل get_translations_paginated و update_translation، في حين أن إدارة الإعلانات Announcements تستخدم جداول announcements مع دوال insert_announcement و update_announcement و delete_announcement.
+
+يوجد كذلك صفحات لإدارة الملاحظات، السجلات، إعدادات النظام، وأرشفة العمليات. كل صفحة مرتبطة مباشرة بدوال RPC معرفة في sql-files أو داخل مجلد migrations، وتُقيّد الوصول باستخدام Row Level Security؛ إذ تعتمد الواجهة على useAuth.hasPermission للتحقق من صلاحية العرض قبل تحميل البيانات.
+
+الواجهة تدعم التبديل بين اللغتين العربية والإنجليزية عبر سياق useLanguage الذي يقرأ الترجمات من جدول translations مع fallback إن لم تتوفر القيمة، كما تدعم الوضع الليلي ومزايا PWA بحيث يتصرف التطبيق كتطبيق مستقل على الأجهزة المحمولة عن طريق manifest ديناميكي و service worker.
