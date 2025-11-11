@@ -1,0 +1,140 @@
+SYSTEM OVERVIEW
+- Primary datastore: PostgreSQL (Supabase by default but portable to any PostgreSQL-compatible service).
+- Access pattern: mixture of stored procedures (RPC), direct table queries, triggers, and RLS policies.
+- Authentication: Supabase Auth (can be replaced by external auth so long as user profiles table is kept in sync).
+
+TABLES (CORE DATA DOMAIN)
+1. roles
+  description: catalog of available roles (Admin, Manager, User, etc.).
+  primary fields: id (uuid, pk), name (text unique), description (text), created_at (timestamp).
+  purpose: drive RBAC.
+
+2. permissions
+  description: list of discrete permission strings (e.g. manage:users, view:dashboard).
+  fields: id (uuid, pk), action (text unique), description (text), created_at (timestamp).
+  purpose: granular authorization control.
+
+3. role_permissions
+  description: junction table linking roles to permissions.
+  fields: role_id (uuid fk roles.id), permission_id (uuid fk permissions.id), pk (role_id, permission_id).
+
+4. profiles
+  description: extended user profile tied to auth.users.
+  fields: id (uuid pk fk auth.users.id), full_name (text), email (text unique), role_id (uuid fk roles.id), preferred_language (text), updated_at (timestamp).
+  notes: store additional preferences in jsonb column if needed.
+
+5. translations
+  description: string resources for multilingual UI.
+  fields: id (bigint pk), lang_id (text), key (text), value (text), unique (lang_id, key).
+
+6. app_settings
+  description: key value store for global settings.
+  fields: key (text pk), value (text), updated_at (timestamp).
+
+7. stocks
+  description: master list of tracked tickers.
+  fields: symbol (text pk), name (text), sector (text optional), created_at, updated_at.
+
+8. historical_data
+  description: end-of-day OHLCV per stock.
+  fields: id (serial pk), stock_symbol (text fk stocks.symbol), date (date), open, high, low, close (numeric), volume (bigint), unique (stock_symbol, date).
+
+9. forecasts
+  description: model predictions per stock per date.
+  fields: id (serial pk), stock_symbol, forecast_date (date), predicted_price, predicted_lo, predicted_hi (numeric), confidence (numeric), model_version (text), generated_at (timestamp).
+
+10. forecast_checks
+  description: evaluation of predictions (hit / miss).
+  fields: id (serial pk), stock_symbol, forecast_date, actual_low, actual_high, predicted_low, predicted_high (numeric), is_hit (boolean), checked_at (timestamp).
+
+11. audit_forecast_metrics
+  description: aggregated performance metrics.
+  fields: id (serial pk), forecast_date (date), total_forecasts (integer), hits (integer), misses (integer), hit_rate (numeric), calculated_at (timestamp).
+
+12. technical_indicators
+  description: RSI, MACD, EMA, etc. per stock and date.
+  fields: id (serial pk), stock_symbol, date, indicator_name (text), value (numeric), signal (text optional).
+
+13. pattern_signals
+  description: candlestick pattern detections.
+  fields: id (serial pk), stock_symbol, date, pattern_name (text), bullish (boolean), confidence (numeric).
+
+14. trader_summaries
+  description: auto-generated textual summaries of stock outlooks.
+  fields: id (uuid pk), stock_symbol, summary (text), generated_at (timestamp).
+
+15. user_favorites
+  description: list of tickers saved by each user.
+  fields: user_id (uuid fk profiles.id), stock_symbol (text fk stocks.symbol), created_at (timestamp), pk (user_id, stock_symbol).
+
+16. user_notes
+  description: personal notes per user per stock.
+  fields: id (uuid pk), user_id, stock_symbol, note (text), created_at (timestamp).
+
+17. activity_logs
+  description: audit log for admin actions.
+  fields: id (bigint pk), user_id (uuid fk), action (text), entity_type (text), entity_id (text), details (jsonb), created_at (timestamp).
+
+18. global_announcements
+  description: messages shown to end users.
+  fields: id (uuid pk), title (text), content (text), is_enabled (boolean), start_date, end_date, created_at, updated_at.
+
+19. nasdaq_daily_snapshot
+  description: daily summary for NASDAQ index (single row per trading date).
+  fields: trading_date (date pk), close_price, change_points, change_percent, open_price, high_price, low_price (numeric), volume (bigint), advancers_count, decliners_count (integer), leading_sector, lagging_sector (text), headline (text), metadata_json (jsonb optional), created_at (timestamp default now()).
+  indexes: idx_nasdaq_daily_snapshot_created_at on created_at.
+
+VIEWS
+- daily_checklist_view: consolidated stream of forecasts, actual ranges, model metadata, hit status. Used for Daily Watchlist and Stock Analysis pages.
+- forecast_accuracy_view (if implemented): aggregated metrics feeding Forecast Accuracy dashboard.
+
+RPC FUNCTIONS (stored procedures exposed via Supabase or equivalent)
+- get_daily_checklist(): returns rows from daily_checklist_view filtered to most recent trading session.
+- get_stock_details_page_data(p_symbol text): returns combined historical data, indicators, patterns, forecast summaries for a single stock.
+- get_what_happened_summary(): returns last session summary table.
+- get_what_happened_stock_details(p_symbol text): returns detailed dataset (historical, forecasts, patterns) for the selected symbol.
+- get_latest_nasdaq_snapshot(): returns the most recent row from nasdaq_daily_snapshot.
+- get_forecast_accuracy_overall(): returns aggregated KPIs (hit rate, average error, etc.).
+- get_forecast_accuracy_by_stock(): returns per-stock breakdown.
+- get_forecast_accuracy_by_date(): returns chronological accuracy metrics.
+- get_forecast_accuracy_by_confidence(): breakdown by confidence buckets.
+- get_forecast_accuracy_recent(): recent forecast evaluation records.
+- get_forecast_error_range_stats(): histogram of absolute errors.
+- get_forecast_range_size_stats(): stats on prediction range widths.
+- get_forecast_time_trends(): data for 30-day trend charts.
+- get_forecast_day_of_week_stats(): hit rate by weekday.
+- get_forecast_bias_analysis(): positive vs negative bias metrics.
+- equivalents with _by_stock suffix expect p_symbol parameter for drill-down.
+- get_forecast_history_overview(filters json): returns aggregated performance for selectable period.
+- get_forecast_history_details(filters json): returns detailed hit/miss records for history page.
+- get_all_users_with_roles(): join of profiles + roles.
+- get_user_profile_and_permissions(p_user_id uuid): returns profile, role, permissions.
+- get_all_roles(), get_all_permissions(): administrative usage.
+- get_active_announcements(): returns announcements where is_enabled true and within date range.
+- evaluate_and_save_forecasts(): server-side evaluation routine that writes to forecast_checks and audit_forecast_metrics.
+- trigger_daily_tasks(): manual trigger for jobs (fetch data, evaluate forecasts, clear caches).
+- upsert_nasdaq_daily_snapshot(...) : inserts or updates the daily snapshot row for provided trading date.
+
+TRIGGERS
+- handle_new_user: fires on insert into auth.users, creates default profile and assigns user role.
+- trigger_forecast_evaluation: executes evaluate_and_save_forecasts after new forecasts land.
+- log_activity_trigger: generic trigger to append records into activity_logs for write operations on sensitive tables.
+- optional triggers for translations/app_settings to keep history tables updated.
+
+RLS POLICIES (recommendation)
+- public read access on stocks, historical_data, nasdaq_daily_snapshot, translations.
+- authenticated users read/write their own records in user_favorites and user_notes.
+- admin-only write access to roles, permissions, forecasts, forecast_checks, audit tables, announcements, indicators, pattern tables.
+- profiles: users can select/ update their own row, admins can manage all.
+
+BACKGROUND JOBS / AUTOMATIONS
+- Daily data fetch: script (e.g., Python) calling upsert_nasdaq_daily_snapshot and fetching new historical data (Yahoo Finance / Stooq). Schedule via Supabase Scheduler, GitHub Actions, or external cron.
+- Forecast evaluation: run evaluate_and_save_forecasts nightly or after new forecasts inserted.
+- Cache warming: optional job to populate materialized views or cached JSON for front end.
+
+MIGRATION GUIDELINES
+- Maintain migrations in chronological order (migration_XXX files). Each migration should cover table creation, indexes, RLS policies, and RPC definitions.
+- Use SQL files or migration framework (Supabase CLI, Knex, Prisma) depending on chosen backend.
+
+SUMMARY
+The database stores user roles, multilingual content, stock data, forecasts, evaluation metrics, and market snapshots. Each front-end page corresponds to a set of RPC functions that combine data from multiple tables. Any new implementation must preserve this schema (or provide a mapping layer) to ensure feature parity across environments.
