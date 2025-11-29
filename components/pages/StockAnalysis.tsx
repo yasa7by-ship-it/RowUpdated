@@ -422,8 +422,32 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
         return { total, hits, misses, hitRate };
     }, [checklistData]);
     
-    // استخدام تاريخ آخر إغلاق من جدول stocks
-    const forecastDate = lastClosingDate;
+    const forecastDate = useMemo(() => {
+        // استخدام تاريخ آخر إغلاق من جدول stocks إذا كان متوفراً
+        if (lastClosingDate) {
+            return lastClosingDate;
+        }
+        
+        // Fallback: استخدام المنطق الأصلي من checklistData
+        if (checklistData.length === 0) {
+            return null;
+        }
+
+        const latestItem = checklistData.reduce<DailyChecklistItem | null>((latest, current) => {
+            if (!current.forecast_date) return latest;
+
+            if (!latest || !latest.forecast_date) {
+                return current;
+            }
+
+            const currentDate = new Date(current.forecast_date);
+            const latestDate = new Date(latest.forecast_date);
+
+            return currentDate > latestDate ? current : latest;
+        }, null);
+
+        return latestItem?.forecast_date ? formatDate(latestItem.forecast_date) : null;
+    }, [checklistData, lastClosingDate]);
 
     const processedData = useMemo(() => {
         return checklistData.filter(item => {
