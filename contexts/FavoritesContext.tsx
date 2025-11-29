@@ -38,9 +38,9 @@ export const FavoritesProvider: React.FC<{ children: ReactNode }> = ({ children 
     fetchFavorites();
   }, [fetchFavorites]);
   
-  const isFavorite = (symbol: string) => favoriteSymbols.has(symbol);
+  const isFavorite = useCallback((symbol: string) => favoriteSymbols.has(symbol), [favoriteSymbols]);
 
-  const toggleFavorite = async (symbol: string) => {
+  const toggleFavorite = useCallback(async (symbol: string) => {
     if (!session) return;
     const originalFavorites = new Set(favoriteSymbols);
     
@@ -63,7 +63,7 @@ export const FavoritesProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Revert on error
       setFavoriteSymbols(originalFavorites);
     }
-  };
+  }, [session, favoriteSymbols]);
   
   const value = { favoriteSymbols, isFavorite, toggleFavorite, refetchFavorites: fetchFavorites, loading };
 
