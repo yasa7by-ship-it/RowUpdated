@@ -393,14 +393,19 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
                 const freshData = rpcData as DailyChecklistItem[];
                 setChecklistData(freshData);
 
-                // جلب تاريخ آخر إغلاق من جدول stocks
-                const { data: closingDate, error: dateError } = await supabase.rpc('get_last_closing_date');
-                if (!dateError && closingDate) {
-                    setLastClosingDate(formatDate(closingDate));
-                }
-
                 localStorage.setItem(CACHE_KEY, JSON.stringify(freshData));
                 localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+
+                // جلب تاريخ آخر إغلاق من جدول stocks (في try-catch منفصل حتى لا يؤثر على باقي الكود)
+                try {
+                    const { data: closingDate, error: dateError } = await supabase.rpc('get_last_closing_date');
+                    if (!dateError && closingDate) {
+                        setLastClosingDate(formatDate(closingDate));
+                    }
+                } catch (dateErr) {
+                    // تجاهل الخطأ - نستخدم المنطق الأصلي كـ fallback
+                    console.warn('Failed to fetch last closing date:', dateErr);
+                }
 
             } catch(e: any) {
                 setError(e.message);
