@@ -357,6 +357,7 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
     const { settings } = useAppSettings();
     const { isFavorite, toggleFavorite } = useFavorites();
     const [checklistData, setChecklistData] = useState<DailyChecklistItem[]>([]);
+    const [lastClosingDate, setLastClosingDate] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -392,6 +393,12 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
                 const freshData = rpcData as DailyChecklistItem[];
                 setChecklistData(freshData);
 
+                // جلب تاريخ آخر إغلاق من جدول stocks
+                const { data: closingDate, error: dateError } = await supabase.rpc('get_last_closing_date');
+                if (!dateError && closingDate) {
+                    setLastClosingDate(formatDate(closingDate));
+                }
+
                 localStorage.setItem(CACHE_KEY, JSON.stringify(freshData));
                 localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
 
@@ -415,26 +422,8 @@ const StockAnalysis: React.FC<StockAnalysisProps> = ({ setPage }) => {
         return { total, hits, misses, hitRate };
     }, [checklistData]);
     
-    const forecastDate = useMemo(() => {
-        if (checklistData.length === 0) {
-            return null;
-        }
-
-        const latestItem = checklistData.reduce<DailyChecklistItem | null>((latest, current) => {
-            if (!current.forecast_date) return latest;
-
-            if (!latest || !latest.forecast_date) {
-                return current;
-            }
-
-            const currentDate = new Date(current.forecast_date);
-            const latestDate = new Date(latest.forecast_date);
-
-            return currentDate > latestDate ? current : latest;
-        }, null);
-
-        return latestItem?.forecast_date ? formatDate(latestItem.forecast_date) : null;
-    }, [checklistData]);
+    // استخدام تاريخ آخر إغلاق من جدول stocks
+    const forecastDate = lastClosingDate;
 
     const processedData = useMemo(() => {
         return checklistData.filter(item => {
